@@ -203,16 +203,6 @@ Install the cc-safety-net plugin in `~/.config/opencode/opencode.json` (or `.jso
 gemini extensions install https://github.com/kenryu42/gemini-safety-net
 ```
 
-> [!IMPORTANT]
-> You need to set the following settings in `.gemini/settings.json` to enable hooks:
-> ```json
-> {
->   "tools": {
->     "enableHooks": true
->   }
-> }
-> ```
-
 ---
 
 ### GitHub Copilot CLI Installation
