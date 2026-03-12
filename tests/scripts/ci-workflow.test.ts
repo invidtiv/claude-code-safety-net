@@ -73,7 +73,7 @@ describe('CI workflow trigger filters', () => {
     const pushPaths = extractPaths(readWorkflow(), 'push');
 
     expect(pushPaths).not.toContain('assets/**');
-    expect(pushPaths).not.toContain('package.json');
+    expect(pushPaths).toContain('package.json');
   });
 
   test('pull requests still validate workflow and package changes', () => {
