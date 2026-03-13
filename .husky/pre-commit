@@ -1,3 +1,11 @@
 #!/usr/bin/env sh
+set -e
 
-bun run knip && bun run lint-staged
+bun run knip
+bun run lint-staged
+
+# Build and auto-stage dist/ if it changed
+bun run build
+if ! git diff --quiet dist/; then
+  git add -A dist/
+fi
