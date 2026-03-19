@@ -158,6 +158,106 @@ describe('explainCommand edge cases', () => {
     const result = explainCommand('git status', { cwd: '/tmp' });
     expect(result.result).toBe('allowed');
   });
+
+  test('rm redirect to dev null is allowed when target is safe', () => {
+    const result = explainCommand('rm -rf /tmp/foo 2>/dev/null');
+    expect(result.result).toBe('allowed');
+    expect(result.trace.steps).toContainEqual({
+      type: 'parse',
+      input: 'rm -rf /tmp/foo 2>/dev/null',
+      segments: [['rm', '-rf', '/tmp/foo']],
+    });
+  });
+
+  test('redirect target command substitution remains blocked', () => {
+    const result = explainCommand('echo x >$(git reset --hard)');
+    expect(result.result).toBe('blocked');
+    expect(result.reason).toContain('git reset --hard');
+  });
+
+  test('nested rm redirect to dev null is allowed in command substitution', () => {
+    const result = explainCommand('echo $(rm -rf /tmp/foo 2>/dev/null)');
+    expect(result.result).toBe('allowed');
+    expect(result.trace.steps).toContainEqual({
+      type: 'parse',
+      input: 'echo $(rm -rf /tmp/foo 2>/dev/null)',
+      segments: [['echo'], ['rm', '-rf', '/tmp/foo']],
+    });
+  });
+
+  test('numeric rm target before redirect is preserved in explain trace', () => {
+    const result = explainCommand('rm -rf 7 > /dev/null');
+    expect(result.result).toBe('allowed');
+    expect(result.trace.steps).toContainEqual({
+      type: 'parse',
+      input: 'rm -rf 7 > /dev/null',
+      segments: [['rm', '-rf', '7']],
+    });
+  });
+
+  test('attached io-number redirect is stripped from explain trace', () => {
+    const result = explainCommand('rm -rf 123>/dev/null');
+    expect(result.result).toBe('allowed');
+    expect(result.trace.steps).toContainEqual({
+      type: 'parse',
+      input: 'rm -rf 123>/dev/null',
+      segments: [['rm', '-rf']],
+    });
+  });
+
+  test('spaced numeric rm arg before redirect stays visible in explain trace', () => {
+    const result = explainCommand('rm -rf 123 >/dev/null');
+    expect(result.result).toBe('allowed');
+    expect(result.trace.steps).toContainEqual({
+      type: 'parse',
+      input: 'rm -rf 123 >/dev/null',
+      segments: [['rm', '-rf', '123']],
+    });
+  });
+
+  test('backticks inside arithmetic expansion remain blocked in explain trace', () => {
+    const result = explainCommand('echo $((`git reset --hard` + 1))');
+    expect(result.result).toBe('blocked');
+    expect(result.reason).toContain('git reset --hard');
+  });
+
+  test('process substitution remains blocked in explain trace', () => {
+    const result = explainCommand('echo <(git reset --hard)');
+    expect(result.result).toBe('blocked');
+    expect(result.reason).toContain('git reset --hard');
+    expect(result.trace.steps).toContainEqual({
+      type: 'parse',
+      input: 'echo <(git reset --hard)',
+      segments: [['echo'], ['git', 'reset', '--hard']],
+    });
+  });
+
+  test('quoted literal backticks in redirect target do not hide blocked args in explain trace', () => {
+    const result = explainCommand("git checkout >'file`name' -- foo");
+    expect(result.result).toBe('blocked');
+    expect(result.reason).toContain('git checkout --');
+    expect(result.trace.steps).toContainEqual({
+      type: 'parse',
+      input: "git checkout >'file`name' -- foo",
+      segments: [['git', 'checkout', '--', 'foo']],
+    });
+  });
+
+  test('single-quoted backticks in redirect targets stay literal in explain trace', () => {
+    const result = explainCommand("echo >'a`git reset --hard`b'");
+    expect(result.result).toBe('allowed');
+    expect(result.trace.steps).toContainEqual({
+      type: 'parse',
+      input: "echo >'a`git reset --hard`b'",
+      segments: [['echo']],
+    });
+  });
+
+  test('attached backtick substitutions outside redirect targets stay blocked in explain trace', () => {
+    const result = explainCommand('echo foo`git reset --hard`bar');
+    expect(result.result).toBe('blocked');
+    expect(result.reason).toContain('git reset --hard');
+  });
 });
 
 describe('explainCommand rm with home directory', () => {

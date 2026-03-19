@@ -97,8 +97,14 @@ describe('shell parsing helpers', () => {
       expect(splitShellCommands('echo $((1+2))')).toEqual([['echo'], ['1+2']]);
     });
 
+    test('keeps arithmetic comparisons and shifts intact inside substitutions', () => {
+      expect(splitShellCommands('echo $((2>1))')).toEqual([['echo'], ['2>1']]);
+      expect(splitShellCommands('echo $((123>>1))')).toEqual([['echo'], ['123>>1']]);
+      expect(splitShellCommands('echo $((1*2))')).toEqual([['echo'], ['1*2']]);
+    });
+
     test('extracts backtick substitution segments', () => {
-      expect(splitShellCommands('echo `date`')).toEqual([['date'], ['echo', '`date`']]);
+      expect(splitShellCommands('echo `date`')).toEqual([['echo'], ['date']]);
     });
 
     test('extracts $() substitution segments split on operators', () => {
@@ -110,7 +116,7 @@ describe('shell parsing helpers', () => {
     });
 
     test('extracts multiple backtick substitutions from one token', () => {
-      expect(splitShellCommands('echo `a`:`b`')).toEqual([['a'], ['b'], ['echo', '`a`:`b`']]);
+      expect(splitShellCommands('echo `a`:`b`')).toEqual([['echo'], ['a'], ['b'], [':']]);
     });
 
     test('handles nested $(...) with operators', () => {
@@ -119,6 +125,14 @@ describe('shell parsing helpers', () => {
       const flat = result.flat();
       expect(flat).toContain('rm');
       expect(flat).toContain('-rf');
+    });
+
+    test('treats grouped subshells inside command substitutions as commands, not arithmetic', () => {
+      expect(splitShellCommands('echo $( (git reset --hard) )')).toEqual([
+        ['echo'],
+        ['git', 'reset', '--hard'],
+      ]);
+      expect(splitShellCommands('echo $( (rm -rf /) )')).toEqual([['echo'], ['rm', '-rf', '/']]);
     });
 
     test('handles deeply nested $(...) substitutions', () => {
@@ -148,11 +162,284 @@ describe('shell parsing helpers', () => {
         ['rm', '-rf', '/tmp/x'],
       ]);
     });
+
+    test('drops plain redirect targets and attached fd prefixes', () => {
+      expect(splitShellCommands('rm -rf ./foo 2>/dev/null')).toEqual([['rm', '-rf', './foo']]);
+      expect(splitShellCommands('rm -rf ./foo 2>&1')).toEqual([['rm', '-rf', './foo']]);
+      expect(splitShellCommands('rm -rf ./foo 2>>/tmp/log')).toEqual([['rm', '-rf', './foo']]);
+    });
+
+    test('keeps spaced numeric args and quoted redirect literals intact', () => {
+      expect(splitShellCommands('rm -rf 123>/dev/null')).toEqual([['rm', '-rf']]);
+      expect(splitShellCommands('rm -rf 7 > /dev/null')).toEqual([['rm', '-rf', '7']]);
+      expect(splitShellCommands('rm -rf 123 >/dev/null')).toEqual([['rm', '-rf', '123']]);
+      expect(splitShellCommands('rm -rf ./foo 2 > /dev/null')).toEqual([
+        ['rm', '-rf', './foo', '2'],
+      ]);
+      expect(splitShellCommands("echo '2>/dev/null'")).toEqual([['echo', '2>/dev/null']]);
+    });
+
+    test('keeps nested command substitutions in redirect targets analyzable', () => {
+      expect(splitShellCommands('echo x >$(git reset --hard)')).toEqual([
+        ['echo', 'x'],
+        ['git', 'reset', '--hard'],
+      ]);
+    });
+
+    test('drops glob redirect targets instead of treating them as args', () => {
+      expect(splitShellCommands('echo > *.log')).toEqual([['echo']]);
+    });
+
+    test('drops glob redirect targets inside command substitutions', () => {
+      expect(splitShellCommands('echo $(echo > *.log)')).toEqual([['echo'], ['echo']]);
+    });
+
+    test('keeps attached command substitutions in redirect targets analyzable', () => {
+      expect(splitShellCommands('rm -rf /tmp/foo >file$(git reset --hard)')).toEqual([
+        ['git', 'reset', '--hard'],
+        ['rm', '-rf', '/tmp/foo'],
+      ]);
+      expect(splitShellCommands('rm -rf /tmp/foo >$TMPDIR/$(rm -rf /)')).toEqual([
+        ['rm', '-rf', '/'],
+        ['rm', '-rf', '/tmp/foo'],
+      ]);
+    });
+
+    test('keeps operands after redirects in the same segment', () => {
+      expect(splitShellCommands('rm -rf 2>/dev/null /')).toEqual([['rm', '-rf', '/']]);
+      expect(splitShellCommands('git checkout 2>/dev/null -- foo')).toEqual([
+        ['git', 'checkout', '--', 'foo'],
+      ]);
+    });
+
+    test('keeps nested command substitutions visible inside arithmetic expansion', () => {
+      const gitResult = splitShellCommands('echo $(( $(git reset --hard) + 1 ))');
+      expect(gitResult).toContainEqual(['git', 'reset', '--hard']);
+
+      const rmResult = splitShellCommands('echo $(( $(rm -rf /) + 1 ))');
+      expect(rmResult).toContainEqual(['rm', '-rf', '/']);
+    });
+
+    test('keeps adjacent nested command substitutions visible inside arithmetic expansion', () => {
+      const gitResult = splitShellCommands('echo $((foo+$(git reset --hard)))');
+      expect(gitResult).toContainEqual(['git', 'reset', '--hard']);
+
+      const rmResult = splitShellCommands('echo $((1+$(rm -rf /)))');
+      expect(rmResult).toContainEqual(['rm', '-rf', '/']);
+    });
+
+    test('keeps backtick command substitutions visible inside arithmetic expansion', () => {
+      expect(splitShellCommands('echo $((`git reset --hard` + 1))')).toContainEqual([
+        'git',
+        'reset',
+        '--hard',
+      ]);
+      expect(splitShellCommands('echo $((foo`git reset --hard`bar))')).toContainEqual([
+        'git',
+        'reset',
+        '--hard',
+      ]);
+    });
+
+    test('flushes arithmetic text before a spaced nested command substitution', () => {
+      expect(splitShellCommands('echo $((1 + $(git status)))')).toEqual([
+        ['echo'],
+        ['1+'],
+        ['git', 'status'],
+      ]);
+    });
+
+    test('keeps nested arithmetic parentheses intact', () => {
+      expect(splitShellCommands('echo $(((1+2)))')).toEqual([['echo'], ['(1+2)']]);
+    });
+
+    test('handles malformed arithmetic substitutions without hanging', () => {
+      expect(splitShellCommands('echo $((1+(2))')).toEqual([['echo'], ['1+(2)']]);
+      expect(splitShellCommands('echo $((1+2)')).toEqual([['echo'], ['1+2']]);
+    });
+
+    test('handles arithmetic substitutions that reach EOF without a closing parenthesis', () => {
+      expect(splitShellCommands('echo $((1+2')).toEqual([['echo'], ['1+2']]);
+      expect(splitShellCommands('echo $((1+$(git status)')).toEqual([
+        ['echo'],
+        ['1+'],
+        ['git', 'status'],
+      ]);
+    });
+
+    test('does not treat quoted arithmetic expansion as command substitution', () => {
+      expect(splitShellCommands('echo "$(( rm -rf /x ))"')).toEqual([['echo', '$(( rm -rf /x ))']]);
+      expect(splitShellCommands('echo "$(( foo + bar ))"')).toEqual([['echo', '$(( foo + bar ))']]);
+    });
+
+    test('keeps backtick substitutions inside quoted redirect targets analyzable', () => {
+      expect(splitShellCommands('echo x >"`git reset --hard`"')).toEqual([
+        ['git', 'reset', '--hard'],
+        ['echo', 'x'],
+      ]);
+    });
+
+    test('keeps bare backtick redirect targets analyzable', () => {
+      expect(splitShellCommands('rm -rf /tmp/foo >`git reset --hard`')).toEqual([
+        ['rm', '-rf', '/tmp/foo'],
+        ['git', 'reset', '--hard'],
+      ]);
+      expect(splitShellCommands('echo $(rm -rf /tmp/foo >`git reset --hard`)')).toEqual([
+        ['echo'],
+        ['rm', '-rf', '/tmp/foo'],
+        ['git', 'reset', '--hard'],
+      ]);
+    });
+
+    test('drops redirect targets inside nested command substitutions', () => {
+      expect(splitShellCommands('echo $(rm -rf /tmp/foo 2>/dev/null)')).toEqual([
+        ['echo'],
+        ['rm', '-rf', '/tmp/foo'],
+      ]);
+    });
+
+    test('ignores missing redirect targets without creating empty segments', () => {
+      expect(splitShellCommands('echo >')).toEqual([['echo']]);
+    });
+
+    test('keeps process substitutions analyzable as separate segments', () => {
+      expect(splitShellCommands('echo <(git reset --hard)')).toEqual([
+        ['echo'],
+        ['git', 'reset', '--hard'],
+      ]);
+      expect(splitShellCommands('cat >(git reset --hard)')).toEqual([
+        ['cat'],
+        ['git', 'reset', '--hard'],
+      ]);
+      expect(splitShellCommands('echo x > >(git reset --hard)')).toEqual([
+        ['echo', 'x'],
+        ['git', 'reset', '--hard'],
+      ]);
+      expect(splitShellCommands('echo foo < <(git reset --hard)')).toEqual([
+        ['echo', 'foo'],
+        ['git', 'reset', '--hard'],
+      ]);
+    });
+
+    test('keeps arguments after quoted backticks in redirect targets visible', () => {
+      expect(splitShellCommands("git checkout >'file`name' -- foo")).toEqual([
+        ['git', 'checkout', '--', 'foo'],
+      ]);
+      expect(splitShellCommands("rm -rf >'file`name' /")).toEqual([['rm', '-rf', '/']]);
+    });
+
+    test('does not treat single-quoted backticks in redirect targets as commands', () => {
+      expect(splitShellCommands("echo >'a`git reset --hard`b'")).toEqual([['echo']]);
+    });
+
+    test('keeps attached backtick substitutions analyzable outside redirect targets', () => {
+      expect(splitShellCommands('echo foo`git reset --hard`bar')).toContainEqual([
+        'git',
+        'reset',
+        '--hard',
+      ]);
+    });
+
+    test('does not treat escaped or quoted inline substitutions as executable commands', () => {
+      expect(splitShellCommands('echo $(printf "x\\$(git status)y")')).toEqual([
+        ['echo'],
+        ['printf', 'x$(git status)y'],
+      ]);
+      expect(splitShellCommands('echo $(printf "x\'$(git status)\'y")')).toEqual([
+        ['echo'],
+        ['printf', "x'$(git status)'y"],
+      ]);
+      expect(splitShellCommands('echo $(printf "x\\"$(git status)\\"y")')).toEqual([
+        ['echo'],
+        ['printf', 'x"$(git status)"y'],
+      ]);
+    });
+
+    test('tracks nested parentheses inside inline command substitutions', () => {
+      expect(splitShellCommands('echo "x$(printf y(z))"')).toEqual([
+        ['printf', 'y', 'z'],
+        ['echo', 'x$(printf y(z))'],
+      ]);
+    });
+
+    test('tracks quoted and escaped content while scanning inline command substitutions', () => {
+      expect(splitShellCommands('echo "x$(printf \'y\')w"')).toEqual([
+        ['printf', 'y'],
+        ['echo', "x$(printf 'y')w"],
+      ]);
+      expect(splitShellCommands('echo \'x$(printf "y")w\'')).toEqual([
+        ['printf', 'y'],
+        ['echo', 'x$(printf "y")w'],
+      ]);
+      expect(splitShellCommands("echo 'x$(printf y\\(z\\))w'")).toEqual([
+        ['printf', 'y(z)'],
+        ['echo', 'x$(printf y\\(z\\))w'],
+      ]);
+      expect(splitShellCommands("echo 'x$(printf y(z)'")).toEqual([['echo', 'x$(printf y(z)']]);
+    });
+
+    test('preserves top level glob arguments', () => {
+      expect(splitShellCommands('git add *.ts')).toEqual([['git', 'add', '*.ts']]);
+    });
+
+    test('preserves glob arguments inside command substitutions', () => {
+      expect(splitShellCommands('echo $(git *.ts)')).toEqual([['echo'], ['git', '*.ts']]);
+    });
+
+    test('preserves glob arguments while reconstructing redirect target substitutions', () => {
+      expect(splitShellCommands('echo >foo$(git *.ts)')).toEqual([['git', '*.ts'], ['echo']]);
+    });
+
+    test('handles escaped backticks in redirect targets without hanging', () => {
+      expect(splitShellCommands('echo x >`a\\` b`')).toEqual([
+        ['echo', 'x'],
+        ['a`', 'b'],
+      ]);
+    });
+
+    test('extracts process substitution inside command substitution', () => {
+      const result = splitShellCommands('echo $(diff <(cat file1) file2)');
+      expect(result).toContainEqual(['cat', 'file1']);
+      expect(result).toContainEqual(['diff']);
+      expect(result).toContainEqual(['file2']);
+    });
+
+    test('keeps attached backtick suffix inside command substitution', () => {
+      const result = splitShellCommands('echo $(cd `pwd`/subdir)');
+      const flat = result.flat();
+      expect(flat).toContain('cd');
+      expect(flat.some((t) => t.includes('/subdir'))).toBe(true);
+    });
+
+    test('extracts attached command substitution inside command substitution', () => {
+      const result = splitShellCommands('echo $(echo prefix$(inner cmd))');
+      expect(result).toContainEqual(['inner', 'cmd']);
+      const flat = result.flat();
+      expect(flat).toContain('echo');
+      expect(flat.some((t) => t.includes('prefix'))).toBe(true);
+    });
+
+    test('handles unclosed backtick without hanging', () => {
+      const result = splitShellCommands('echo `unclosed');
+      expect(result.length).toBeGreaterThanOrEqual(1);
+      const flat = result.flat();
+      expect(flat).toContain('echo');
+    });
+
+    test('handles operator token inside parenthesized redirect target', () => {
+      const result = splitShellCommands('echo >log$(echo x | wc)');
+      expect(result).toContainEqual(['echo', 'x']);
+    });
   });
 
   describe('stripWrappersWithInfo', () => {
     test('strips sudo options that consume a value', () => {
       const result = stripWrappersWithInfo(['sudo', '-u', 'root', 'rm', '-rf', '/tmp/a']);
+      expect(result.tokens).toEqual(['rm', '-rf', '/tmp/a']);
+    });
+
+    test('strips sudo options that do not consume a value', () => {
+      const result = stripWrappersWithInfo(['sudo', '-n', 'rm', '-rf', '/tmp/a']);
       expect(result.tokens).toEqual(['rm', '-rf', '/tmp/a']);
     });
 

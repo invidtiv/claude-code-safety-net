@@ -202,6 +202,92 @@ describe('edge cases', () => {
     test('command substitution find without delete allowed', () => {
       assertAllowed('echo $(find . -name foo )');
     });
+
+    test('grouped subshell command substitution git reset hard blocked', () => {
+      assertBlocked('echo $( (git reset --hard) )', 'git reset --hard');
+    });
+
+    test('grouped subshell command substitution rm root blocked', () => {
+      assertBlocked('echo $( (rm -rf /) )', 'extremely dangerous');
+    });
+
+    test('command substitution in redirect target git reset hard blocked', () => {
+      assertBlocked('echo x >$(git reset --hard)', 'git reset --hard');
+    });
+
+    test('command substitution in redirect target rm root blocked', () => {
+      assertBlocked('echo x >$(rm -rf /)', 'extremely dangerous');
+    });
+
+    test('attached command substitution in redirect target git reset hard blocked', () => {
+      assertBlocked('echo x >file$(git reset --hard)', 'git reset --hard');
+    });
+
+    test('attached command substitution in redirect target rm root blocked', () => {
+      assertBlocked('echo x >$TMPDIR/$(rm -rf /)', 'extremely dangerous');
+    });
+
+    test('command substitution keeps arguments after redirects blocked', () => {
+      assertBlocked('echo $(rm -rf 2>/dev/null /)', 'extremely dangerous');
+    });
+
+    test('arithmetic expansion keeps nested git reset blocked', () => {
+      assertBlocked('echo $(( $(git reset --hard) + 1 ))', 'git reset --hard');
+    });
+
+    test('arithmetic expansion keeps nested rm root blocked', () => {
+      assertBlocked('echo $(( $(rm -rf /) + 1 ))', 'extremely dangerous');
+    });
+
+    test('arithmetic expansion with adjacent nested git reset blocked', () => {
+      assertBlocked('echo $((foo+$(git reset --hard)))', 'git reset --hard');
+    });
+
+    test('arithmetic expansion with adjacent nested rm root blocked', () => {
+      assertBlocked('echo $((1+$(rm -rf /)))', 'extremely dangerous');
+    });
+
+    test('arithmetic expansion with backticks keeps nested git reset blocked', () => {
+      assertBlocked('echo $((`git reset --hard` + 1))', 'git reset --hard');
+      assertBlocked('echo $((foo`git reset --hard`bar))', 'git reset --hard');
+    });
+
+    test('quoted arithmetic expressions that resemble guarded commands stay allowed', () => {
+      assertAllowed('echo "$(( rm -rf /x ))"');
+      assertAllowed('echo "$(( foo + bar ))"');
+    });
+
+    test('quoted backtick substitution in redirect target git reset hard blocked', () => {
+      assertBlocked('echo x >"`git reset --hard`"', 'git reset --hard');
+    });
+
+    test('bare backtick redirect target git reset hard blocked', () => {
+      assertBlocked('echo x >`git reset --hard`', 'git reset --hard');
+    });
+
+    test('bare backtick redirect target inside command substitution blocked', () => {
+      assertBlocked('echo $(echo x >`git reset --hard`)', 'git reset --hard');
+    });
+
+    test('process substitution git reset hard blocked', () => {
+      assertBlocked('echo <(git reset --hard)', 'git reset --hard');
+      assertBlocked('cat >(git reset --hard)', 'git reset --hard');
+      assertBlocked('echo x > >(git reset --hard)', 'git reset --hard');
+      assertBlocked('echo foo < <(git reset --hard)', 'git reset --hard');
+    });
+
+    test('quoted literal backticks in redirect targets do not hide blocked args', () => {
+      assertBlocked("git checkout >'file`name' -- foo", 'git checkout --');
+      assertBlocked("rm -rf >'file`name' /", 'extremely dangerous');
+    });
+
+    test('single-quoted backticks in redirect targets stay literal', () => {
+      assertAllowed("echo >'a`git reset --hard`b'");
+    });
+
+    test('attached backtick substitutions outside redirect targets stay blocked', () => {
+      assertBlocked('echo foo`git reset --hard`bar', 'git reset --hard');
+    });
   });
 
   describe('xargs', () => {
@@ -489,6 +575,10 @@ describe('edge cases', () => {
 
     test('redirection ampersand greater does not split blocked', () => {
       assertBlocked('echo ok &>out && git reset --hard', 'git reset --hard');
+    });
+
+    test('redirect before checkout path still blocks', () => {
+      assertBlocked('git checkout 2>/dev/null -- foo', 'git checkout --');
     });
 
     test('pipe stderr and stdout split blocked', () => {

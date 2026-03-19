@@ -135,6 +135,14 @@ describe('rm -rf allowed', () => {
   test('busybox rm -rf /tmp/test-dir allowed', () => {
     assertAllowed('busybox rm -rf /tmp/test-dir');
   });
+
+  test('rm -rf /tmp/foo 2>/dev/null allowed', () => {
+    assertAllowed('rm -rf /tmp/foo 2>/dev/null', '/tmp');
+  });
+
+  test('echo $(rm -rf /tmp/foo 2>/dev/null) allowed', () => {
+    assertAllowed('echo $(rm -rf /tmp/foo 2>/dev/null)', '/tmp');
+  });
 });
 
 describe('rm -rf cwd-aware', () => {
@@ -218,6 +226,19 @@ describe('rm -rf cwd-aware', () => {
     } finally {
       cleanup();
     }
+  });
+
+  test('rm -rf ./subdir 2>/dev/null allowed', () => {
+    setup();
+    try {
+      assertAllowed('rm -rf ./subdir 2>/dev/null', tmpDir);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('attached io-number redirect does not become a numeric rm target', () => {
+    assertAllowed('rm -rf 123>/dev/null');
   });
 
   test('rm -rf . blocked', () => {
@@ -393,6 +414,14 @@ describe('rm -rf cwd-aware', () => {
     } finally {
       cleanup();
     }
+  });
+
+  test('rm -rf numeric target before redirect stays blocked conservatively', () => {
+    assertBlocked('rm -rf 7 > /dev/null', 'rm -rf');
+  });
+
+  test('spaced numeric target before redirect stays blocked conservatively', () => {
+    assertBlocked('rm -rf 123 >/dev/null', 'rm -rf');
   });
 });
 
