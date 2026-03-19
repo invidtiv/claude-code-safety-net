@@ -388,6 +388,40 @@ describe('shell parsing helpers', () => {
         ['a`', 'b'],
       ]);
     });
+
+    test('extracts process substitution inside command substitution', () => {
+      const result = splitShellCommands('echo $(diff <(cat file1) file2)');
+      expect(result).toContainEqual(['cat', 'file1']);
+      expect(result).toContainEqual(['diff']);
+      expect(result).toContainEqual(['file2']);
+    });
+
+    test('keeps attached backtick suffix inside command substitution', () => {
+      const result = splitShellCommands('echo $(cd `pwd`/subdir)');
+      const flat = result.flat();
+      expect(flat).toContain('cd');
+      expect(flat.some((t) => t.includes('/subdir'))).toBe(true);
+    });
+
+    test('extracts attached command substitution inside command substitution', () => {
+      const result = splitShellCommands('echo $(echo prefix$(inner cmd))');
+      expect(result).toContainEqual(['inner', 'cmd']);
+      const flat = result.flat();
+      expect(flat).toContain('echo');
+      expect(flat.some((t) => t.includes('prefix'))).toBe(true);
+    });
+
+    test('handles unclosed backtick without hanging', () => {
+      const result = splitShellCommands('echo `unclosed');
+      expect(result.length).toBeGreaterThanOrEqual(1);
+      const flat = result.flat();
+      expect(flat).toContain('echo');
+    });
+
+    test('handles operator token inside parenthesized redirect target', () => {
+      const result = splitShellCommands('echo >log$(echo x | wc)');
+      expect(result).toContainEqual(['echo', 'x']);
+    });
   });
 
   describe('stripWrappersWithInfo', () => {
