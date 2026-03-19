@@ -431,6 +431,7 @@ var ENV_PROXY = new Proxy({}, {
   get: (_, name) => `$${String(name)}`
 });
 var ARITHMETIC_SENTINEL = "__CC_SAFETY_NET_ARITH_SENTINEL__";
+var BACKTICK_ATTACHED_SUFFIX_SENTINEL = "__CC_SAFETY_NET_BACKTICK_SUFFIX__";
 function splitShellCommands(command) {
   if (hasUnclosedQuotes(command)) {
     return [[command]];
@@ -450,6 +451,18 @@ function splitShellCommands(command) {
       i++;
       continue;
     }
+    if (_isProcessSubstitutionStart(tokens, i)) {
+      if (current.length > 0) {
+        segments.push(current);
+        current = [];
+      }
+      const { innerSegments, endIndex } = extractProcessSubstitution(tokens, i);
+      for (const seg of innerSegments) {
+        segments.push(seg);
+      }
+      i = endIndex + 1;
+      continue;
+    }
     if (_isRedirectOp(token)) {
       const { redirectTarget, advance } = _getRedirectTargetInfo(tokens, i);
       if (redirectTarget !== null) {
@@ -459,9 +472,29 @@ function splitShellCommands(command) {
       continue;
     }
     if (_isCommandSubstitutionStart(tokens, i)) {
-      if (current.length > 0) {
+      const { innerSegments, endIndex } = extractCommandSubstitution(tokens, i + 2);
+      const attachedSuffix = _getBacktickAttachedSuffix(tokens[endIndex + 1]);
+      const shouldKeepCurrent = attachedSuffix !== null && !_isRedirectOp(tokens[i - 1]) && !isOperatorToken(tokens[i - 1]);
+      if (!shouldKeepCurrent && current.length > 0) {
         segments.push(current);
         current = [];
+      }
+      for (const seg of innerSegments) {
+        segments.push(seg);
+      }
+      if (shouldKeepCurrent && attachedSuffix) {
+        current.push(attachedSuffix);
+      }
+      i = endIndex + (attachedSuffix !== null ? 2 : 1);
+      continue;
+    }
+    if (_isAttachedCommandSubstitutionStart(tokens, i)) {
+      const tokenText2 = tokens[i];
+      if (typeof tokenText2 === "string") {
+        const prefix = tokenText2.slice(0, -1);
+        if (prefix) {
+          current.push(prefix);
+        }
       }
       const { innerSegments, endIndex } = extractCommandSubstitution(tokens, i + 2);
       for (const seg of innerSegments) {
@@ -481,27 +514,6 @@ function splitShellCommands(command) {
   }
   if (current.length > 0) {
     segments.push(current);
-  }
-  return segments;
-}
-function extractBacktickSubstitutions(token) {
-  const segments = [];
-  let i = 0;
-  while (i < token.length) {
-    const backtickStart = token.indexOf("`", i);
-    if (backtickStart === -1)
-      break;
-    const backtickEnd = token.indexOf("`", backtickStart + 1);
-    if (backtickEnd === -1)
-      break;
-    const innerCommand = token.slice(backtickStart + 1, backtickEnd);
-    if (innerCommand.trim()) {
-      const innerSegments = splitShellCommands(innerCommand);
-      for (const seg of innerSegments) {
-        segments.push(seg);
-      }
-    }
-    i = backtickEnd + 1;
   }
   return segments;
 }
@@ -600,6 +612,18 @@ function extractCommandSubstitution(tokens, startIndex) {
       i++;
       continue;
     }
+    if (depth === 1 && _isProcessSubstitutionStart(tokens, i)) {
+      if (currentSegment.length > 0) {
+        innerSegments.push(currentSegment);
+        currentSegment = [];
+      }
+      const { innerSegments: nestedSegments, endIndex } = extractProcessSubstitution(tokens, i);
+      for (const seg of nestedSegments) {
+        innerSegments.push(seg);
+      }
+      i = endIndex + 1;
+      continue;
+    }
     if (depth === 1 && _isRedirectOp(token)) {
       const { redirectTarget, advance } = _getRedirectTargetInfo(tokens, i);
       if (redirectTarget !== null) {
@@ -609,9 +633,28 @@ function extractCommandSubstitution(tokens, startIndex) {
       continue;
     }
     if (depth === 1 && _isCommandSubstitutionStart(tokens, i)) {
-      if (currentSegment.length > 0) {
+      const { innerSegments: nestedSegments, endIndex } = extractCommandSubstitution(tokens, i + 2);
+      const attachedSuffix = _getBacktickAttachedSuffix(tokens[endIndex + 1]);
+      const shouldKeepCurrent = attachedSuffix !== null && !_isRedirectOp(tokens[i - 1]) && !isOperatorToken(tokens[i - 1]);
+      if (!shouldKeepCurrent && currentSegment.length > 0) {
         innerSegments.push(currentSegment);
         currentSegment = [];
+      }
+      for (const seg of nestedSegments) {
+        innerSegments.push(seg);
+      }
+      if (shouldKeepCurrent && attachedSuffix) {
+        currentSegment.push(attachedSuffix);
+      }
+      i = endIndex + (attachedSuffix !== null ? 2 : 1);
+      continue;
+    }
+    if (depth === 1 && _isAttachedCommandSubstitutionStart(tokens, i)) {
+      if (typeof token === "string") {
+        const prefix = token.slice(0, -1);
+        if (prefix) {
+          currentSegment.push(prefix);
+        }
       }
       const { innerSegments: nestedSegments, endIndex } = extractCommandSubstitution(tokens, i + 2);
       for (const seg of nestedSegments) {
@@ -709,10 +752,6 @@ function _pushInlineSubstitutionSegments(segments, token) {
   for (const seg of inlineSegments) {
     segments.push(seg);
   }
-  const backtickSegments = extractBacktickSubstitutions(token);
-  for (const seg of backtickSegments) {
-    segments.push(seg);
-  }
 }
 function hasUnclosedQuotes(command) {
   let inSingle = false;
@@ -772,6 +811,22 @@ function _stripAttachedIoNumbers(command) {
       inDouble = !inDouble;
       atTokenBoundary = false;
       i++;
+      continue;
+    }
+    if (!inSingle && char === "`") {
+      const endIndex = _findBacktickEnd(command, i + 1);
+      if (endIndex === -1) {
+        result += char;
+        atTokenBoundary = false;
+        i++;
+        continue;
+      }
+      result += `$(${command.slice(i + 1, endIndex)})`;
+      if (atTokenBoundary && command[endIndex + 1] && _isPathLikeBacktickSuffix(command[endIndex + 1])) {
+        result += BACKTICK_ATTACHED_SUFFIX_SENTINEL;
+      }
+      atTokenBoundary = false;
+      i = endIndex + 1;
       continue;
     }
     if (!inSingle && !inDouble) {
@@ -1036,6 +1091,9 @@ function getBasename(token) {
 function isOperator(token) {
   return typeof token === "object" && token !== null && "op" in token && SHELL_OPERATORS.has(token.op);
 }
+function isOperatorToken(token) {
+  return token !== undefined && isOperator(token);
+}
 var REDIRECT_OPS = new Set([">", ">>", "<", ">&", "<&", ">|"]);
 var RAW_REDIRECT_OPS = [">>", ">&", "<&", ">|", ">", "<"];
 function _isRedirectOp(token) {
@@ -1044,13 +1102,34 @@ function _isRedirectOp(token) {
 function _isCommandSubstitutionStart(tokens, index) {
   return tokens[index] === "$" && isParenOpen(tokens[index + 1]);
 }
+function _isAttachedCommandSubstitutionStart(tokens, index) {
+  const token = tokens[index];
+  return typeof token === "string" && token !== "$" && token.endsWith("$") && isParenOpen(tokens[index + 1]);
+}
+function _getBacktickAttachedSuffix(token) {
+  return typeof token === "string" && token.startsWith(BACKTICK_ATTACHED_SUFFIX_SENTINEL) ? token.slice(BACKTICK_ATTACHED_SUFFIX_SENTINEL.length) : null;
+}
+function _isProcessSubstitutionStart(tokens, index) {
+  const token = tokens[index];
+  return typeof token === "object" && token !== null && "op" in token && (token.op === "<(" || token.op === ">" && isParenOpen(tokens[index + 1]));
+}
+function extractProcessSubstitution(tokens, startIndex) {
+  const token = tokens[startIndex];
+  if (typeof token === "object" && token !== null && "op" in token && token.op === "<(") {
+    return extractCommandSubstitution(tokens, startIndex + 1);
+  }
+  if (_isProcessSubstitutionStart(tokens, startIndex)) {
+    return extractCommandSubstitution(tokens, startIndex + 2);
+  }
+  return { innerSegments: [], endIndex: startIndex };
+}
 function _getRedirectTargetInfo(tokens, index) {
-  if (_isCommandSubstitutionStart(tokens, index + 1)) {
+  if (_isCommandSubstitutionStart(tokens, index + 1) || _isProcessSubstitutionStart(tokens, index + 1)) {
     return { redirectTarget: null, advance: 1 };
   }
   const firstTarget = tokens[index + 1];
   if (typeof firstTarget !== "string") {
-    return { redirectTarget: null, advance: firstTarget === undefined ? 1 : 2 };
+    return { redirectTarget: null, advance: 1 };
   }
   let redirectTarget = firstTarget;
   let nextIndex = index + 2;
@@ -1060,14 +1139,6 @@ function _getRedirectTargetInfo(tokens, index) {
       redirectTarget += text;
       nextIndex += consumed;
     }
-  }
-  while (_hasUnclosedBackticks(redirectTarget)) {
-    const nextToken = tokens[nextIndex];
-    if (typeof nextToken !== "string") {
-      break;
-    }
-    redirectTarget += ` ${nextToken}`;
-    nextIndex++;
   }
   return {
     redirectTarget,
@@ -1119,10 +1190,13 @@ function _findInlineCommandSubstitutionEnd(token, startIndex) {
   }
   return -1;
 }
-function _hasUnclosedBackticks(token) {
-  let inBacktick = false;
+function _findBacktickEnd(command, startIndex) {
   let escaped = false;
-  for (const char of token) {
+  for (let i = startIndex;i < command.length; i++) {
+    const char = command[i];
+    if (!char) {
+      break;
+    }
     if (escaped) {
       escaped = false;
       continue;
@@ -1132,10 +1206,10 @@ function _hasUnclosedBackticks(token) {
       continue;
     }
     if (char === "`") {
-      inBacktick = !inBacktick;
+      return i;
     }
   }
-  return inBacktick;
+  return -1;
 }
 function _collectParenthesizedTokens(tokens, startIndex) {
   if (!isParenOpen(tokens[startIndex])) {
@@ -1189,6 +1263,9 @@ function _isWhitespaceChar(char) {
 }
 function _isAsciiDigit(char) {
   return char >= "0" && char <= "9";
+}
+function _isPathLikeBacktickSuffix(char) {
+  return char === "/" || char === ".";
 }
 function _isShellTokenBoundaryChar(char) {
   return _isWhitespaceChar(char) || ";|&()<>".includes(char);
