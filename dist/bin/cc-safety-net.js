@@ -968,7 +968,8 @@ function colorizeToken(token, index, seed = 0) {
 var PLATFORM_NAMES = {
   "claude-code": "Claude Code",
   opencode: "OpenCode",
-  "gemini-cli": "Gemini CLI"
+  "gemini-cli": "Gemini CLI",
+  "copilot-cli": "Copilot CLI"
 };
 function formatHooksSection(hooks) {
   const lines = [];
@@ -1325,6 +1326,7 @@ function formatSystemInfoTable(system) {
     { label: "Claude Code", value: system.claudeCodeVersion },
     { label: "OpenCode", value: system.openCodeVersion },
     { label: "Gemini CLI", value: system.geminiCliVersion },
+    { label: "Copilot CLI", value: system.copilotCliVersion },
     { label: "Node.js", value: system.nodeVersion },
     { label: "npm", value: system.npmVersion },
     { label: "Bun", value: system.bunVersion },
@@ -1373,7 +1375,7 @@ All checks passed.`);
 }
 
 // src/bin/doctor/hooks.ts
-import { existsSync as existsSync4, readFileSync as readFileSync4 } from "node:fs";
+import { existsSync as existsSync4, readdirSync as readdirSync2, readFileSync as readFileSync4 } from "node:fs";
 import { homedir as homedir4, tmpdir as tmpdir3 } from "node:os";
 import { join as join3 } from "node:path";
 
@@ -3958,14 +3960,70 @@ function detectGeminiCLI(homeDir, cwd) {
     errors
   };
 }
+function isSafetyNetCopilotCommand(command) {
+  if (!command?.includes("cc-safety-net"))
+    return false;
+  return /(^|\s)(--copilot-cli|-cp)(\s|$)/.test(command);
+}
+function checkCopilotEnabled(homeDir, cwd, errors) {
+  const directories = [join3(cwd, ".github", "hooks"), join3(homeDir, ".copilot", "hooks")];
+  for (const dirPath of directories) {
+    if (!existsSync4(dirPath))
+      continue;
+    const filenames = readdirSync2(dirPath).filter((name) => name.endsWith(".json")).sort((a, b) => a.localeCompare(b));
+    for (const filename of filenames) {
+      const configPath = join3(dirPath, filename);
+      try {
+        const config = JSON.parse(readFileSync4(configPath, "utf-8"));
+        const preToolUseHooks = config.hooks?.preToolUse ?? [];
+        const hasSafetyNetHook = preToolUseHooks.some((hook) => {
+          if (hook.type !== "command")
+            return false;
+          return isSafetyNetCopilotCommand(hook.bash) || isSafetyNetCopilotCommand(hook.powershell);
+        });
+        if (hasSafetyNetHook) {
+          return { enabled: true, configPath };
+        }
+      } catch (e) {
+        errors.push(`Failed to parse ${configPath}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+  }
+  return { enabled: false };
+}
+function detectCopilotCLI(homeDir, cwd) {
+  const errors = [];
+  const hooksCheck = checkCopilotEnabled(homeDir, cwd, errors);
+  if (hooksCheck.enabled) {
+    return {
+      platform: "copilot-cli",
+      status: "configured",
+      method: "hook config",
+      configPath: hooksCheck.configPath,
+      selfTest: runSelfTest(),
+      errors: errors.length > 0 ? errors : undefined
+    };
+  }
+  return {
+    platform: "copilot-cli",
+    status: "n/a",
+    errors: errors.length > 0 ? errors : undefined
+  };
+}
 function detectAllHooks(cwd, options) {
   const homeDir = options?.homeDir ?? homedir4();
-  return [detectClaudeCode(homeDir), detectOpenCode(homeDir), detectGeminiCLI(homeDir, cwd)];
+  return [
+    detectClaudeCode(homeDir),
+    detectOpenCode(homeDir),
+    detectGeminiCLI(homeDir, cwd),
+    detectCopilotCLI(homeDir, cwd)
+  ];
 }
 
 // src/bin/doctor/system-info.ts
 import { spawn } from "node:child_process";
 var CURRENT_VERSION = "0.7.1";
+var VERSION_FETCH_TIMEOUT_MS = 2000;
 function getPackageVersion() {
   return CURRENT_VERSION;
 }
@@ -3978,15 +4036,28 @@ var defaultVersionFetcher = async (args) => {
       const proc = spawn(cmd, rest, {
         stdio: ["ignore", "pipe", "pipe"]
       });
+      let isSettled = false;
       let output = "";
       proc.stdout.on("data", (data) => {
         output += data.toString();
       });
+      proc.stderr.on("data", () => {});
+      const finish = (value) => {
+        if (isSettled)
+          return;
+        isSettled = true;
+        clearTimeout(timeoutId);
+        resolve3(value);
+      };
+      const timeoutId = setTimeout(() => {
+        proc.kill();
+        finish(null);
+      }, VERSION_FETCH_TIMEOUT_MS);
       proc.on("close", (code) => {
-        resolve3(code === 0 ? output.trim() || null : null);
+        finish(code === 0 ? output.trim() || null : null);
       });
       proc.on("error", () => {
-        resolve3(null);
+        finish(null);
       });
     } catch {
       resolve3(null);
@@ -4007,10 +4078,11 @@ function parseVersion(output) {
   return firstLine || null;
 }
 async function getSystemInfo(fetcher = defaultVersionFetcher) {
-  const [claudeRaw, openCodeRaw, geminiRaw, nodeRaw, npmRaw, bunRaw] = await Promise.all([
+  const [claudeRaw, openCodeRaw, geminiRaw, copilotRaw, nodeRaw, npmRaw, bunRaw] = await Promise.all([
     fetcher(["claude", "--version"]),
     fetcher(["opencode", "--version"]),
     fetcher(["gemini", "--version"]),
+    fetcher(["copilot", "--version"]),
     fetcher(["node", "--version"]),
     fetcher(["npm", "--version"]),
     fetcher(["bun", "--version"])
@@ -4020,6 +4092,7 @@ async function getSystemInfo(fetcher = defaultVersionFetcher) {
     claudeCodeVersion: parseVersion(claudeRaw),
     openCodeVersion: parseVersion(openCodeRaw),
     geminiCliVersion: parseVersion(geminiRaw),
+    copilotCliVersion: parseVersion(copilotRaw),
     nodeVersion: parseVersion(nodeRaw),
     npmVersion: parseVersion(npmRaw),
     bunVersion: parseVersion(bunRaw),
