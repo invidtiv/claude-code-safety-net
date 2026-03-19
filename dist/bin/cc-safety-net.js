@@ -1609,12 +1609,13 @@ function splitShellCommands(command) {
       i = endIndex + 1;
       continue;
     }
-    if (typeof token !== "string") {
+    const tokenText = _getCommandTokenText(token);
+    if (tokenText === null) {
       i++;
       continue;
     }
-    _pushInlineSubstitutionSegments(segments, token);
-    current.push(token);
+    _pushInlineSubstitutionSegments(segments, tokenText);
+    current.push(tokenText);
     i++;
   }
   if (current.length > 0) {
@@ -1699,6 +1700,15 @@ function isParenOpen(token) {
 function isParenClose(token) {
   return typeof token === "object" && token !== null && "op" in token && token.op === ")";
 }
+function _getCommandTokenText(token) {
+  if (typeof token === "string") {
+    return token;
+  }
+  if (token && typeof token === "object" && "pattern" in token && typeof token.pattern === "string") {
+    return token.pattern;
+  }
+  return null;
+}
 function extractCommandSubstitution(tokens, startIndex) {
   if (tokens[startIndex] === ARITHMETIC_SENTINEL) {
     return _extractArithmeticSubstitution(tokens, startIndex);
@@ -1749,8 +1759,9 @@ function extractCommandSubstitution(tokens, startIndex) {
       i = endIndex + 1;
       continue;
     }
-    if (typeof token === "string") {
-      currentSegment.push(token);
+    const tokenText = _getCommandTokenText(token);
+    if (tokenText !== null) {
+      currentSegment.push(tokenText);
     }
     i++;
   }
@@ -2295,11 +2306,11 @@ function _stringifyParseEntry(token) {
     return token;
   }
   if (token && typeof token === "object") {
-    if ("op" in token) {
-      return String(token.op);
-    }
     if ("pattern" in token && typeof token.pattern === "string") {
       return token.pattern;
+    }
+    if ("op" in token) {
+      return String(token.op);
     }
   }
   return "";
