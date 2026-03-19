@@ -149,9 +149,20 @@ describe('shell parsing helpers', () => {
       ]);
     });
 
-    test('drops plain redirect targets but keeps ambiguous numeric args', () => {
-      expect(splitShellCommands('rm -rf ./foo 2>/dev/null')).toEqual([['rm', '-rf', './foo', '2']]);
+    test('drops plain redirect targets and attached fd prefixes', () => {
+      expect(splitShellCommands('rm -rf ./foo 2>/dev/null')).toEqual([['rm', '-rf', './foo']]);
+      expect(splitShellCommands('rm -rf ./foo 2>&1')).toEqual([['rm', '-rf', './foo']]);
+      expect(splitShellCommands('rm -rf ./foo 2>>/tmp/log')).toEqual([['rm', '-rf', './foo']]);
+    });
+
+    test('keeps spaced numeric args and quoted redirect literals intact', () => {
+      expect(splitShellCommands('rm -rf 123>/dev/null')).toEqual([['rm', '-rf']]);
       expect(splitShellCommands('rm -rf 7 > /dev/null')).toEqual([['rm', '-rf', '7']]);
+      expect(splitShellCommands('rm -rf 123 >/dev/null')).toEqual([['rm', '-rf', '123']]);
+      expect(splitShellCommands('rm -rf ./foo 2 > /dev/null')).toEqual([
+        ['rm', '-rf', './foo', '2'],
+      ]);
+      expect(splitShellCommands("echo '2>/dev/null'")).toEqual([['echo', '2>/dev/null']]);
     });
 
     test('keeps nested command substitutions in redirect targets analyzable', () => {
@@ -164,7 +175,7 @@ describe('shell parsing helpers', () => {
     test('drops redirect targets inside nested command substitutions', () => {
       expect(splitShellCommands('echo $(rm -rf /tmp/foo 2>/dev/null)')).toEqual([
         ['echo'],
-        ['rm', '-rf', '/tmp/foo', '2'],
+        ['rm', '-rf', '/tmp/foo'],
       ]);
     });
   });

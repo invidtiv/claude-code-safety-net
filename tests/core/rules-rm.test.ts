@@ -237,6 +237,10 @@ describe('rm -rf cwd-aware', () => {
     }
   });
 
+  test('attached io-number redirect does not become a numeric rm target', () => {
+    assertAllowed('rm -rf 123>/dev/null');
+  });
+
   test('rm -rf . blocked', () => {
     setup();
     try {
@@ -414,6 +418,10 @@ describe('rm -rf cwd-aware', () => {
 
   test('rm -rf numeric target before redirect stays blocked conservatively', () => {
     assertBlocked('rm -rf 7 > /dev/null', 'rm -rf');
+  });
+
+  test('spaced numeric target before redirect stays blocked conservatively', () => {
+    assertBlocked('rm -rf 123 >/dev/null', 'rm -rf');
   });
 });
 

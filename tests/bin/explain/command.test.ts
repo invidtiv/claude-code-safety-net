@@ -165,7 +165,7 @@ describe('explainCommand edge cases', () => {
     expect(result.trace.steps).toContainEqual({
       type: 'parse',
       input: 'rm -rf /tmp/foo 2>/dev/null',
-      segments: [['rm', '-rf', '/tmp/foo', '2']],
+      segments: [['rm', '-rf', '/tmp/foo']],
     });
   });
 
@@ -178,6 +178,11 @@ describe('explainCommand edge cases', () => {
   test('nested rm redirect to dev null is allowed in command substitution', () => {
     const result = explainCommand('echo $(rm -rf /tmp/foo 2>/dev/null)');
     expect(result.result).toBe('allowed');
+    expect(result.trace.steps).toContainEqual({
+      type: 'parse',
+      input: 'echo $(rm -rf /tmp/foo 2>/dev/null)',
+      segments: [['echo'], ['rm', '-rf', '/tmp/foo']],
+    });
   });
 
   test('numeric rm target before redirect is preserved in explain trace', () => {
@@ -187,6 +192,26 @@ describe('explainCommand edge cases', () => {
       type: 'parse',
       input: 'rm -rf 7 > /dev/null',
       segments: [['rm', '-rf', '7']],
+    });
+  });
+
+  test('attached io-number redirect is stripped from explain trace', () => {
+    const result = explainCommand('rm -rf 123>/dev/null');
+    expect(result.result).toBe('allowed');
+    expect(result.trace.steps).toContainEqual({
+      type: 'parse',
+      input: 'rm -rf 123>/dev/null',
+      segments: [['rm', '-rf']],
+    });
+  });
+
+  test('spaced numeric rm arg before redirect stays visible in explain trace', () => {
+    const result = explainCommand('rm -rf 123 >/dev/null');
+    expect(result.result).toBe('allowed');
+    expect(result.trace.steps).toContainEqual({
+      type: 'parse',
+      input: 'rm -rf 123 >/dev/null',
+      segments: [['rm', '-rf', '123']],
     });
   });
 });
