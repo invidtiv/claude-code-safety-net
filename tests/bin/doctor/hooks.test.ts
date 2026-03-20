@@ -662,6 +662,27 @@ describe('detectAllHooks', () => {
     }
   });
 
+  test('Copilot CLI: supports global config.json inline hooks at the minimum supported version', () => {
+    const tmpBase = join(tmpdir(), `doctor-copilot-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const configDir = join(homeDir, '.copilot');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(configDir, { recursive: true });
+    writeCopilotInlineConfig(join(configDir, 'config.json'));
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '1.0.8' });
+      const copilot = hooks.find((hook) => hook.platform === 'copilot-cli');
+
+      expect(copilot?.status).toBe('configured');
+      expect(copilot?.configPath).toBe(join(configDir, 'config.json'));
+      expect(copilot?.configPaths).toEqual([join(configDir, 'config.json')]);
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
   test('Copilot CLI: configured from repository settings.json inline hooks', () => {
     const tmpBase = join(tmpdir(), `doctor-copilot-${Date.now()}`);
     const homeDir = join(tmpBase, 'home');
@@ -843,6 +864,33 @@ describe('detectAllHooks', () => {
       expect(copilot?.status).toBe('configured');
       expect(copilot?.errors?.some((e) => e.includes('Failed to parse'))).toBe(true);
       expect(copilot?.configPaths).toEqual([join(homeDir, '.copilot', 'hooks', 'global.json')]);
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Copilot CLI: reports an error when the repository hooks path is not a directory', () => {
+    const tmpBase = join(tmpdir(), `doctor-copilot-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const githubDir = join(projectDir, '.github');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(githubDir, { recursive: true });
+    writeFileSync(join(githubDir, 'hooks'), 'not a directory');
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir });
+      const copilot = hooks.find((hook) => hook.platform === 'copilot-cli');
+
+      expect(copilot?.status).toBe('n/a');
+      expect(copilot?.selfTest).toBeUndefined();
+      expect(
+        copilot?.errors?.some(
+          (error) =>
+            error.includes('Failed to read') &&
+            error.includes(join(projectDir, '.github', 'hooks')),
+        ),
+      ).toBe(true);
     } finally {
       rmSync(tmpBase, { recursive: true, force: true });
     }
