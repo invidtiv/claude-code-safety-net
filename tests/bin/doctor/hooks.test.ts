@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { detectAllHooks, stripJsonComments } from '@/bin/doctor/hooks';
 import { withEnv } from '../../helpers.ts';
 
-function writeCopilotHook(
+function _writeCopilotHook(
   filePath: string,
   command: string = 'npx -y cc-safety-net --copilot-cli',
   commandKey: 'bash' | 'powershell' = 'bash',
@@ -32,7 +32,7 @@ function writeCopilotHook(
   );
 }
 
-function writeCopilotInlineConfig(
+function _writeCopilotInlineConfig(
   filePath: string,
   command: string = 'npx -y cc-safety-net --copilot-cli',
   options: {
@@ -104,7 +104,7 @@ describe('detectAllHooks', () => {
 
     const copilotDir = join(projectDir, '.github', 'hooks');
     mkdirSync(copilotDir, { recursive: true });
-    writeCopilotHook(join(copilotDir, 'safety-net.json'));
+    _writeCopilotHook(join(copilotDir, 'safety-net.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir });
@@ -427,7 +427,7 @@ describe('detectAllHooks', () => {
     const copilotDir = join(projectDir, '.github', 'hooks');
     mkdirSync(homeDir, { recursive: true });
     mkdirSync(copilotDir, { recursive: true });
-    writeCopilotHook(join(copilotDir, 'safety-net.json'));
+    _writeCopilotHook(join(copilotDir, 'safety-net.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir });
@@ -448,7 +448,7 @@ describe('detectAllHooks', () => {
     const copilotDir = join(homeDir, '.copilot', 'hooks');
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(copilotDir, { recursive: true });
-    writeCopilotHook(join(copilotDir, 'global.json'));
+    _writeCopilotHook(join(copilotDir, 'global.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '1.0.9' });
@@ -469,7 +469,7 @@ describe('detectAllHooks', () => {
     const copilotDir = join(homeDir, '.copilot', 'hooks');
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(copilotDir, { recursive: true });
-    writeCopilotHook(join(copilotDir, 'global.json'));
+    _writeCopilotHook(join(copilotDir, 'global.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '0.0.421' });
@@ -485,6 +485,83 @@ describe('detectAllHooks', () => {
     }
   });
 
+  test('Copilot CLI: unsupported user hook warning uses resolved COPILOT_HOME hooks path', () => {
+    const tmpBase = join(tmpdir(), `doctor-copilot-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const customCopilotHome = join(tmpBase, 'custom-copilot');
+    const customHooksDir = join(customCopilotHome, 'hooks');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(customHooksDir, { recursive: true });
+    _writeCopilotHook(join(customHooksDir, 'global.json'));
+
+    try {
+      const hooks = withEnv({ COPILOT_HOME: customCopilotHome }, () =>
+        detectAllHooks(projectDir, { homeDir, copilotCliVersion: '0.0.421' }),
+      );
+      const copilot = hooks.find((hook) => hook.platform === 'copilot-cli');
+
+      expect(copilot?.status).toBe('n/a');
+      expect(
+        copilot?.errors?.some((error) =>
+          error.includes(`user hook files in ${join(customCopilotHome, 'hooks')}`),
+        ) ?? false,
+      ).toBe(true);
+      expect(copilot?.errors?.some((error) => error.includes('~/.copilot/hooks')) ?? false).toBe(
+        false,
+      );
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Copilot CLI: ignores malformed global hook config on unsupported versions', () => {
+    const tmpBase = join(tmpdir(), `doctor-copilot-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const copilotDir = join(homeDir, '.copilot', 'hooks');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(copilotDir, { recursive: true });
+    writeFileSync(join(copilotDir, 'broken.json'), '{ invalid json }');
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '0.0.421' });
+      const copilot = hooks.find((hook) => hook.platform === 'copilot-cli');
+
+      expect(copilot?.status).toBe('n/a');
+      expect(copilot?.errors?.some((error) => error.includes('Failed to parse')) ?? false).toBe(
+        false,
+      );
+      expect(copilot?.errors?.some((error) => error.includes('user hook files')) ?? false).toBe(
+        false,
+      );
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Copilot CLI: does not warn about unsupported user hook files when none configure Safety Net', () => {
+    const tmpBase = join(tmpdir(), `doctor-copilot-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const copilotDir = join(homeDir, '.copilot', 'hooks');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(copilotDir, { recursive: true });
+    _writeCopilotHook(join(copilotDir, 'other.json'), 'echo safe');
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir });
+      const copilot = hooks.find((hook) => hook.platform === 'copilot-cli');
+
+      expect(copilot?.status).toBe('n/a');
+      expect(copilot?.errors?.some((error) => error.includes('user hook files')) ?? false).toBe(
+        false,
+      );
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
   test('Copilot CLI: reports repo and global hook configs together', () => {
     const tmpBase = join(tmpdir(), `doctor-copilot-${Date.now()}`);
     const homeDir = join(tmpBase, 'home');
@@ -493,8 +570,8 @@ describe('detectAllHooks', () => {
     const globalDir = join(homeDir, '.copilot', 'hooks');
     mkdirSync(localDir, { recursive: true });
     mkdirSync(globalDir, { recursive: true });
-    writeCopilotHook(join(globalDir, 'global.json'));
-    writeCopilotHook(join(localDir, 'local.json'));
+    _writeCopilotHook(join(globalDir, 'global.json'));
+    _writeCopilotHook(join(localDir, 'local.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '1.0.9' });
@@ -519,7 +596,7 @@ describe('detectAllHooks', () => {
     mkdirSync(homeDir, { recursive: true });
     mkdirSync(copilotDir, { recursive: true });
     writeFileSync(join(copilotDir, 'broken.json'), '{ invalid json }');
-    writeCopilotHook(join(copilotDir, 'safety-net.json'));
+    _writeCopilotHook(join(copilotDir, 'safety-net.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir });
@@ -540,7 +617,7 @@ describe('detectAllHooks', () => {
     const copilotDir = join(projectDir, '.github', 'hooks');
     mkdirSync(homeDir, { recursive: true });
     mkdirSync(copilotDir, { recursive: true });
-    writeCopilotHook(join(copilotDir, 'other.json'), 'echo safe');
+    _writeCopilotHook(join(copilotDir, 'other.json'), 'echo safe');
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir });
@@ -560,7 +637,7 @@ describe('detectAllHooks', () => {
     const copilotDir = join(projectDir, '.github', 'hooks');
     mkdirSync(homeDir, { recursive: true });
     mkdirSync(copilotDir, { recursive: true });
-    writeCopilotHook(
+    _writeCopilotHook(
       join(copilotDir, 'powershell.json'),
       'npx -y cc-safety-net --copilot-cli',
       'powershell',
@@ -606,7 +683,7 @@ describe('detectAllHooks', () => {
     const copilotDir = join(projectDir, '.github', 'hooks');
     mkdirSync(homeDir, { recursive: true });
     mkdirSync(copilotDir, { recursive: true });
-    writeCopilotHook(join(copilotDir, 'short-flag.json'), 'bunx cc-safety-net -cp');
+    _writeCopilotHook(join(copilotDir, 'short-flag.json'), 'bunx cc-safety-net -cp');
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir });
@@ -626,7 +703,7 @@ describe('detectAllHooks', () => {
     const configDir = join(homeDir, '.copilot');
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(configDir, { recursive: true });
-    writeCopilotInlineConfig(join(configDir, 'config.json'));
+    _writeCopilotInlineConfig(join(configDir, 'config.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '1.0.9' });
@@ -647,7 +724,7 @@ describe('detectAllHooks', () => {
     const configDir = join(homeDir, '.copilot');
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(configDir, { recursive: true });
-    writeCopilotInlineConfig(join(configDir, 'config.json'));
+    _writeCopilotInlineConfig(join(configDir, 'config.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '1.0.7' });
@@ -669,7 +746,7 @@ describe('detectAllHooks', () => {
     const configDir = join(homeDir, '.copilot');
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(configDir, { recursive: true });
-    writeCopilotInlineConfig(join(configDir, 'config.json'));
+    _writeCopilotInlineConfig(join(configDir, 'config.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '1.0.8' });
@@ -690,7 +767,7 @@ describe('detectAllHooks', () => {
     const configDir = join(projectDir, '.github', 'copilot');
     mkdirSync(homeDir, { recursive: true });
     mkdirSync(configDir, { recursive: true });
-    writeCopilotInlineConfig(join(configDir, 'settings.json'));
+    _writeCopilotInlineConfig(join(configDir, 'settings.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '1.0.9' });
@@ -711,7 +788,7 @@ describe('detectAllHooks', () => {
     const configDir = join(projectDir, '.github', 'copilot');
     mkdirSync(homeDir, { recursive: true });
     mkdirSync(configDir, { recursive: true });
-    writeCopilotInlineConfig(join(configDir, 'settings.local.json'));
+    _writeCopilotInlineConfig(join(configDir, 'settings.local.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '1.0.9' });
@@ -733,7 +810,7 @@ describe('detectAllHooks', () => {
     const configDir = join(homeDir, '.copilot');
     mkdirSync(hooksDir, { recursive: true });
     mkdirSync(configDir, { recursive: true });
-    writeCopilotHook(join(hooksDir, 'safety-net.json'));
+    _writeCopilotHook(join(hooksDir, 'safety-net.json'));
     writeFileSync(join(configDir, 'config.json'), JSON.stringify({ disableAllHooks: true }));
 
     try {
@@ -759,7 +836,7 @@ describe('detectAllHooks', () => {
     mkdirSync(repoConfigDir, { recursive: true });
     writeFileSync(join(userConfigDir, 'config.json'), JSON.stringify({ disableAllHooks: true }));
     writeFileSync(join(repoConfigDir, 'settings.json'), JSON.stringify({ disableAllHooks: false }));
-    writeCopilotInlineConfig(join(repoConfigDir, 'settings.local.json'));
+    _writeCopilotInlineConfig(join(repoConfigDir, 'settings.local.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '1.0.9' });
@@ -781,8 +858,8 @@ describe('detectAllHooks', () => {
     const repoConfigDir = join(projectDir, '.github', 'copilot');
     mkdirSync(userConfigDir, { recursive: true });
     mkdirSync(repoConfigDir, { recursive: true });
-    writeCopilotInlineConfig(join(userConfigDir, 'config.json'));
-    writeCopilotInlineConfig(join(repoConfigDir, 'settings.json'));
+    _writeCopilotInlineConfig(join(userConfigDir, 'config.json'));
+    _writeCopilotInlineConfig(join(repoConfigDir, 'settings.json'));
     writeFileSync(
       join(repoConfigDir, 'settings.local.json'),
       JSON.stringify({ disableAllHooks: true }),
@@ -807,7 +884,7 @@ describe('detectAllHooks', () => {
     const projectDir = join(tmpBase, 'project');
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(customCopilotHome, { recursive: true });
-    writeCopilotInlineConfig(join(customCopilotHome, 'config.json'));
+    _writeCopilotInlineConfig(join(customCopilotHome, 'config.json'));
 
     try {
       const hooks = withEnv({ COPILOT_HOME: customCopilotHome }, () =>
@@ -830,7 +907,7 @@ describe('detectAllHooks', () => {
     const configDir = join(homeDir, '.copilot');
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(configDir, { recursive: true });
-    writeCopilotInlineConfig(join(configDir, 'config.json'));
+    _writeCopilotInlineConfig(join(configDir, 'config.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir });
@@ -840,6 +917,79 @@ describe('detectAllHooks', () => {
       expect(copilot?.errors?.some((e) => e.includes('Copilot CLI version unavailable'))).toBe(
         true,
       );
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Copilot CLI: does not warn about unsupported inline hooks when none configure Safety Net', () => {
+    const tmpBase = join(tmpdir(), `doctor-copilot-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const configDir = join(homeDir, '.copilot');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(configDir, { recursive: true });
+    _writeCopilotInlineConfig(join(configDir, 'config.json'), 'echo safe');
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '1.0.7' });
+      const copilot = hooks.find((hook) => hook.platform === 'copilot-cli');
+
+      expect(copilot?.status).toBe('n/a');
+      expect(
+        copilot?.errors?.some((error) => error.includes('inline hook definitions')) ?? false,
+      ).toBe(false);
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Copilot CLI: ignores malformed inline config on unsupported versions', () => {
+    const tmpBase = join(tmpdir(), `doctor-copilot-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const configDir = join(homeDir, '.copilot');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'config.json'), '{ invalid json }');
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '1.0.7' });
+      const copilot = hooks.find((hook) => hook.platform === 'copilot-cli');
+
+      expect(copilot?.status).toBe('n/a');
+      expect(copilot?.errors?.some((error) => error.includes('Failed to parse')) ?? false).toBe(
+        false,
+      );
+      expect(
+        copilot?.errors?.some((error) => error.includes('inline hook definitions')) ?? false,
+      ).toBe(false);
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Copilot CLI: ignores malformed inline config when version is unavailable', () => {
+    const tmpBase = join(tmpdir(), `doctor-copilot-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const configDir = join(homeDir, '.copilot');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, 'config.json'), '{ invalid json }');
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir });
+      const copilot = hooks.find((hook) => hook.platform === 'copilot-cli');
+
+      expect(copilot?.status).toBe('n/a');
+      expect(copilot?.errors?.some((error) => error.includes('Failed to parse')) ?? false).toBe(
+        false,
+      );
+      expect(
+        copilot?.errors?.some((error) => error.includes('Copilot CLI version unavailable')) ??
+          false,
+      ).toBe(false);
     } finally {
       rmSync(tmpBase, { recursive: true, force: true });
     }
@@ -855,7 +1005,7 @@ describe('detectAllHooks', () => {
     mkdirSync(configDir, { recursive: true });
     mkdirSync(hooksDir, { recursive: true });
     writeFileSync(join(configDir, 'config.json'), '{ invalid json }');
-    writeCopilotHook(join(hooksDir, 'global.json'));
+    _writeCopilotHook(join(hooksDir, 'global.json'));
 
     try {
       const hooks = detectAllHooks(projectDir, { homeDir, copilotCliVersion: '1.0.9' });
