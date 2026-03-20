@@ -6,6 +6,20 @@ import { describe, expect, test } from 'bun:test';
 import { defaultVersionFetcher, getPackageVersion, getSystemInfo } from '@/bin/doctor/system-info';
 import { mockVersionFetcher } from '../../helpers.ts';
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (reason?: unknown) => void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('getSystemInfo', () => {
   test('returns all required fields', async () => {
     const sysInfo = await getSystemInfo(mockVersionFetcher);
@@ -39,26 +53,35 @@ describe('getSystemInfo', () => {
     expect(sysInfo.copilotCliVersion).toBe('1.0.9');
   });
 
-  test('uses copilot --binary-version before falling back to --version', async () => {
+  test('starts both copilot version probes immediately and prefers --binary-version', async () => {
     const calls: string[][] = [];
-    const fetcher = async (args: string[]) => {
+    const binaryVersion = createDeferred<string | null>();
+    const fallbackVersion = createDeferred<string | null>();
+    const fetcher = (args: string[]): Promise<string | null> => {
       calls.push(args);
       if (args[0] === 'copilot' && args[1] === '--binary-version') {
-        return 'Copilot binary version: 1.0.9';
+        return binaryVersion.promise;
       }
       if (args[0] === 'copilot' && args[1] === '--version') {
-        return 'copilot 1.0.8';
+        return fallbackVersion.promise;
       }
-      return null;
+      return Promise.resolve(null);
     };
 
-    const sysInfo = await getSystemInfo(fetcher);
+    const sysInfoPromise = getSystemInfo(fetcher);
+    await Promise.resolve();
 
-    expect(sysInfo.copilotCliVersion).toBe('1.0.9');
     expect(calls.some((args) => args[0] === 'copilot' && args[1] === '--binary-version')).toBe(
       true,
     );
-    expect(calls.some((args) => args[0] === 'copilot' && args[1] === '--version')).toBe(false);
+    expect(calls.some((args) => args[0] === 'copilot' && args[1] === '--version')).toBe(true);
+
+    fallbackVersion.resolve('copilot 1.0.8');
+    binaryVersion.resolve('Copilot binary version: 1.0.9');
+
+    const sysInfo = await sysInfoPromise;
+
+    expect(sysInfo.copilotCliVersion).toBe('1.0.9');
   });
 
   test('falls back to copilot --version when --binary-version is unavailable', async () => {
@@ -79,6 +102,38 @@ describe('getSystemInfo', () => {
     );
     expect(calls.some((args) => args[0] === 'copilot' && args[1] === '--version')).toBe(true);
   });
+
+  test('does not wait for copilot --version when --binary-version succeeds', async () => {
+    const calls: string[][] = [];
+    const binaryVersion = createDeferred<string | null>();
+    const fallbackVersion = createDeferred<string | null>();
+    const fetcher = (args: string[]): Promise<string | null> => {
+      calls.push(args);
+      if (args[0] === 'copilot' && args[1] === '--binary-version') {
+        return binaryVersion.promise;
+      }
+      if (args[0] === 'copilot' && args[1] === '--version') {
+        return fallbackVersion.promise;
+      }
+      return Promise.resolve(null);
+    };
+
+    const sysInfoPromise = getSystemInfo(fetcher);
+    await Promise.resolve();
+
+    expect(calls.some((args) => args[0] === 'copilot' && args[1] === '--binary-version')).toBe(
+      true,
+    );
+    expect(calls.some((args) => args[0] === 'copilot' && args[1] === '--version')).toBe(true);
+
+    binaryVersion.resolve('Copilot binary version: 1.0.9');
+
+    const sysInfo = await sysInfoPromise;
+
+    expect(sysInfo.copilotCliVersion).toBe('1.0.9');
+
+    fallbackVersion.resolve('copilot 1.0.8');
+  }, 100);
 
   test('handles commands that exit with non-zero code', async () => {
     const failingFetcher = async (_args: string[]) => null;

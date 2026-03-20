@@ -100,11 +100,13 @@ export async function getSystemInfo(
   fetcher: VersionFetcher = defaultVersionFetcher,
 ): Promise<SystemInfo> {
   const fetchCopilotVersion = async (): Promise<string | null> => {
-    const binaryVersion = await fetcher(['copilot', '--binary-version']);
+    const binaryVersionPromise = fetcher(['copilot', '--binary-version']);
+    const fallbackVersionPromise = fetcher(['copilot', '--version']);
+    const binaryVersion = await binaryVersionPromise;
     if (binaryVersion) {
       return binaryVersion;
     }
-    return fetcher(['copilot', '--version']);
+    return fallbackVersionPromise;
   };
 
   // Run all version fetches in parallel

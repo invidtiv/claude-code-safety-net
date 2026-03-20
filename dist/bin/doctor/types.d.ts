@@ -33,7 +33,7 @@ export interface HookStatus {
     status: HookConfigStatus;
     method?: string;
     configPath?: string;
-    configPaths?: string[];
+    configPaths?: readonly string[];
     errors?: string[];
     selfTest?: SelfTestSummary;
 }
