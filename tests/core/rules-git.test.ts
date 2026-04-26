@@ -1,6 +1,17 @@
 import { describe, expect, test } from 'bun:test';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, symlinkSync } from 'node:fs';
+import { join } from 'node:path';
 import { analyzeGit } from '@/core/rules-git';
-import { assertAllowed, assertBlocked } from '../helpers.ts';
+import {
+  assertAllowed,
+  assertBlocked,
+  createLinkedWorktreeFixture,
+  createSubmoduleLikeGitFileFixture,
+  runGuard,
+  toShellPath,
+  withEnv,
+} from '../helpers.ts';
 
 describe('analyzeGit direct', () => {
   test('empty tokens returns null', () => {
@@ -421,6 +432,209 @@ describe('git clean', () => {
 
   test('git clean -nd allowed', () => {
     assertAllowed('git clean -nd');
+  });
+});
+
+describe('git linked worktree mode', () => {
+  test('default mode still blocks local discard commands in linked worktrees', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      assertBlocked('git reset --hard', 'git reset --hard', fixture.linkedWorktree);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE allows local discard commands in linked worktrees', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        const commands = [
+          'git restore file.txt',
+          'git restore --worktree file.txt',
+          'git checkout -- file.txt',
+          'git checkout HEAD -- file.txt',
+          'git checkout --force main',
+          'git checkout --pathspec-from-file paths.txt',
+          'git checkout main file.txt',
+          'git switch --discard-changes main',
+          'git switch -f main',
+          'git reset --hard',
+          'git reset --merge',
+          'git clean -f',
+          'git clean -fd',
+        ];
+
+        for (const command of commands) {
+          expect(runGuard(command, fixture.linkedWorktree)).toBeNull();
+        }
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE does not relax main worktree commands', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked('git reset --hard', 'git reset --hard', fixture.mainWorktree);
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE does not relax main worktree subdirectories', () => {
+    const fixture = createLinkedWorktreeFixture();
+    const subdir = join(fixture.mainWorktree, 'nested');
+    mkdirSync(subdir);
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked('git clean -f', 'git clean -f', subdir);
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE does not relax submodule-like git file directories', () => {
+    const fixture = createSubmoduleLikeGitFileFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked('git reset --hard', 'git reset --hard', fixture.cwd);
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE allows symlinked cwd inside linked worktree', () => {
+    const fixture = createLinkedWorktreeFixture();
+    const nested = join(fixture.linkedWorktree, 'nested');
+    const symlinkedCwd = join(fixture.rootDir, 'nested-link');
+    mkdirSync(nested);
+    symlinkSync(nested, symlinkedCwd, 'dir');
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertAllowed('git reset --hard', symlinkedCwd);
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE allows nested linked worktrees', () => {
+    const fixture = createLinkedWorktreeFixture();
+    const nestedWorktree = join(fixture.linkedWorktree, 'inner-worktree');
+    execFileSync('git', ['worktree', 'add', '-b', 'feature/nested-worktree-test', nestedWorktree], {
+      cwd: fixture.mainWorktree,
+      stdio: 'ignore',
+    });
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertAllowed('git reset --hard', nestedWorktree);
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE honors git -C linked worktree directories', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertAllowed(
+          `git -C ${toShellPath(fixture.linkedWorktree)} reset --hard`,
+          fixture.mainWorktree,
+        );
+        assertAllowed(
+          `git -C${toShellPath(fixture.linkedWorktree)} clean -f`,
+          fixture.mainWorktree,
+        );
+        assertAllowed(
+          `git -C ${toShellPath(fixture.mainWorktree)} -C ../linked reset --merge`,
+          fixture.rootDir,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE does not relax unresolved git -C directories', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          `git -C ${toShellPath(join(fixture.rootDir, 'missing'))} reset --hard`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE does not relax after cwd becomes unknown', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked('cd /tmp && git reset --hard', 'git reset --hard', fixture.linkedWorktree);
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE does not relax explicit git context overrides', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          'git --git-dir=.git reset --hard',
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+        assertBlocked('git --work-tree=. reset --hard', 'git reset --hard', fixture.linkedWorktree);
+        assertBlocked('GIT_DIR=.git git reset --hard', 'git reset --hard', fixture.linkedWorktree);
+        assertBlocked(
+          'GIT_WORK_TREE=. git reset --hard',
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+        assertBlocked(
+          'GIT_COMMON_DIR=.git git reset --hard',
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE keeps shared and remote destructive rules blocked', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked('git push -f', 'push --force', fixture.linkedWorktree);
+        assertBlocked(
+          'git branch -D feature/worktree-test',
+          'git branch -D',
+          fixture.linkedWorktree,
+        );
+        assertBlocked('git stash clear', 'git stash clear', fixture.linkedWorktree);
+        assertBlocked(
+          'git worktree remove --force ../other-worktree',
+          'git worktree remove --force',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
   });
 });
 
