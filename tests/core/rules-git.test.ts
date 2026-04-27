@@ -630,6 +630,61 @@ describe('git linked worktree mode', () => {
     }
   });
 
+  test('SAFETY_NET_WORKTREE keeps env chdir context through terminators and attached args', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          `env -C ${toShellPath(fixture.mainWorktree)} -- git reset --hard`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+        assertBlocked(
+          `env -C${toShellPath(fixture.mainWorktree)} git reset --hard`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE parses env split strings before relaxing', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          `env -S '-C ${toShellPath(fixture.mainWorktree)}' git reset --hard`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+        assertBlocked(
+          `env -S 'GIT_DIR=${toShellPath(join(fixture.mainWorktree, '.git'))} GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)}' git reset --hard`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE tracks sudo chdir before relaxing', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          `sudo -D ${toShellPath(fixture.mainWorktree)} git reset --hard`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
   test('SAFETY_NET_WORKTREE does not relax xargs child git env overrides', () => {
     const fixture = createLinkedWorktreeFixture();
     try {
@@ -651,6 +706,61 @@ describe('git linked worktree mode', () => {
       withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
         assertBlocked(
           `parallel env GIT_DIR=${toShellPath(join(fixture.mainWorktree, '.git'))} GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)} git reset --hard ::: x`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE propagates wrapper context through parallel commands mode', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          `env -C ${toShellPath(fixture.mainWorktree)} parallel ::: 'git reset --hard'`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+        assertBlocked(
+          `GIT_DIR=${toShellPath(join(fixture.mainWorktree, '.git'))} GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)} parallel ::: 'git reset --hard'`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE propagates wrapper context through BusyBox', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          `env -C ${toShellPath(fixture.mainWorktree)} busybox sh -c 'git reset --hard'`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+        assertBlocked(
+          `GIT_DIR=${toShellPath(join(fixture.mainWorktree, '.git'))} GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)} busybox sh -c 'git reset --hard'`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE does not relax exported git context overrides', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          `export GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)}; git reset --hard`,
           'git reset --hard',
           fixture.linkedWorktree,
         );
@@ -707,6 +817,41 @@ describe('git linked worktree mode', () => {
       withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
         assertBlocked('git reset --hard HEAD~1', 'git reset --hard', fixture.linkedWorktree);
         assertBlocked('git reset --merge HEAD~1', 'git reset --merge', fixture.linkedWorktree);
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE keeps xargs and parallel appended reset refs blocked', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          'echo HEAD~1 | xargs git reset --hard',
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+        assertBlocked(
+          'parallel git reset --hard ::: HEAD~1',
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE propagates interpreter wrapper context', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          `GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)} ruby -e '\`git restore file.txt\`'`,
+          'git restore',
+          fixture.linkedWorktree,
+        );
       });
     } finally {
       fixture.cleanup();

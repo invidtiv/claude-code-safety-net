@@ -11,6 +11,7 @@ import { explainSegment } from '@/bin/explain/segment';
 import { REASON_RECURSION_LIMIT } from '@/core/analyze/analyze-command';
 import type { TraceStep } from '@/types';
 import { MAX_RECURSION_DEPTH } from '@/types';
+import { createLinkedWorktreeFixture, toShellPath, withEnv } from '../../helpers.ts';
 
 describe('explainCommand', () => {
   test('git status returns allowed', () => {
@@ -581,6 +582,43 @@ describe('explainCommand fallback scan with find', () => {
     const allSteps = result.trace.segments.flatMap((s) => s.steps);
     const fallbackStep = allSteps.find((s) => s.type === 'fallback-scan');
     expect(fallbackStep).toBeDefined();
+  });
+});
+
+describe('explainCommand worktree parity', () => {
+  test('uses wrapper cwd when explaining worktree relaxation', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        const result = explainCommand(
+          `env -C ${toShellPath(fixture.mainWorktree)} git reset --hard`,
+          { cwd: fixture.linkedWorktree },
+        );
+
+        expect(result.result).toBe('blocked');
+        expect(result.reason).toContain('git reset --hard');
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('does not report worktree relaxation for fallback embedded git', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        const result = explainCommand('ssh host git clean -f', { cwd: fixture.linkedWorktree });
+        const worktreeStep = result.trace.segments
+          .flatMap((segment) => segment.steps)
+          .find((step) => step.type === 'worktree-relaxation');
+
+        expect(result.result).toBe('blocked');
+        expect(result.reason).toContain('git clean -f');
+        expect(worktreeStep).toBeUndefined();
+      });
+    } finally {
+      fixture.cleanup();
+    }
   });
 });
 
