@@ -572,7 +572,7 @@ function _stripAttachedIoNumbers(command: string): string {
 
 const ENV_ASSIGNMENT_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
-function parseEnvAssignment(token: string): { name: string; value: string } | null {
+export function parseEnvAssignment(token: string): { name: string; value: string } | null {
   if (!ENV_ASSIGNMENT_RE.test(token)) {
     return null;
   }
@@ -652,7 +652,11 @@ export function stripWrappersWithInfo(
     }
 
     if (head === 'sudo') {
-      result = stripSudo(result);
+      const sudoResult = stripSudoWithInfo(result, currentCwd);
+      result = sudoResult.tokens;
+      if (sudoResult.cwd !== undefined) {
+        currentCwd = sudoResult.cwd;
+      }
     }
     if (head === 'env') {
       const envResult = stripEnvWithInfo(result, currentCwd);
@@ -682,19 +686,30 @@ export function stripWrappersWithInfo(
 
 const SUDO_OPTS_WITH_VALUE = new Set(['-u', '-g', '-C', '-D', '-h', '-p', '-r', '-t', '-T', '-U']);
 
-function stripSudo(tokens: string[]): string[] {
+function stripSudoWithInfo(
+  tokens: string[],
+  cwd?: string | null,
+): { tokens: string[]; cwd?: string | null } {
   let i = 1;
+  let currentCwd = cwd;
   while (i < tokens.length) {
     const token = tokens[i];
     if (!token) break;
 
     if (token === '--') {
-      return tokens.slice(i + 1);
+      return { tokens: tokens.slice(i + 1), cwd: currentCwd };
     }
 
     // Guard: not an option, exit loop
     if (!token.startsWith('-')) {
       break;
+    }
+
+    if (token === '-D') {
+      const target = tokens[i + 1];
+      currentCwd = target ? resolveWrapperCwd(currentCwd, target) : null;
+      i += 2;
+      continue;
     }
 
     if (SUDO_OPTS_WITH_VALUE.has(token)) {
@@ -704,7 +719,7 @@ function stripSudo(tokens: string[]): string[] {
 
     i++;
   }
-  return tokens.slice(i);
+  return { tokens: tokens.slice(i), cwd: currentCwd };
 }
 
 const ENV_OPTS_NO_VALUE = new Set(['-i', '-0', '--null']);
@@ -721,13 +736,14 @@ const ENV_OPTS_WITH_VALUE = new Set([
 function stripEnvWithInfo(tokens: string[], cwd?: string | null): EnvStrippingResult {
   const envAssignments = new Map<string, string>();
   let currentCwd = cwd;
+  let expandedTokens = tokens;
   let i = 1;
-  while (i < tokens.length) {
-    const token = tokens[i];
+  while (i < expandedTokens.length) {
+    const token = expandedTokens[i];
     if (!token) break;
 
     if (token === '--') {
-      return { tokens: tokens.slice(i + 1), envAssignments };
+      return { tokens: expandedTokens.slice(i + 1), envAssignments, cwd: currentCwd };
     }
 
     if (ENV_OPTS_NO_VALUE.has(token)) {
@@ -735,9 +751,55 @@ function stripEnvWithInfo(tokens: string[], cwd?: string | null): EnvStrippingRe
       continue;
     }
 
+    if (token === '-S' || token === '--split-string') {
+      const splitValue = expandedTokens[i + 1];
+      const splitTokens = splitValue !== undefined ? parseEnvSplitString(splitValue) : null;
+      if (!splitTokens) {
+        currentCwd = null;
+        i += 2;
+        continue;
+      }
+      expandedTokens = [
+        ...expandedTokens.slice(0, i),
+        ...splitTokens,
+        ...expandedTokens.slice(i + 2),
+      ];
+      continue;
+    }
+
+    if (token.startsWith('-S') && token.length > 2) {
+      const splitTokens = parseEnvSplitString(token.slice('-S'.length));
+      if (!splitTokens) {
+        currentCwd = null;
+        i++;
+        continue;
+      }
+      expandedTokens = [
+        ...expandedTokens.slice(0, i),
+        ...splitTokens,
+        ...expandedTokens.slice(i + 1),
+      ];
+      continue;
+    }
+
+    if (token.startsWith('--split-string=')) {
+      const splitTokens = parseEnvSplitString(token.slice('--split-string='.length));
+      if (!splitTokens) {
+        currentCwd = null;
+        i++;
+        continue;
+      }
+      expandedTokens = [
+        ...expandedTokens.slice(0, i),
+        ...splitTokens,
+        ...expandedTokens.slice(i + 1),
+      ];
+      continue;
+    }
+
     if (ENV_OPTS_WITH_VALUE.has(token)) {
       if (token === '-C' || token === '--chdir') {
-        const target = tokens[i + 1];
+        const target = expandedTokens[i + 1];
         currentCwd = target ? resolveWrapperCwd(currentCwd, target) : null;
       }
       i += 2;
@@ -749,10 +811,12 @@ function stripEnvWithInfo(tokens: string[], cwd?: string | null): EnvStrippingRe
       continue;
     }
 
-    if (token.startsWith('-C=') || token.startsWith('--chdir=')) {
-      const target = token.startsWith('-C=')
-        ? token.slice('-C='.length)
-        : token.slice('--chdir='.length);
+    if ((token.startsWith('-C') && token.length > 2) || token.startsWith('--chdir=')) {
+      const target = token.startsWith('--chdir=')
+        ? token.slice('--chdir='.length)
+        : token.startsWith('-C=')
+          ? token.slice('-C='.length)
+          : token.slice('-C'.length);
       currentCwd = resolveWrapperCwd(currentCwd, target);
       i++;
       continue;
@@ -776,7 +840,24 @@ function stripEnvWithInfo(tokens: string[], cwd?: string | null): EnvStrippingRe
     envAssignments.set(assignment.name, assignment.value);
     i++;
   }
-  return { tokens: tokens.slice(i), envAssignments, cwd: currentCwd };
+  return { tokens: expandedTokens.slice(i), envAssignments, cwd: currentCwd };
+}
+
+function parseEnvSplitString(value: string): string[] | null {
+  if (hasUnclosedQuotes(value)) {
+    return null;
+  }
+
+  const parsed = parse(value, ENV_PROXY);
+  const result: string[] = [];
+  for (const entry of parsed) {
+    const token = _getCommandTokenText(entry as ParseEntry);
+    if (token === null) {
+      return null;
+    }
+    result.push(token);
+  }
+  return result;
 }
 
 function resolveWrapperCwd(cwd: string | null | undefined, target: string): string | null {

@@ -1,4 +1,8 @@
 export declare function splitShellCommands(command: string): string[][];
+export declare function parseEnvAssignment(token: string): {
+    name: string;
+    value: string;
+} | null;
 export interface EnvStrippingResult {
     tokens: string[];
     envAssignments: Map<string, string>;

@@ -11,7 +11,7 @@ export const GIT_GLOBAL_OPTS_WITH_VALUE: ReadonlySet<string> = new Set([
   '--config-env',
 ]);
 
-const GIT_CONTEXT_ENV_OVERRIDES = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR'] as const;
+export const GIT_CONTEXT_ENV_OVERRIDES = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR'] as const;
 
 export interface GitExecutionContext {
   gitCwd: string | null;
