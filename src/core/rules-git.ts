@@ -164,7 +164,7 @@ function analyzeGitRule(tokens: readonly string[]): GitRuleMatch | null {
     case 'restore':
       return localDiscard(analyzeGitRestore(rest));
     case 'reset':
-      return localDiscard(analyzeGitReset(rest));
+      return analyzeGitReset(rest);
     case 'clean':
       return localDiscard(analyzeGitClean(rest));
     case 'push':
@@ -391,16 +391,37 @@ function analyzeGitRestore(tokens: readonly string[]): string | null {
   return hasStaged ? null : REASON_RESTORE;
 }
 
-function analyzeGitReset(tokens: readonly string[]): string | null {
+function analyzeGitReset(tokens: readonly string[]): GitRuleMatch | null {
+  let reason: string | null = null;
+
   for (const token of tokens) {
     if (token === '--hard') {
-      return REASON_RESET_HARD;
+      reason = REASON_RESET_HARD;
+      break;
     }
     if (token === '--merge') {
-      return REASON_RESET_MERGE;
+      reason = REASON_RESET_MERGE;
+      break;
     }
   }
-  return null;
+
+  if (!reason) {
+    return null;
+  }
+
+  return resetHasRef(tokens) ? sharedState(reason) : localDiscard(reason);
+}
+
+function resetHasRef(tokens: readonly string[]): boolean {
+  for (const token of tokens) {
+    if (token === '--') {
+      return false;
+    }
+    if (!token.startsWith('-')) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function analyzeGitClean(tokens: readonly string[]): string | null {
