@@ -615,6 +615,104 @@ describe('git linked worktree mode', () => {
     }
   });
 
+  test('SAFETY_NET_WORKTREE does not relax cwd-changing wrappers into main worktree', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          `env -C ${toShellPath(fixture.mainWorktree)} git reset --hard`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE does not relax xargs child git env overrides', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          `echo HEAD | xargs env GIT_DIR=${toShellPath(join(fixture.mainWorktree, '.git'))} GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)} git reset --hard`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE does not relax parallel child git env overrides', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          `parallel env GIT_DIR=${toShellPath(join(fixture.mainWorktree, '.git'))} GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)} git reset --hard ::: x`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE does not relax shell wrapper git env overrides', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          `GIT_DIR=${toShellPath(join(fixture.mainWorktree, '.git'))} GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)} sh -c 'git reset --hard'`,
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE does not relax fallback embedded git commands', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked('ssh host git clean -f', 'git clean -f', fixture.linkedWorktree);
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE does not relax remote parallel git commands', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          'parallel -S host git clean -f ::: .',
+          'git clean -f',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE keeps ref-moving resets blocked', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked('git reset --hard HEAD~1', 'git reset --hard', fixture.linkedWorktree);
+        assertBlocked('git reset --merge HEAD~1', 'git reset --merge', fixture.linkedWorktree);
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
   test('SAFETY_NET_WORKTREE keeps shared and remote destructive rules blocked', () => {
     const fixture = createLinkedWorktreeFixture();
     try {
