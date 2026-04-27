@@ -3,8 +3,8 @@ import { hasRecursiveForceFlags } from '@/core/analyze/rm-flags';
 import { extractDashCArg } from '@/core/analyze/shell-wrappers';
 import { analyzeGit } from '@/core/rules-git';
 import { analyzeRm } from '@/core/rules-rm';
-import { getBasename, stripWrappers } from '@/core/shell';
-import { SHELL_WRAPPERS } from '@/types';
+import { getBasename, stripWrappersWithInfo } from '@/core/shell';
+import { type AnalyzeNestedOverrides, SHELL_WRAPPERS } from '@/types';
 
 const REASON_PARALLEL_RM =
   'parallel rm -rf with dynamic input is dangerous. Use explicit file list instead.';
@@ -18,7 +18,7 @@ export interface ParallelAnalyzeContext {
   allowTmpdirVar: boolean;
   envAssignments?: ReadonlyMap<string, string>;
   worktreeMode?: boolean;
-  analyzeNested: (command: string) => string | null;
+  analyzeNested: (command: string, overrides?: AnalyzeNestedOverrides) => string | null;
 }
 
 export function analyzeParallel(
@@ -31,13 +31,14 @@ export function analyzeParallel(
     return null;
   }
 
-  const { template, args, hasPlaceholder } = parseResult;
+  const { template, args, hasPlaceholder, runsRemotely } = parseResult;
 
   if (template.length === 0) {
     // parallel ::: 'cmd1' 'cmd2' - commands mode
     // Analyze each arg as a command
+    const nestedOverrides = runsRemotely ? { worktreeMode: false } : undefined;
     for (const arg of args) {
-      const reason = context.analyzeNested(arg);
+      const reason = context.analyzeNested(arg, nestedOverrides);
       if (reason) {
         return reason;
       }
@@ -45,7 +46,19 @@ export function analyzeParallel(
     return null;
   }
 
-  let childTokens = stripWrappers([...template]);
+  const childWrapperInfo = stripWrappersWithInfo([...template], context.cwd);
+  let childTokens = childWrapperInfo.tokens;
+  const childEnvAssignments = new Map(context.envAssignments ?? []);
+  for (const [k, v] of childWrapperInfo.envAssignments) {
+    childEnvAssignments.set(k, v);
+  }
+  const childCwd =
+    childWrapperInfo.cwd === null ? undefined : (childWrapperInfo.cwd ?? context.cwd);
+  const nestedOverrides = buildNestedOverrides(
+    childEnvAssignments,
+    childWrapperInfo.cwd,
+    runsRemotely,
+  );
   let head = getBasename(childTokens[0] ?? '').toLowerCase();
 
   if (head === 'busybox' && childTokens.length > 1) {
@@ -67,7 +80,7 @@ export function analyzeParallel(
           // Expand with actual args and analyze
           for (const arg of args) {
             const expandedScript = dashCArg.replace(/{}/g, arg);
-            const reason = context.analyzeNested(expandedScript);
+            const reason = context.analyzeNested(expandedScript, nestedOverrides);
             if (reason) {
               return reason;
             }
@@ -76,14 +89,14 @@ export function analyzeParallel(
         }
         // Stdin mode with placeholder - analyze the script template
         // Check if the script pattern is dangerous (e.g., rm -rf {})
-        const reason = context.analyzeNested(dashCArg);
+        const reason = context.analyzeNested(dashCArg, nestedOverrides);
         if (reason) {
           return reason;
         }
         return null;
       }
       // Script doesn't have placeholder - analyze it directly
-      const reason = context.analyzeNested(dashCArg);
+      const reason = context.analyzeNested(dashCArg, nestedOverrides);
       if (reason) {
         return reason;
       }
@@ -152,9 +165,9 @@ export function analyzeParallel(
 
   if (head === 'git') {
     const gitResult = analyzeGit(childTokens, {
-      cwd: context.cwd,
-      envAssignments: context.envAssignments,
-      worktreeMode: context.worktreeMode,
+      cwd: childCwd,
+      envAssignments: childEnvAssignments,
+      worktreeMode: runsRemotely ? false : context.worktreeMode,
     });
     if (gitResult) {
       return gitResult;
@@ -164,10 +177,26 @@ export function analyzeParallel(
   return null;
 }
 
+function buildNestedOverrides(
+  envAssignments: ReadonlyMap<string, string>,
+  cwd: string | null | undefined,
+  runsRemotely: boolean,
+): AnalyzeNestedOverrides {
+  const overrides: AnalyzeNestedOverrides = { envAssignments };
+  if (cwd !== undefined) {
+    overrides.effectiveCwd = cwd;
+  }
+  if (runsRemotely) {
+    overrides.worktreeMode = false;
+  }
+  return overrides;
+}
+
 interface ParallelParseResult {
   template: string[];
   args: string[];
   hasPlaceholder: boolean;
+  runsRemotely: boolean;
 }
 
 function parseParallelCommand(tokens: readonly string[]): ParallelParseResult | null {
@@ -190,6 +219,7 @@ function parseParallelCommand(tokens: readonly string[]): ParallelParseResult | 
   let i = 1;
   const templateTokens: string[] = [];
   let markerIndex = -1;
+  let runsRemotely = false;
 
   // First pass: find the ::: marker and extract template
   while (i < tokens.length) {
@@ -217,6 +247,33 @@ function parseParallelCommand(tokens: readonly string[]): ParallelParseResult | 
     }
 
     if (token.startsWith('-')) {
+      if (
+        token === '-S' ||
+        token === '--sshlogin' ||
+        token === '--slf' ||
+        token === '--sshloginfile'
+      ) {
+        runsRemotely = true;
+        i += 2;
+        continue;
+      }
+
+      if (token.startsWith('-S') && token.length > 2) {
+        runsRemotely = true;
+        i++;
+        continue;
+      }
+
+      if (
+        token.startsWith('--sshlogin=') ||
+        token.startsWith('--slf=') ||
+        token.startsWith('--sshloginfile=')
+      ) {
+        runsRemotely = true;
+        i++;
+        continue;
+      }
+
       // Handle -jN attached option
       if (token.startsWith('-j') && token.length > 2 && /^\d+$/.test(token.slice(2))) {
         i++;
@@ -279,7 +336,7 @@ function parseParallelCommand(tokens: readonly string[]): ParallelParseResult | 
     return null;
   }
 
-  return { template: templateTokens, args, hasPlaceholder };
+  return { template: templateTokens, args, hasPlaceholder, runsRemotely };
 }
 
 export function extractParallelChildCommand(tokens: readonly string[]): string[] {
