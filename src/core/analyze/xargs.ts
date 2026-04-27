@@ -2,7 +2,7 @@ import { analyzeFind } from '@/core/analyze/find';
 import { hasRecursiveForceFlags } from '@/core/analyze/rm-flags';
 import { analyzeGit } from '@/core/rules-git';
 import { analyzeRm } from '@/core/rules-rm';
-import { getBasename, stripWrappers } from '@/core/shell';
+import { getBasename, stripWrappersWithInfo } from '@/core/shell';
 import { SHELL_WRAPPERS } from '@/types';
 
 const REASON_XARGS_RM =
@@ -24,7 +24,14 @@ export function analyzeXargs(
 ): string | null {
   const { childTokens: rawChildTokens } = extractXargsChildCommandWithInfo(tokens);
 
-  let childTokens = stripWrappers(rawChildTokens);
+  const childWrapperInfo = stripWrappersWithInfo(rawChildTokens, context.cwd);
+  let childTokens = childWrapperInfo.tokens;
+  const childEnvAssignments = new Map(context.envAssignments ?? []);
+  for (const [k, v] of childWrapperInfo.envAssignments) {
+    childEnvAssignments.set(k, v);
+  }
+  const childCwd =
+    childWrapperInfo.cwd === null ? undefined : (childWrapperInfo.cwd ?? context.cwd);
 
   if (childTokens.length === 0) {
     return null;
@@ -68,8 +75,8 @@ export function analyzeXargs(
 
   if (head === 'git') {
     const gitResult = analyzeGit(childTokens, {
-      cwd: context.cwd,
-      envAssignments: context.envAssignments,
+      cwd: childCwd,
+      envAssignments: childEnvAssignments,
       worktreeMode: context.worktreeMode,
     });
     if (gitResult) {
