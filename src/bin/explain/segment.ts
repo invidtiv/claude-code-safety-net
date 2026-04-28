@@ -8,7 +8,11 @@ import {
   redactEnvAssignmentTokens,
   redactEnvVars,
 } from '@/bin/explain/redact';
-import { REASON_RECURSION_LIMIT } from '@/core/analyze/analyze-command';
+import {
+  applyShellGitContextEnvSegment,
+  createShellGitContextEnvState,
+  REASON_RECURSION_LIMIT,
+} from '@/core/analyze/analyze-command';
 import { DISPLAY_COMMANDS } from '@/core/analyze/constants';
 import { dangerousInText } from '@/core/analyze/dangerous-text';
 import { analyzeFind } from '@/core/analyze/find';
@@ -87,6 +91,7 @@ function explainInnerSegments(
   // Preserve null (unknown CWD after cd/pushd) - only fall back to cwd when undefined
   let effectiveCwd: string | null | undefined =
     options.effectiveCwd === undefined ? options.cwd : options.effectiveCwd;
+  const shellGitContextState = createShellGitContextEnvState(options.envAssignments);
 
   for (const segment of innerSegments) {
     // Check for unparseable segment (single token with spaces) - matches guard behavior
@@ -117,7 +122,16 @@ function explainInnerSegments(
       continue;
     }
 
-    const result = explainSegment(segment, depth + 1, { ...options, effectiveCwd }, steps);
+    const result = explainSegment(
+      segment,
+      depth + 1,
+      {
+        ...options,
+        effectiveCwd,
+        envAssignments: shellGitContextState.effectiveEnvAssignments,
+      },
+      steps,
+    );
     if (result) return result;
 
     if (segmentChangesCwd(segment)) {
@@ -128,6 +142,7 @@ function explainInnerSegments(
       });
       effectiveCwd = null;
     }
+    applyShellGitContextEnvSegment(segment, shellGitContextState);
   }
 
   return null;
