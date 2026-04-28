@@ -654,6 +654,23 @@ describe('explainCommand worktree parity', () => {
     }
   });
 
+  test('carries nested exported git context overrides across inner segments', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        const result = explainCommand(
+          `sh -c "export GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)}; git reset --hard"`,
+          { cwd: fixture.linkedWorktree },
+        );
+
+        expect(result.result).toBe('blocked');
+        expect(result.reason).toContain('git reset --hard');
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
   test('honors parallel nested overrides when explaining remote commands', () => {
     const fixture = createLinkedWorktreeFixture();
     try {
