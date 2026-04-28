@@ -48,6 +48,7 @@ export function analyzeCommandInternal(
   let effectiveCwd: string | null | undefined =
     options.effectiveCwd !== undefined ? options.effectiveCwd : options.cwd;
   let effectiveEnvAssignments = options.envAssignments;
+  const shellGitContextAssignments = new Map<string, string>();
 
   for (const segment of segments) {
     const segmentStr = segment.join(' ');
@@ -93,7 +94,15 @@ export function analyzeCommandInternal(
       effectiveCwd = null;
     }
 
-    const exportedEnvAssignments = getExportedGitContextEnvAssignments(segment);
+    const shellAssignments = getShellGitContextEnvAssignments(segment);
+    for (const [k, v] of shellAssignments) {
+      shellGitContextAssignments.set(k, v);
+    }
+
+    const exportedEnvAssignments = getExportedGitContextEnvAssignments(
+      segment,
+      shellGitContextAssignments,
+    );
     if (exportedEnvAssignments.size > 0) {
       const nextEnvAssignments = new Map(effectiveEnvAssignments ?? []);
       for (const [k, v] of exportedEnvAssignments) {
@@ -106,21 +115,104 @@ export function analyzeCommandInternal(
   return null;
 }
 
-function getExportedGitContextEnvAssignments(tokens: readonly string[]): Map<string, string> {
+export function getShellGitContextEnvAssignments(tokens: readonly string[]): Map<string, string> {
   const result = new Map<string, string>();
-  if (tokens[0] !== 'export') {
-    return result;
-  }
 
-  for (const token of tokens.slice(1)) {
-    if (token.startsWith('-')) {
+  for (const token of tokens) {
+    const assignment = parseEnvAssignment(token);
+    if (!assignment) {
       return new Map();
     }
-
-    const assignment = parseEnvAssignment(token);
-    if (assignment && GIT_CONTEXT_ENV_OVERRIDE_NAMES.has(assignment.name)) {
+    if (GIT_CONTEXT_ENV_OVERRIDE_NAMES.has(assignment.name)) {
       result.set(assignment.name, assignment.value);
     }
   }
+
   return result;
+}
+
+export function getExportedGitContextEnvAssignments(
+  tokens: readonly string[],
+  shellGitContextAssignments: ReadonlyMap<string, string>,
+): Map<string, string> {
+  const result = new Map<string, string>();
+  const command = tokens[0];
+  if (!command) {
+    return result;
+  }
+
+  const operandsStart =
+    command === 'export'
+      ? getExportOperandsStart(tokens)
+      : command === 'typeset' || command === 'declare'
+        ? getTypesetExportOperandsStart(tokens)
+        : null;
+
+  if (operandsStart === null) {
+    return result;
+  }
+
+  for (const token of tokens.slice(operandsStart)) {
+    addExportedGitContextEnvAssignment(result, shellGitContextAssignments, token);
+  }
+  return result;
+}
+
+function getExportOperandsStart(tokens: readonly string[]): number | null {
+  const firstOperand = tokens[1];
+  if (firstOperand === undefined) {
+    return 1;
+  }
+  if (firstOperand === '--') {
+    return 2;
+  }
+  if (firstOperand.startsWith('-')) {
+    return null;
+  }
+  return 1;
+}
+
+function getTypesetExportOperandsStart(tokens: readonly string[]): number | null {
+  let i = 1;
+  let hasExportFlag = false;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (!token) {
+      return null;
+    }
+    if (token === '--') {
+      return hasExportFlag ? i + 1 : null;
+    }
+    if (token.startsWith('-')) {
+      hasExportFlag = hasExportFlag || token.slice(1).includes('x');
+      i++;
+      continue;
+    }
+    if (token.startsWith('+')) {
+      return null;
+    }
+    return hasExportFlag ? i : null;
+  }
+  return hasExportFlag ? i : null;
+}
+
+function addExportedGitContextEnvAssignment(
+  result: Map<string, string>,
+  shellGitContextAssignments: ReadonlyMap<string, string>,
+  token: string,
+): void {
+  const assignment = parseEnvAssignment(token);
+  if (assignment) {
+    if (GIT_CONTEXT_ENV_OVERRIDE_NAMES.has(assignment.name)) {
+      result.set(assignment.name, assignment.value);
+    }
+    return;
+  }
+
+  if (GIT_CONTEXT_ENV_OVERRIDE_NAMES.has(token)) {
+    const value = shellGitContextAssignments.get(token);
+    if (value !== undefined) {
+      result.set(token, value);
+    }
+  }
 }
