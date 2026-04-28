@@ -1091,6 +1091,107 @@ describe('git linked worktree mode', () => {
     }
   });
 
+  test('SAFETY_NET_WORKTREE fails closed on dynamic worktree relaxation bypasses', () => {
+    const fixture = createLinkedWorktreeFixture();
+    const mainWorktree = toShellPath(fixture.mainWorktree);
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        const commands = [
+          {
+            command: 'echo -ffdx | xargs -I{} git clean -f {}',
+            reason: 'git clean -f',
+          },
+          {
+            command: 'EXTRA=-ffdx; git clean -f $EXTRA',
+            reason: 'git clean -f',
+          },
+          {
+            command: "printf -- '-ffdx\\n' | parallel sh -c 'git clean -f {}'",
+            reason: 'git clean -f',
+          },
+          {
+            command:
+              'GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=submodule.recurse GIT_CONFIG_VALUE_0=true git reset --hard',
+            reason: 'git reset --hard',
+          },
+          {
+            command: `export -p GIT_WORK_TREE=${mainWorktree}; git reset --hard`,
+            reason: 'git reset --hard',
+          },
+          {
+            command: `readonly -x GIT_WORK_TREE=${mainWorktree}; git reset --hard`,
+            reason: 'git reset --hard',
+          },
+          {
+            command: `command -p export GIT_WORK_TREE=${mainWorktree}; git reset --hard`,
+            reason: 'git reset --hard',
+          },
+          {
+            command: 'git checkout -fB feature HEAD~1',
+            reason: 'git checkout --force',
+          },
+          {
+            command: 'git switch --discard-changes -C feature HEAD~1',
+            reason: 'git switch --discard-changes',
+          },
+          {
+            command: 'git switch --discard-changes --force-create feature HEAD~1',
+            reason: 'git switch --discard-changes',
+          },
+          {
+            command: 'git switch -fC feature HEAD~1',
+            reason: 'git switch --force',
+          },
+          {
+            command: `set -k; git restore file.txt GIT_WORK_TREE=${mainWorktree}`,
+            reason: 'git restore',
+          },
+          {
+            command: `set -o keyword; git restore file.txt GIT_WORK_TREE=${mainWorktree}`,
+            reason: 'git restore',
+          },
+          {
+            command: `set -a; set -- +a; GIT_WORK_TREE=${mainWorktree}; git restore file.txt`,
+            reason: 'git restore',
+          },
+          {
+            command: `set +a -a; GIT_WORK_TREE=${mainWorktree}; git reset --hard`,
+            reason: 'git reset --hard',
+          },
+          {
+            command: `typeset +x -x GIT_WORK_TREE=${mainWorktree}; git reset --hard`,
+            reason: 'git reset --hard',
+          },
+        ];
+
+        const failures = commands.flatMap(({ command, reason }) => {
+          const result = runGuard(command, fixture.linkedWorktree);
+          return result?.includes(reason) ? [] : [{ command, result }];
+        });
+
+        expect(failures).toEqual([]);
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE keeps configured recursive submodule discards blocked', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      execFileSync('git', ['config', 'submodule.recurse', 'true'], {
+        cwd: fixture.linkedWorktree,
+        stdio: 'ignore',
+      });
+
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked('git reset --hard', 'git reset --hard', fixture.linkedWorktree);
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
   test('SAFETY_NET_WORKTREE verifies worktree config before relaxing', () => {
     const fixture = createLinkedWorktreeFixture();
     try {
