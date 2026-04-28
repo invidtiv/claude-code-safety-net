@@ -32,6 +32,7 @@ export function analyzeParallel(
   }
 
   const { template, args, hasPlaceholder, runsRemotely, usesStdin } = parseResult;
+  const hasDynamicStdinPlaceholder = usesStdin && hasPlaceholder;
 
   if (template.length === 0) {
     // parallel ::: 'cmd1' 'cmd2' - commands mode
@@ -57,7 +58,7 @@ export function analyzeParallel(
   const nestedOverrides = buildNestedOverrides(
     childEnvAssignments,
     childWrapperInfo.cwd,
-    runsRemotely,
+    runsRemotely || hasDynamicStdinPlaceholder,
   );
   let head = getBasename(childTokens[0] ?? '').toLowerCase();
 

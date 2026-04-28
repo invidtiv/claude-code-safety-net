@@ -78,10 +78,13 @@ export function analyzeXargs(
   if (head === 'git') {
     const gitTokens =
       replacementToken === null ? [...childTokens, XARGS_APPENDED_INPUT] : childTokens;
+    const hasDynamicReplacement =
+      replacementToken !== null && childTokens.some((token) => token.includes(replacementToken));
     const gitResult = analyzeGit(gitTokens, {
       cwd: childCwd,
       envAssignments: childEnvAssignments,
-      worktreeMode: replacementToken === null ? false : context.worktreeMode,
+      worktreeMode:
+        replacementToken === null || hasDynamicReplacement ? false : context.worktreeMode,
     });
     if (gitResult) {
       return gitResult;
