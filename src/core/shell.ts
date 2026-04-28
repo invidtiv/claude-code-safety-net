@@ -1,6 +1,7 @@
 import { isAbsolute, resolve } from 'node:path';
 import { type ParseEntry, parse } from 'shell-quote';
 import { MAX_STRIP_ITERATIONS, SHELL_OPERATORS } from '@/types';
+import { GIT_CONTEXT_ENV_OVERRIDES } from './worktree';
 
 // Proxy that preserves variable references as $VAR strings instead of expanding them
 const ENV_PROXY = new Proxy(
@@ -571,6 +572,8 @@ function _stripAttachedIoNumbers(command: string): string {
 }
 
 const ENV_ASSIGNMENT_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const ENV_APPEND_ASSIGNMENT_RE = /^([A-Za-z_][A-Za-z0-9_]*)\+=/;
+const GIT_CONTEXT_ENV_OVERRIDE_NAMES: ReadonlySet<string> = new Set(GIT_CONTEXT_ENV_OVERRIDES);
 
 export function parseEnvAssignment(token: string): { name: string; value: string } | null {
   if (!ENV_ASSIGNMENT_RE.test(token)) {
@@ -578,6 +581,16 @@ export function parseEnvAssignment(token: string): { name: string; value: string
   }
   const eqIdx = token.indexOf('=');
   return { name: token.slice(0, eqIdx), value: token.slice(eqIdx + 1) };
+}
+
+function parseGitContextAppendEnvAssignment(token: string): { name: string; value: string } | null {
+  const match = token.match(ENV_APPEND_ASSIGNMENT_RE);
+  const name = match?.[1];
+  if (!name || !GIT_CONTEXT_ENV_OVERRIDE_NAMES.has(name)) {
+    return null;
+  }
+  const eqIdx = token.indexOf('=');
+  return { name, value: token.slice(eqIdx + 1) };
 }
 
 export interface EnvStrippingResult {
@@ -637,9 +650,12 @@ export function stripWrappersWithInfo(
       result[0]?.includes('=') &&
       !ENV_ASSIGNMENT_RE.test(result[0] ?? '')
     ) {
-      // Conservative parsing: only strict NAME=value is treated as an env assignment.
-      // Other leading tokens that contain '=' (e.g. NAME+=value) are dropped to reach
-      // the actual executable token.
+      const appendAssignment = parseGitContextAppendEnvAssignment(result[0] ?? '');
+      if (appendAssignment) {
+        allEnvAssignments.set(appendAssignment.name, appendAssignment.value);
+      }
+      // Other non-strict leading assignments are dropped to reach the executable token.
+      // Git context append assignments are preserved above so worktree relaxation fails closed.
       result = result.slice(1);
     }
     if (result.length === 0) break;
@@ -705,10 +721,16 @@ function stripSudoWithInfo(
       break;
     }
 
-    if (token === '-D') {
+    if (token === '-D' || token === '--chdir') {
       const target = tokens[i + 1];
       currentCwd = target ? resolveWrapperCwd(currentCwd, target) : null;
       i += 2;
+      continue;
+    }
+
+    if (token.startsWith('--chdir=')) {
+      currentCwd = resolveWrapperCwd(currentCwd, token.slice('--chdir='.length));
+      i++;
       continue;
     }
 
