@@ -10,6 +10,7 @@ const REASON_PARALLEL_RM =
   'parallel rm -rf with dynamic input is dangerous. Use explicit file list instead.';
 const REASON_PARALLEL_SHELL =
   'parallel with shell -c can execute arbitrary commands from dynamic input.';
+const PARALLEL_PLACEHOLDER_RE = /\{[^{}\s]*\}/;
 
 export interface ParallelAnalyzeContext {
   cwd: string | undefined;
@@ -72,15 +73,15 @@ export function analyzeParallel(
     const dashCArg = extractDashCArg(childTokens);
     if (dashCArg) {
       // If script IS just the placeholder, stdin provides entire script - dangerous
-      if (dashCArg === '{}' || dashCArg === '{1}') {
+      if (isOnlyParallelPlaceholder(dashCArg)) {
         return REASON_PARALLEL_SHELL;
       }
       // If script contains placeholder
-      if (dashCArg.includes('{}')) {
+      if (hasParallelPlaceholder(dashCArg)) {
         if (args.length > 0) {
           // Expand with actual args and analyze
           for (const arg of args) {
-            const expandedScript = dashCArg.replace(/{}/g, arg);
+            const expandedScript = replaceParallelPlaceholder(dashCArg, arg);
             const reason = context.analyzeNested(expandedScript, nestedOverrides);
             if (reason) {
               return reason;
@@ -171,7 +172,7 @@ export function analyzeParallel(
         : !hasPlaceholder && args.length > 0
           ? args.map((arg) => [...childTokens, arg])
           : [childTokens];
-    const dynamicGitArgs = usesStdin || (hasPlaceholder && args.length === 0);
+    const dynamicGitArgs = usesStdin || hasPlaceholder;
     for (const gitTokens of gitTokenSets) {
       const gitResult = analyzeGit(gitTokens, {
         cwd: childCwd,
@@ -228,10 +229,15 @@ interface ParallelParseResult {
 }
 
 function replaceParallelPlaceholder(token: string, arg: string): string {
-  return token
-    .replace(/\{\}/g, arg)
-    .replace(/\{1\}/g, arg)
-    .replace(/\{\.\}/g, arg);
+  return token.replace(/\{[^{}\s]*\}/g, arg);
+}
+
+function hasParallelPlaceholder(token: string): boolean {
+  return PARALLEL_PLACEHOLDER_RE.test(token);
+}
+
+function isOnlyParallelPlaceholder(token: string): boolean {
+  return /^\{[^{}\s]*\}$/.test(token);
 }
 
 function parseParallelCommand(tokens: readonly string[]): ParallelParseResult | null {
@@ -362,9 +368,7 @@ function parseParallelCommand(tokens: readonly string[]): ParallelParseResult | 
   }
 
   // Determine if template has placeholder
-  const hasPlaceholder = templateTokens.some(
-    (t) => t.includes('{}') || t.includes('{1}') || t.includes('{.}'),
-  );
+  const hasPlaceholder = templateTokens.some(hasParallelPlaceholder);
 
   // If no template and no marker, no valid parallel command
   if (templateTokens.length === 0 && markerIndex === -1) {
