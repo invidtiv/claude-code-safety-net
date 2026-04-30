@@ -1835,7 +1835,8 @@ function extractDashCArg(tokens) {
 
 // src/core/rules-git.ts
 import { execFileSync } from "node:child_process";
-import { existsSync as existsSync2 } from "node:fs";
+import { existsSync as existsSync2, readFileSync as readFileSync2 } from "node:fs";
+import { dirname as dirname3, isAbsolute as isAbsolute3, join as join2, resolve as resolve2 } from "node:path";
 var REASON_CHECKOUT_DOUBLE_DASH = "git checkout -- discards uncommitted changes permanently. Use 'git stash' first.";
 var REASON_CHECKOUT_FORCE = "git checkout --force discards uncommitted changes. Use 'git stash' first.";
 var REASON_CHECKOUT_REF_PATH = "git checkout <ref> -- <path> overwrites working tree with ref version. Use 'git stash' first.";
@@ -2279,9 +2280,13 @@ function getEnvConfigValue(name, envAssignments) {
   return envAssignments?.get(name) ?? process.env[name];
 }
 function effectiveGitConfigEnablesRecursiveSubmodules(cwd) {
+  const localConfigResult = localGitConfigEnablesRecursiveSubmodules(cwd);
+  if (localConfigResult === null || localConfigResult) {
+    return true;
+  }
   const gitBinary = getTrustedGitBinary();
   if (gitBinary === null) {
-    return true;
+    return false;
   }
   try {
     const value = execFileSync(gitBinary, ["config", "--get", "submodule.recurse"], {
@@ -2294,6 +2299,22 @@ function effectiveGitConfigEnablesRecursiveSubmodules(cwd) {
   } catch (error) {
     return !isGitConfigUnsetError(error);
   }
+}
+function localGitConfigEnablesRecursiveSubmodules(cwd) {
+  const configPaths = getLocalGitConfigPaths(cwd);
+  if (configPaths === null) {
+    return null;
+  }
+  for (const configPath of configPaths) {
+    if (!existsSync2(configPath)) {
+      continue;
+    }
+    const result = gitConfigFileEnablesRecursiveSubmodules(configPath);
+    if (result) {
+      return true;
+    }
+  }
+  return false;
 }
 function getTrustedGitBinary() {
   for (const gitBinary of TRUSTED_GIT_BINARIES) {
@@ -2314,6 +2335,100 @@ function withoutGitConfigEnv(env) {
 }
 function isGitConfigUnsetError(error) {
   return typeof error === "object" && error !== null && "status" in error && error.status === 1;
+}
+function getLocalGitConfigPaths(cwd) {
+  const dotGitPath = findDotGitPath(cwd);
+  if (dotGitPath === null) {
+    return null;
+  }
+  const gitDir = resolveGitDirFromDotGit(dotGitPath);
+  if (gitDir === null) {
+    return null;
+  }
+  const commonDir = resolveCommonGitDir(gitDir);
+  if (commonDir === null) {
+    return null;
+  }
+  return [join2(commonDir, "config"), join2(gitDir, "config.worktree")];
+}
+function findDotGitPath(cwd) {
+  let current = cwd;
+  while (true) {
+    const dotGitPath = join2(current, ".git");
+    if (existsSync2(dotGitPath)) {
+      return dotGitPath;
+    }
+    const parent = dirname3(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+}
+function resolveGitDirFromDotGit(dotGitPath) {
+  try {
+    const content = readFileSync2(dotGitPath, "utf-8");
+    const firstLine = content.split(/\r?\n/, 1)[0]?.trim() ?? "";
+    if (!firstLine.startsWith("gitdir:")) {
+      return dotGitPath;
+    }
+    const rawGitDir = firstLine.slice("gitdir:".length).trim();
+    if (rawGitDir === "") {
+      return null;
+    }
+    return isAbsolute3(rawGitDir) ? rawGitDir : resolve2(dirname3(dotGitPath), rawGitDir);
+  } catch {
+    return null;
+  }
+}
+function resolveCommonGitDir(gitDir) {
+  const commonDirPath = join2(gitDir, "commondir");
+  if (!existsSync2(commonDirPath)) {
+    return gitDir;
+  }
+  try {
+    const rawCommonDir = readFileSync2(commonDirPath, "utf-8").split(/\r?\n/, 1)[0]?.trim() ?? "";
+    if (rawCommonDir === "") {
+      return null;
+    }
+    return isAbsolute3(rawCommonDir) ? rawCommonDir : resolve2(gitDir, rawCommonDir);
+  } catch {
+    return null;
+  }
+}
+function gitConfigFileEnablesRecursiveSubmodules(configPath) {
+  let content;
+  try {
+    content = readFileSync2(configPath, "utf-8");
+  } catch {
+    return true;
+  }
+  let section = "";
+  let recursiveSubmoduleConfig = false;
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed.startsWith("#") || trimmed.startsWith(";")) {
+      continue;
+    }
+    const sectionMatch = trimmed.match(/^\[([^\]]+)\]$/);
+    if (sectionMatch) {
+      section = sectionMatch[1]?.trim().toLowerCase() ?? "";
+      continue;
+    }
+    const eqIdx = trimmed.indexOf("=");
+    const key = (eqIdx === -1 ? trimmed : trimmed.slice(0, eqIdx)).trim().toLowerCase();
+    const value = eqIdx === -1 ? "true" : trimmed.slice(eqIdx + 1).trim();
+    if (isIncludeConfigSection(section) && key === "path") {
+      return true;
+    }
+    if (section === "submodule" && key === "recurse") {
+      recursiveSubmoduleConfig = gitConfigValueEnablesRecursiveSubmodules(value);
+    }
+  }
+  return recursiveSubmoduleConfig;
+}
+function isIncludeConfigSection(section) {
+  return section === "include" || section.startsWith("includeif ");
 }
 function recursiveSubmoduleConfigValue(config) {
   if (!config) {
@@ -2445,7 +2560,7 @@ function analyzeGitWorktree(tokens) {
 // src/core/rules-rm.ts
 import { realpathSync as realpathSync3 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { normalize, resolve as resolve2, sep as sep3 } from "node:path";
+import { normalize, resolve as resolve3, sep as sep3 } from "node:path";
 var IS_WINDOWS = process.platform === "win32";
 function normalizePathForComparison2(p) {
   let normalized = normalize(p);
@@ -2617,13 +2732,13 @@ function isCwdSelfTarget(target, cwd) {
     return true;
   }
   try {
-    const resolved = resolve2(cwd, target);
+    const resolved = resolve3(cwd, target);
     const realCwd = realpathSync3(cwd);
     const realResolved = realpathSync3(resolved);
     return normalizePathForComparison2(realResolved) === normalizePathForComparison2(realCwd);
   } catch {
     try {
-      const resolved = resolve2(cwd, target);
+      const resolved = resolve3(cwd, target);
       return normalizePathForComparison2(resolved) === normalizePathForComparison2(cwd);
     } catch {
       return false;
@@ -2649,7 +2764,7 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
   }
   if (target.startsWith("./") || target.startsWith(".\\") || !target.includes("/") && !target.includes("\\")) {
     try {
-      const resolved = resolve2(resolveCwd, target);
+      const resolved = resolve3(resolveCwd, target);
       const normalizedResolved = normalizePathForComparison2(resolved);
       const normalizedOriginalCwd = normalizePathForComparison2(originalCwd);
       return normalizedResolved.startsWith(`${normalizedOriginalCwd}${sep3}`) || normalizedResolved === normalizedOriginalCwd;
@@ -2661,7 +2776,7 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
     return false;
   }
   try {
-    const resolved = resolve2(resolveCwd, target);
+    const resolved = resolve3(resolveCwd, target);
     const normalizedResolved = normalizePathForComparison2(resolved);
     const normalizedCwd = normalizePathForComparison2(originalCwd);
     return normalizedResolved.startsWith(`${normalizedCwd}${sep3}`) || normalizedResolved === normalizedCwd;
@@ -3774,18 +3889,18 @@ function getSetOptionChanges(tokens, commandIndex) {
 }
 
 // src/core/config.ts
-import { existsSync as existsSync3, readFileSync as readFileSync2 } from "node:fs";
+import { existsSync as existsSync3, readFileSync as readFileSync3 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { join as join2, resolve as resolve3 } from "node:path";
+import { join as join3, resolve as resolve4 } from "node:path";
 var DEFAULT_CONFIG = {
   version: 1,
   rules: []
 };
 function loadConfig(cwd, options) {
   const safeCwd = typeof cwd === "string" ? cwd : process.cwd();
-  const userConfigDir = options?.userConfigDir ?? join2(homedir2(), ".cc-safety-net");
-  const userConfigPath = join2(userConfigDir, "config.json");
-  const projectConfigPath = join2(safeCwd, ".safety-net.json");
+  const userConfigDir = options?.userConfigDir ?? join3(homedir2(), ".cc-safety-net");
+  const userConfigPath = join3(userConfigDir, "config.json");
+  const projectConfigPath = join3(safeCwd, ".safety-net.json");
   const userConfig = loadSingleConfig(userConfigPath);
   const projectConfig = loadSingleConfig(projectConfigPath);
   return mergeConfigs(userConfig, projectConfig);
@@ -3795,7 +3910,7 @@ function loadSingleConfig(path) {
     return null;
   }
   try {
-    const content = readFileSync2(path, "utf-8");
+    const content = readFileSync3(path, "utf-8");
     if (!content.trim()) {
       return null;
     }
@@ -3922,7 +4037,7 @@ function validateConfigFile(path) {
     return { errors, ruleNames };
   }
   try {
-    const content = readFileSync2(path, "utf-8");
+    const content = readFileSync3(path, "utf-8");
     if (!content.trim()) {
       errors.push("Config file is empty");
       return { errors, ruleNames };
@@ -3935,10 +4050,10 @@ function validateConfigFile(path) {
   }
 }
 function getUserConfigPath() {
-  return join2(homedir2(), ".cc-safety-net", "config.json");
+  return join3(homedir2(), ".cc-safety-net", "config.json");
 }
 function getProjectConfigPath(cwd) {
-  return resolve3(cwd ?? process.cwd(), ".safety-net.json");
+  return resolve4(cwd ?? process.cwd(), ".safety-net.json");
 }
 
 // src/core/analyze.ts

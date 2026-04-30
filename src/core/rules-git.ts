@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { extractShortOpts, getBasename } from '@/core/shell';
 import {
   GIT_GLOBAL_OPTS_WITH_VALUE,
@@ -608,9 +609,14 @@ function getEnvConfigValue(
 }
 
 function effectiveGitConfigEnablesRecursiveSubmodules(cwd: string): boolean {
+  const localConfigResult = localGitConfigEnablesRecursiveSubmodules(cwd);
+  if (localConfigResult === null || localConfigResult) {
+    return true;
+  }
+
   const gitBinary = getTrustedGitBinary();
   if (gitBinary === null) {
-    return true;
+    return false;
   }
 
   try {
@@ -624,6 +630,25 @@ function effectiveGitConfigEnablesRecursiveSubmodules(cwd: string): boolean {
   } catch (error) {
     return !isGitConfigUnsetError(error);
   }
+}
+
+function localGitConfigEnablesRecursiveSubmodules(cwd: string): boolean | null {
+  const configPaths = getLocalGitConfigPaths(cwd);
+  if (configPaths === null) {
+    return null;
+  }
+
+  for (const configPath of configPaths) {
+    if (!existsSync(configPath)) {
+      continue;
+    }
+    const result = gitConfigFileEnablesRecursiveSubmodules(configPath);
+    if (result) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function getTrustedGitBinary(): string | null {
@@ -656,6 +681,117 @@ function isGitConfigUnsetError(error: unknown): boolean {
     'status' in error &&
     (error as { status?: unknown }).status === 1
   );
+}
+
+function getLocalGitConfigPaths(cwd: string): string[] | null {
+  const dotGitPath = findDotGitPath(cwd);
+  if (dotGitPath === null) {
+    return null;
+  }
+
+  const gitDir = resolveGitDirFromDotGit(dotGitPath);
+  if (gitDir === null) {
+    return null;
+  }
+
+  const commonDir = resolveCommonGitDir(gitDir);
+  if (commonDir === null) {
+    return null;
+  }
+
+  return [join(commonDir, 'config'), join(gitDir, 'config.worktree')];
+}
+
+function findDotGitPath(cwd: string): string | null {
+  let current = cwd;
+  while (true) {
+    const dotGitPath = join(current, '.git');
+    if (existsSync(dotGitPath)) {
+      return dotGitPath;
+    }
+
+    const parent = dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+}
+
+function resolveGitDirFromDotGit(dotGitPath: string): string | null {
+  try {
+    const content = readFileSync(dotGitPath, 'utf-8');
+    const firstLine = content.split(/\r?\n/, 1)[0]?.trim() ?? '';
+    if (!firstLine.startsWith('gitdir:')) {
+      return dotGitPath;
+    }
+
+    const rawGitDir = firstLine.slice('gitdir:'.length).trim();
+    if (rawGitDir === '') {
+      return null;
+    }
+    return isAbsolute(rawGitDir) ? rawGitDir : resolve(dirname(dotGitPath), rawGitDir);
+  } catch {
+    return null;
+  }
+}
+
+function resolveCommonGitDir(gitDir: string): string | null {
+  const commonDirPath = join(gitDir, 'commondir');
+  if (!existsSync(commonDirPath)) {
+    return gitDir;
+  }
+
+  try {
+    const rawCommonDir = readFileSync(commonDirPath, 'utf-8').split(/\r?\n/, 1)[0]?.trim() ?? '';
+    if (rawCommonDir === '') {
+      return null;
+    }
+    return isAbsolute(rawCommonDir) ? rawCommonDir : resolve(gitDir, rawCommonDir);
+  } catch {
+    return null;
+  }
+}
+
+function gitConfigFileEnablesRecursiveSubmodules(configPath: string): boolean {
+  let content: string;
+  try {
+    content = readFileSync(configPath, 'utf-8');
+  } catch {
+    return true;
+  }
+
+  let section = '';
+  let recursiveSubmoduleConfig = false;
+
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith(';')) {
+      continue;
+    }
+
+    const sectionMatch = trimmed.match(/^\[([^\]]+)\]$/);
+    if (sectionMatch) {
+      section = sectionMatch[1]?.trim().toLowerCase() ?? '';
+      continue;
+    }
+
+    const eqIdx = trimmed.indexOf('=');
+    const key = (eqIdx === -1 ? trimmed : trimmed.slice(0, eqIdx)).trim().toLowerCase();
+    const value = eqIdx === -1 ? 'true' : trimmed.slice(eqIdx + 1).trim();
+    if (isIncludeConfigSection(section) && key === 'path') {
+      return true;
+    }
+    if (section === 'submodule' && key === 'recurse') {
+      recursiveSubmoduleConfig = gitConfigValueEnablesRecursiveSubmodules(value);
+    }
+  }
+
+  return recursiveSubmoduleConfig;
+}
+
+function isIncludeConfigSection(section: string): boolean {
+  return section === 'include' || section.startsWith('includeif ');
 }
 
 function recursiveSubmoduleConfigValue(config: string | undefined): boolean | null {

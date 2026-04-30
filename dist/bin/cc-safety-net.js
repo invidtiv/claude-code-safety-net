@@ -1380,9 +1380,9 @@ All checks passed.`);
 }
 
 // src/bin/doctor/hooks.ts
-import { existsSync as existsSync6, readdirSync as readdirSync2, readFileSync as readFileSync5 } from "node:fs";
+import { existsSync as existsSync6, readdirSync as readdirSync2, readFileSync as readFileSync6 } from "node:fs";
 import { homedir as homedir4, tmpdir as tmpdir3 } from "node:os";
-import { join as join4 } from "node:path";
+import { join as join5 } from "node:path";
 
 // src/core/analyze/dangerous-text.ts
 function dangerousInText(text) {
@@ -2981,7 +2981,8 @@ function extractDashCArg(tokens) {
 
 // src/core/rules-git.ts
 import { execFileSync } from "node:child_process";
-import { existsSync as existsSync5 } from "node:fs";
+import { existsSync as existsSync5, readFileSync as readFileSync5 } from "node:fs";
+import { dirname as dirname3, isAbsolute as isAbsolute3, join as join4, resolve as resolve3 } from "node:path";
 var REASON_CHECKOUT_DOUBLE_DASH = "git checkout -- discards uncommitted changes permanently. Use 'git stash' first.";
 var REASON_CHECKOUT_FORCE = "git checkout --force discards uncommitted changes. Use 'git stash' first.";
 var REASON_CHECKOUT_REF_PATH = "git checkout <ref> -- <path> overwrites working tree with ref version. Use 'git stash' first.";
@@ -3425,9 +3426,13 @@ function getEnvConfigValue(name, envAssignments) {
   return envAssignments?.get(name) ?? process.env[name];
 }
 function effectiveGitConfigEnablesRecursiveSubmodules(cwd) {
+  const localConfigResult = localGitConfigEnablesRecursiveSubmodules(cwd);
+  if (localConfigResult === null || localConfigResult) {
+    return true;
+  }
   const gitBinary = getTrustedGitBinary();
   if (gitBinary === null) {
-    return true;
+    return false;
   }
   try {
     const value = execFileSync(gitBinary, ["config", "--get", "submodule.recurse"], {
@@ -3440,6 +3445,22 @@ function effectiveGitConfigEnablesRecursiveSubmodules(cwd) {
   } catch (error) {
     return !isGitConfigUnsetError(error);
   }
+}
+function localGitConfigEnablesRecursiveSubmodules(cwd) {
+  const configPaths = getLocalGitConfigPaths(cwd);
+  if (configPaths === null) {
+    return null;
+  }
+  for (const configPath of configPaths) {
+    if (!existsSync5(configPath)) {
+      continue;
+    }
+    const result = gitConfigFileEnablesRecursiveSubmodules(configPath);
+    if (result) {
+      return true;
+    }
+  }
+  return false;
 }
 function getTrustedGitBinary() {
   for (const gitBinary of TRUSTED_GIT_BINARIES) {
@@ -3460,6 +3481,100 @@ function withoutGitConfigEnv(env) {
 }
 function isGitConfigUnsetError(error) {
   return typeof error === "object" && error !== null && "status" in error && error.status === 1;
+}
+function getLocalGitConfigPaths(cwd) {
+  const dotGitPath = findDotGitPath(cwd);
+  if (dotGitPath === null) {
+    return null;
+  }
+  const gitDir = resolveGitDirFromDotGit(dotGitPath);
+  if (gitDir === null) {
+    return null;
+  }
+  const commonDir = resolveCommonGitDir(gitDir);
+  if (commonDir === null) {
+    return null;
+  }
+  return [join4(commonDir, "config"), join4(gitDir, "config.worktree")];
+}
+function findDotGitPath(cwd) {
+  let current = cwd;
+  while (true) {
+    const dotGitPath = join4(current, ".git");
+    if (existsSync5(dotGitPath)) {
+      return dotGitPath;
+    }
+    const parent = dirname3(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+}
+function resolveGitDirFromDotGit(dotGitPath) {
+  try {
+    const content = readFileSync5(dotGitPath, "utf-8");
+    const firstLine = content.split(/\r?\n/, 1)[0]?.trim() ?? "";
+    if (!firstLine.startsWith("gitdir:")) {
+      return dotGitPath;
+    }
+    const rawGitDir = firstLine.slice("gitdir:".length).trim();
+    if (rawGitDir === "") {
+      return null;
+    }
+    return isAbsolute3(rawGitDir) ? rawGitDir : resolve3(dirname3(dotGitPath), rawGitDir);
+  } catch {
+    return null;
+  }
+}
+function resolveCommonGitDir(gitDir) {
+  const commonDirPath = join4(gitDir, "commondir");
+  if (!existsSync5(commonDirPath)) {
+    return gitDir;
+  }
+  try {
+    const rawCommonDir = readFileSync5(commonDirPath, "utf-8").split(/\r?\n/, 1)[0]?.trim() ?? "";
+    if (rawCommonDir === "") {
+      return null;
+    }
+    return isAbsolute3(rawCommonDir) ? rawCommonDir : resolve3(gitDir, rawCommonDir);
+  } catch {
+    return null;
+  }
+}
+function gitConfigFileEnablesRecursiveSubmodules(configPath) {
+  let content;
+  try {
+    content = readFileSync5(configPath, "utf-8");
+  } catch {
+    return true;
+  }
+  let section = "";
+  let recursiveSubmoduleConfig = false;
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed.startsWith("#") || trimmed.startsWith(";")) {
+      continue;
+    }
+    const sectionMatch = trimmed.match(/^\[([^\]]+)\]$/);
+    if (sectionMatch) {
+      section = sectionMatch[1]?.trim().toLowerCase() ?? "";
+      continue;
+    }
+    const eqIdx = trimmed.indexOf("=");
+    const key = (eqIdx === -1 ? trimmed : trimmed.slice(0, eqIdx)).trim().toLowerCase();
+    const value = eqIdx === -1 ? "true" : trimmed.slice(eqIdx + 1).trim();
+    if (isIncludeConfigSection(section) && key === "path") {
+      return true;
+    }
+    if (section === "submodule" && key === "recurse") {
+      recursiveSubmoduleConfig = gitConfigValueEnablesRecursiveSubmodules(value);
+    }
+  }
+  return recursiveSubmoduleConfig;
+}
+function isIncludeConfigSection(section) {
+  return section === "include" || section.startsWith("includeif ");
 }
 function recursiveSubmoduleConfigValue(config) {
   if (!config) {
@@ -3591,7 +3706,7 @@ function analyzeGitWorktree(tokens) {
 // src/core/rules-rm.ts
 import { realpathSync as realpathSync3 } from "node:fs";
 import { homedir as homedir3, tmpdir } from "node:os";
-import { normalize, resolve as resolve3, sep as sep3 } from "node:path";
+import { normalize, resolve as resolve4, sep as sep3 } from "node:path";
 var IS_WINDOWS = process.platform === "win32";
 function normalizePathForComparison2(p) {
   let normalized = normalize(p);
@@ -3763,13 +3878,13 @@ function isCwdSelfTarget(target, cwd) {
     return true;
   }
   try {
-    const resolved = resolve3(cwd, target);
+    const resolved = resolve4(cwd, target);
     const realCwd = realpathSync3(cwd);
     const realResolved = realpathSync3(resolved);
     return normalizePathForComparison2(realResolved) === normalizePathForComparison2(realCwd);
   } catch {
     try {
-      const resolved = resolve3(cwd, target);
+      const resolved = resolve4(cwd, target);
       return normalizePathForComparison2(resolved) === normalizePathForComparison2(cwd);
     } catch {
       return false;
@@ -3795,7 +3910,7 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
   }
   if (target.startsWith("./") || target.startsWith(".\\") || !target.includes("/") && !target.includes("\\")) {
     try {
-      const resolved = resolve3(resolveCwd, target);
+      const resolved = resolve4(resolveCwd, target);
       const normalizedResolved = normalizePathForComparison2(resolved);
       const normalizedOriginalCwd = normalizePathForComparison2(originalCwd);
       return normalizedResolved.startsWith(`${normalizedOriginalCwd}${sep3}`) || normalizedResolved === normalizedOriginalCwd;
@@ -3807,7 +3922,7 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
     return false;
   }
   try {
-    const resolved = resolve3(resolveCwd, target);
+    const resolved = resolve4(resolveCwd, target);
     const normalizedResolved = normalizePathForComparison2(resolved);
     const normalizedCwd = normalizePathForComparison2(originalCwd);
     return normalizedResolved.startsWith(`${normalizedCwd}${sep3}`) || normalizedResolved === normalizedCwd;
@@ -4934,7 +5049,7 @@ var SELF_TEST_CASES = [
 ];
 var SELF_TEST_CONFIG = { version: 1, rules: [] };
 function runSelfTest() {
-  const selfTestCwd = join4(tmpdir3(), "cc-safety-net-self-test");
+  const selfTestCwd = join5(tmpdir3(), "cc-safety-net-self-test");
   const results = SELF_TEST_CASES.map((tc) => {
     const result = analyzeCommand(tc.command, {
       cwd: selfTestCwd,
@@ -5044,11 +5159,11 @@ function stripJsonComments(content) {
 }
 function detectClaudeCode(homeDir) {
   const errors = [];
-  const settingsPath = join4(homeDir, ".claude", "settings.json");
+  const settingsPath = join5(homeDir, ".claude", "settings.json");
   const pluginKey = "safety-net@cc-marketplace";
   if (existsSync6(settingsPath)) {
     try {
-      const settings = JSON.parse(readFileSync5(settingsPath, "utf-8"));
+      const settings = JSON.parse(readFileSync6(settingsPath, "utf-8"));
       const pluginValue = settings.enabledPlugins?.[pluginKey];
       if (pluginValue === true) {
         return {
@@ -5079,13 +5194,13 @@ function detectClaudeCode(homeDir) {
 }
 function detectOpenCode(homeDir) {
   const errors = [];
-  const configDir = join4(homeDir, ".config", "opencode");
+  const configDir = join5(homeDir, ".config", "opencode");
   const candidates = ["opencode.json", "opencode.jsonc"];
   for (const filename of candidates) {
-    const configPath = join4(configDir, filename);
+    const configPath = join5(configDir, filename);
     if (existsSync6(configPath)) {
       try {
-        const content = readFileSync5(configPath, "utf-8");
+        const content = readFileSync6(configPath, "utf-8");
         const json = stripJsonComments(content);
         const config = JSON.parse(json);
         const plugins = config.plugin ?? [];
@@ -5113,13 +5228,13 @@ function detectOpenCode(homeDir) {
 }
 function checkGeminiHooksEnabled(homeDir, cwd, errors) {
   const candidates = [
-    join4(homeDir, ".gemini", "settings.json"),
-    join4(cwd, ".gemini", "settings.json")
+    join5(homeDir, ".gemini", "settings.json"),
+    join5(cwd, ".gemini", "settings.json")
   ];
   for (const settingsPath of candidates) {
     if (existsSync6(settingsPath)) {
       try {
-        const settings = JSON.parse(readFileSync5(settingsPath, "utf-8"));
+        const settings = JSON.parse(readFileSync6(settingsPath, "utf-8"));
         if (settings.tools?.enableHooks === true) {
           return { enabled: true, configPath: settingsPath };
         }
@@ -5132,14 +5247,14 @@ function checkGeminiHooksEnabled(homeDir, cwd, errors) {
 }
 function detectGeminiCLI(homeDir, cwd) {
   const errors = [];
-  const extensionPath = join4(homeDir, ".gemini", "extensions", "extension-enablement.json");
+  const extensionPath = join5(homeDir, ".gemini", "extensions", "extension-enablement.json");
   if (!existsSync6(extensionPath)) {
     return { platform: "gemini-cli", status: "n/a" };
   }
   let isInstalled = false;
   let isEnabled = false;
   try {
-    const extensionConfig = JSON.parse(readFileSync5(extensionPath, "utf-8"));
+    const extensionConfig = JSON.parse(readFileSync6(extensionPath, "utf-8"));
     const pluginConfig = extensionConfig["gemini-safety-net"];
     if (pluginConfig) {
       isInstalled = true;
@@ -5226,7 +5341,7 @@ function _supportsCopilotInlineHooks(version) {
   return comparison >= 0;
 }
 function _getCopilotConfigHome(homeDir) {
-  return process.env.COPILOT_HOME || join4(homeDir, ".copilot");
+  return process.env.COPILOT_HOME || join5(homeDir, ".copilot");
 }
 function _hasSafetyNetCopilotHook(config) {
   const preToolUseHooks = config.hooks?.preToolUse ?? [];
@@ -5238,7 +5353,7 @@ function _hasSafetyNetCopilotHook(config) {
 }
 function _readCopilotConfigFile(configPath, errors) {
   try {
-    return JSON.parse(readFileSync5(configPath, "utf-8"));
+    return JSON.parse(readFileSync6(configPath, "utf-8"));
   } catch (e) {
     errors?.push(`Failed to parse ${configPath}: ${e instanceof Error ? e.message : String(e)}`);
     return;
@@ -5257,7 +5372,7 @@ function _collectSafetyNetCopilotHookFiles(dirPath, errors) {
     return [];
   const matches = [];
   for (const filename of _listJsonFiles(dirPath, errors)) {
-    const configPath = join4(dirPath, filename);
+    const configPath = join5(dirPath, filename);
     const config = _readCopilotConfigFile(configPath, errors);
     if (config && _hasSafetyNetCopilotHook(config)) {
       matches.push(configPath);
@@ -5296,15 +5411,15 @@ function _resolveCopilotInlineDisableSource(inlineSources) {
 }
 function _checkCopilotEnabled(homeDir, cwd, copilotCliVersion, errors) {
   const configHome = _getCopilotConfigHome(homeDir);
-  const repoHookDir = join4(cwd, ".github", "hooks");
-  const userHookDir = join4(configHome, "hooks");
-  const repoConfigDir = join4(cwd, ".github", "copilot");
+  const repoHookDir = join5(cwd, ".github", "hooks");
+  const userHookDir = join5(configHome, "hooks");
+  const repoConfigDir = join5(cwd, ".github", "copilot");
   const inlineSupport = _supportsCopilotInlineHooks(copilotCliVersion);
   const inlineErrors = inlineSupport === true ? errors : undefined;
   const inlineSources = {
-    userConfig: _collectCopilotInlineConfig(join4(configHome, "config.json"), inlineErrors),
-    repoSettings: _collectCopilotInlineConfig(join4(repoConfigDir, "settings.json"), inlineErrors),
-    localSettings: _collectCopilotInlineConfig(join4(repoConfigDir, "settings.local.json"), inlineErrors)
+    userConfig: _collectCopilotInlineConfig(join5(configHome, "config.json"), inlineErrors),
+    repoSettings: _collectCopilotInlineConfig(join5(repoConfigDir, "settings.json"), inlineErrors),
+    localSettings: _collectCopilotInlineConfig(join5(repoConfigDir, "settings.local.json"), inlineErrors)
   };
   if (inlineSupport !== false) {
     const disableSource = _resolveCopilotInlineDisableSource(inlineSources);
@@ -5321,7 +5436,7 @@ function _checkCopilotEnabled(homeDir, cwd, copilotCliVersion, errors) {
   const userHookFiles = existsSync6(userHookDir) ? _listJsonFiles(userHookDir, userHookErrors) : [];
   const userHookPaths = [];
   for (const filename of userHookFiles) {
-    const configPath = join4(userHookDir, filename);
+    const configPath = join5(userHookDir, filename);
     const config = _readCopilotConfigFile(configPath, userHookErrors);
     if (config && _hasSafetyNetCopilotHook(config)) {
       userHookPaths.push(configPath);
@@ -5413,7 +5528,7 @@ var defaultVersionFetcher = async (args) => {
   const [cmd, ...rest] = args;
   if (!cmd)
     return null;
-  return new Promise((resolve4) => {
+  return new Promise((resolve5) => {
     try {
       const proc = spawn(cmd, rest, {
         stdio: ["ignore", "pipe", "pipe"]
@@ -5429,7 +5544,7 @@ var defaultVersionFetcher = async (args) => {
           return;
         isSettled = true;
         clearTimeout(timeoutId);
-        resolve4(value);
+        resolve5(value);
       };
       const timeoutId = setTimeout(() => {
         proc.kill();
@@ -5442,7 +5557,7 @@ var defaultVersionFetcher = async (args) => {
         finish(null);
       });
     } catch {
-      resolve4(null);
+      resolve5(null);
     }
   });
 };
@@ -5609,7 +5724,7 @@ function printReport(report) {
 
 // src/bin/explain/config.ts
 import { existsSync as existsSync7 } from "node:fs";
-import { resolve as resolve4 } from "node:path";
+import { resolve as resolve5 } from "node:path";
 
 // src/core/env.ts
 function envTruthy(name) {
@@ -5639,7 +5754,7 @@ function getConfigSource(options) {
   return { configSource: null, configValid: true };
 }
 function buildAnalyzeOptions(explainOptions) {
-  const cwd = resolve4(explainOptions?.cwd ?? process.cwd());
+  const cwd = resolve5(explainOptions?.cwd ?? process.cwd());
   const paranoidAll = envTruthy("SAFETY_NET_PARANOID");
   return {
     cwd,
@@ -6633,7 +6748,7 @@ function showCommandHelp(commandName) {
 // src/core/audit.ts
 import { appendFileSync, existsSync as existsSync8, mkdirSync } from "node:fs";
 import { homedir as homedir5 } from "node:os";
-import { join as join5 } from "node:path";
+import { join as join6 } from "node:path";
 function sanitizeSessionIdForFilename(sessionId) {
   const raw = sessionId.trim();
   if (!raw) {
@@ -6652,12 +6767,12 @@ function writeAuditLog(sessionId, command, segment, reason, cwd, options = {}) {
     return;
   }
   const home = options.homeDir ?? homedir5();
-  const logsDir = join5(home, ".cc-safety-net", "logs");
+  const logsDir = join6(home, ".cc-safety-net", "logs");
   try {
     if (!existsSync8(logsDir)) {
       mkdirSync(logsDir, { recursive: true });
     }
-    const logFile = join5(logsDir, `${safeSessionId}.jsonl`);
+    const logFile = join6(logsDir, `${safeSessionId}.jsonl`);
     const entry = {
       ts: new Date().toISOString(),
       command: redactSecrets(command).slice(0, 300),
@@ -6912,14 +7027,14 @@ async function runGeminiCLIHook() {
 }
 
 // src/bin/statusline.ts
-import { existsSync as existsSync9, readFileSync as readFileSync6 } from "node:fs";
+import { existsSync as existsSync9, readFileSync as readFileSync7 } from "node:fs";
 import { homedir as homedir6 } from "node:os";
-import { join as join6 } from "node:path";
+import { join as join7 } from "node:path";
 async function readStdinAsync() {
   if (process.stdin.isTTY) {
     return null;
   }
-  return new Promise((resolve5) => {
+  return new Promise((resolve6) => {
     let data = "";
     process.stdin.setEncoding("utf-8");
     process.stdin.on("data", (chunk) => {
@@ -6927,10 +7042,10 @@ async function readStdinAsync() {
     });
     process.stdin.on("end", () => {
       const trimmed = data.trim();
-      resolve5(trimmed || null);
+      resolve6(trimmed || null);
     });
     process.stdin.on("error", () => {
-      resolve5(null);
+      resolve6(null);
     });
   });
 }
@@ -6938,7 +7053,7 @@ function getSettingsPath() {
   if (process.env.CLAUDE_SETTINGS_PATH) {
     return process.env.CLAUDE_SETTINGS_PATH;
   }
-  return join6(homedir6(), ".claude", "settings.json");
+  return join7(homedir6(), ".claude", "settings.json");
 }
 function isPluginEnabled() {
   const settingsPath = getSettingsPath();
@@ -6946,7 +7061,7 @@ function isPluginEnabled() {
     return false;
   }
   try {
-    const content = readFileSync6(settingsPath, "utf-8");
+    const content = readFileSync7(settingsPath, "utf-8");
     const settings = JSON.parse(content);
     if (!settings.enabledPlugins) {
       return false;
@@ -6997,8 +7112,8 @@ async function printStatusline() {
 }
 
 // src/bin/verify-config.ts
-import { existsSync as existsSync10, readFileSync as readFileSync7, writeFileSync } from "node:fs";
-import { resolve as resolve5 } from "node:path";
+import { existsSync as existsSync10, readFileSync as readFileSync8, writeFileSync } from "node:fs";
+import { resolve as resolve6 } from "node:path";
 var HEADER = "Safety Net Config";
 var SEPARATOR = "═".repeat(HEADER.length);
 var SCHEMA_URL = "https://raw.githubusercontent.com/kenryu42/claude-code-safety-net/main/assets/cc-safety-net.schema.json";
@@ -7034,7 +7149,7 @@ function printInvalidConfig(scope, path, errors) {
 }
 function addSchemaIfMissing(path) {
   try {
-    const content = readFileSync7(path, "utf-8");
+    const content = readFileSync8(path, "utf-8");
     const parsed = JSON.parse(content);
     if (parsed.$schema) {
       return false;
@@ -7063,7 +7178,7 @@ function verifyConfig(options = {}) {
     const result = validateConfigFile(projectConfig);
     configsChecked.push({
       scope: "Project",
-      path: resolve5(projectConfig),
+      path: resolve6(projectConfig),
       result
     });
     if (result.errors.length > 0) {
