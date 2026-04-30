@@ -165,7 +165,7 @@ function worktreeGitdirBacklinkMatches(gitDir: string, dotGitPath: string): bool
   const linkedDotGitPath = isAbsolute(rawBacklink) ? rawBacklink : resolve(gitDir, rawBacklink);
 
   try {
-    return realpathSync(linkedDotGitPath) === realpathSync(dotGitPath);
+    return sameFilesystemPath(linkedDotGitPath, dotGitPath);
   } catch {
     return false;
   }
@@ -187,10 +187,40 @@ function worktreeConfigMatchesRoot(gitDir: string, worktreeRoot: string): boolea
     : resolve(gitDir, configuredWorktree);
 
   try {
-    return realpathSync(resolvedConfiguredWorktree) === realpathSync(worktreeRoot);
+    return sameFilesystemPath(resolvedConfiguredWorktree, worktreeRoot);
   } catch {
     return false;
   }
+}
+
+function sameFilesystemPath(left: string, right: string): boolean {
+  try {
+    const leftStat = statSync(left);
+    const rightStat = statSync(right);
+    if (
+      leftStat.ino !== 0 &&
+      rightStat.ino !== 0 &&
+      leftStat.dev === rightStat.dev &&
+      leftStat.ino === rightStat.ino
+    ) {
+      return true;
+    }
+  } catch {
+    // Fall through to realpath comparison for platforms where stat identity is unavailable.
+  }
+
+  return (
+    normalizePathForComparison(realpathSync(left)) ===
+    normalizePathForComparison(realpathSync(right))
+  );
+}
+
+function normalizePathForComparison(path: string): string {
+  let normalized = path.replace(/\\/g, '/');
+  if (normalized.length > 1 && normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
 function readCoreWorktree(configPath: string): string | null {

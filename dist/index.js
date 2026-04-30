@@ -565,7 +565,7 @@ function worktreeGitdirBacklinkMatches(gitDir, dotGitPath) {
   }
   const linkedDotGitPath = isAbsolute(rawBacklink) ? rawBacklink : resolve(gitDir, rawBacklink);
   try {
-    return realpathSync(linkedDotGitPath) === realpathSync(dotGitPath);
+    return sameFilesystemPath(linkedDotGitPath, dotGitPath);
   } catch {
     return false;
   }
@@ -581,10 +581,27 @@ function worktreeConfigMatchesRoot(gitDir, worktreeRoot) {
   }
   const resolvedConfiguredWorktree = isAbsolute(configuredWorktree) ? configuredWorktree : resolve(gitDir, configuredWorktree);
   try {
-    return realpathSync(resolvedConfiguredWorktree) === realpathSync(worktreeRoot);
+    return sameFilesystemPath(resolvedConfiguredWorktree, worktreeRoot);
   } catch {
     return false;
   }
+}
+function sameFilesystemPath(left, right) {
+  try {
+    const leftStat = statSync(left);
+    const rightStat = statSync(right);
+    if (leftStat.ino !== 0 && rightStat.ino !== 0 && leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino) {
+      return true;
+    }
+  } catch {}
+  return normalizePathForComparison(realpathSync(left)) === normalizePathForComparison(realpathSync(right));
+}
+function normalizePathForComparison(path) {
+  let normalized = path.replace(/\\/g, "/");
+  if (normalized.length > 1 && normalized.endsWith("/")) {
+    normalized = normalized.slice(0, -1);
+  }
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
 }
 function readCoreWorktree(configPath) {
   const content = readFileSync(configPath, "utf-8");
@@ -2426,7 +2443,7 @@ import { realpathSync as realpathSync3 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { normalize, resolve as resolve2, sep as sep3 } from "node:path";
 var IS_WINDOWS = process.platform === "win32";
-function normalizePathForComparison(p) {
+function normalizePathForComparison2(p) {
   let normalized = normalize(p);
   if (IS_WINDOWS) {
     normalized = normalized.replace(/\//g, "\\");
@@ -2566,8 +2583,8 @@ function isTempTarget(path, allowTmpdirVar) {
     return true;
   }
   const systemTmpdir = tmpdir();
-  const normalizedTmpdir = normalizePathForComparison(systemTmpdir);
-  const pathToCompare = normalizePathForComparison(normalized);
+  const normalizedTmpdir = normalizePathForComparison2(systemTmpdir);
+  const pathToCompare = normalizePathForComparison2(normalized);
   if (pathToCompare.startsWith(`${normalizedTmpdir}${sep3}`) || pathToCompare === normalizedTmpdir) {
     return true;
   }
@@ -2586,7 +2603,7 @@ function getHomeDirForRmPolicy() {
 }
 function isCwdHomeForRmPolicy(cwd, homeDir) {
   try {
-    return normalizePathForComparison(cwd) === normalizePathForComparison(homeDir);
+    return normalizePathForComparison2(cwd) === normalizePathForComparison2(homeDir);
   } catch {
     return false;
   }
@@ -2599,11 +2616,11 @@ function isCwdSelfTarget(target, cwd) {
     const resolved = resolve2(cwd, target);
     const realCwd = realpathSync3(cwd);
     const realResolved = realpathSync3(resolved);
-    return normalizePathForComparison(realResolved) === normalizePathForComparison(realCwd);
+    return normalizePathForComparison2(realResolved) === normalizePathForComparison2(realCwd);
   } catch {
     try {
       const resolved = resolve2(cwd, target);
-      return normalizePathForComparison(resolved) === normalizePathForComparison(cwd);
+      return normalizePathForComparison2(resolved) === normalizePathForComparison2(cwd);
     } catch {
       return false;
     }
@@ -2619,8 +2636,8 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
   }
   if (target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target)) {
     try {
-      const normalizedTarget = normalizePathForComparison(target);
-      const normalizedCwd = `${normalizePathForComparison(originalCwd)}${sep3}`;
+      const normalizedTarget = normalizePathForComparison2(target);
+      const normalizedCwd = `${normalizePathForComparison2(originalCwd)}${sep3}`;
       return normalizedTarget.startsWith(normalizedCwd);
     } catch {
       return false;
@@ -2629,8 +2646,8 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
   if (target.startsWith("./") || target.startsWith(".\\") || !target.includes("/") && !target.includes("\\")) {
     try {
       const resolved = resolve2(resolveCwd, target);
-      const normalizedResolved = normalizePathForComparison(resolved);
-      const normalizedOriginalCwd = normalizePathForComparison(originalCwd);
+      const normalizedResolved = normalizePathForComparison2(resolved);
+      const normalizedOriginalCwd = normalizePathForComparison2(originalCwd);
       return normalizedResolved.startsWith(`${normalizedOriginalCwd}${sep3}`) || normalizedResolved === normalizedOriginalCwd;
     } catch {
       return false;
@@ -2641,8 +2658,8 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
   }
   try {
     const resolved = resolve2(resolveCwd, target);
-    const normalizedResolved = normalizePathForComparison(resolved);
-    const normalizedCwd = normalizePathForComparison(originalCwd);
+    const normalizedResolved = normalizePathForComparison2(resolved);
+    const normalizedCwd = normalizePathForComparison2(originalCwd);
     return normalizedResolved.startsWith(`${normalizedCwd}${sep3}`) || normalizedResolved === normalizedCwd;
   } catch {
     return false;
