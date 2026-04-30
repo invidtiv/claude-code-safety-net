@@ -5,7 +5,6 @@ log*
 plan-*.md
 *-plan-*.md
 .safety-net.json
-.sisyphus/
 .opencode
 .gemini
 .codex
