@@ -1,5 +1,5 @@
 import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, parse as parsePath, resolve, sep } from 'node:path';
 
 export const GIT_GLOBAL_OPTS_WITH_VALUE: ReadonlySet<string> = new Set([
   '-c',
@@ -241,8 +241,9 @@ function resolveGitCwd(baseCwd: string, target: string): string | null {
 }
 
 function resolveChdirTarget(baseCwd: string, target: string): string {
-  let current = isAbsolute(target) ? '/' : baseCwd;
-  for (const component of target.split('/')) {
+  const root = isAbsolute(target) ? getPathRoot(target) : '';
+  let current = root || baseCwd;
+  for (const component of getPathComponents(root ? target.slice(root.length) : target)) {
     if (component === '' || component === '.') {
       continue;
     }
@@ -258,7 +259,16 @@ function resolveChdirTarget(baseCwd: string, target: string): string {
 }
 
 function appendPathWithoutNormalizing(base: string, target: string): string {
-  return base.endsWith('/') ? `${base}${target}` : `${base}/${target}`;
+  return base.endsWith('/') || base.endsWith('\\') ? `${base}${target}` : `${base}${sep}${target}`;
+}
+
+function getPathRoot(target: string): string {
+  return parsePath(target).root;
+}
+
+function getPathComponents(target: string): string[] {
+  const separator = process.platform === 'win32' ? /[\\/]+/ : /\/+/;
+  return target.split(separator);
 }
 
 function isDirectory(path: string): boolean {

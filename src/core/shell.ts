@@ -1,5 +1,5 @@
 import { lstatSync, realpathSync } from 'node:fs';
-import { dirname, isAbsolute } from 'node:path';
+import { dirname, isAbsolute, parse as parsePath, sep } from 'node:path';
 import { type ParseEntry, parse } from 'shell-quote';
 import { MAX_STRIP_ITERATIONS, SHELL_OPERATORS } from '@/types';
 import { GIT_CONTEXT_ENV_OVERRIDES } from './worktree';
@@ -588,6 +588,13 @@ function _stripAttachedIoNumbers(command: string): string {
 const ENV_ASSIGNMENT_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const ENV_APPEND_ASSIGNMENT_RE = /^([A-Za-z_][A-Za-z0-9_]*)\+=/;
 const GIT_CONTEXT_ENV_OVERRIDE_NAMES: ReadonlySet<string> = new Set(GIT_CONTEXT_ENV_OVERRIDES);
+const GIT_CONFIG_AFFECTING_ENV_NAMES: ReadonlySet<string> = new Set([
+  'GIT_CONFIG_GLOBAL',
+  'GIT_CONFIG_NOSYSTEM',
+  'GIT_CONFIG_SYSTEM',
+  'HOME',
+  'XDG_CONFIG_HOME',
+]);
 
 export function parseEnvAssignment(token: string): { name: string; value: string } | null {
   if (!ENV_ASSIGNMENT_RE.test(token)) {
@@ -600,11 +607,27 @@ export function parseEnvAssignment(token: string): { name: string; value: string
 function parseGitContextAppendEnvAssignment(token: string): { name: string; value: string } | null {
   const match = token.match(ENV_APPEND_ASSIGNMENT_RE);
   const name = match?.[1];
-  if (!name || !GIT_CONTEXT_ENV_OVERRIDE_NAMES.has(name)) {
+  if (!name || !isTrackedGitEnvName(name)) {
     return null;
   }
   const eqIdx = token.indexOf('=');
   return { name, value: token.slice(eqIdx + 1) };
+}
+
+function isTrackedGitEnvName(name: string): boolean {
+  return (
+    GIT_CONTEXT_ENV_OVERRIDE_NAMES.has(name) ||
+    GIT_CONFIG_AFFECTING_ENV_NAMES.has(name) ||
+    isGitConfigEnvName(name)
+  );
+}
+
+function isGitConfigEnvName(name: string): boolean {
+  return (
+    name === 'GIT_CONFIG_COUNT' ||
+    name === 'GIT_CONFIG_PARAMETERS' ||
+    /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(name)
+  );
 }
 
 export interface EnvStrippingResult {
@@ -916,7 +939,7 @@ function resolveWrapperCwd(cwd: string | null | undefined, target: string): stri
     if (!cwd && !isAbsolute(target)) {
       return null;
     }
-    const baseCwd = isAbsolute(target) ? '/' : realpathSync(cwd ?? '/');
+    const baseCwd = isAbsolute(target) ? getPathRoot(target) : realpathSync(cwd ?? '/');
     return resolveChdirTarget(baseCwd, target);
   } catch {
     return null;
@@ -924,8 +947,9 @@ function resolveWrapperCwd(cwd: string | null | undefined, target: string): stri
 }
 
 function resolveChdirTarget(baseCwd: string, target: string): string {
-  let current = isAbsolute(target) ? '/' : baseCwd;
-  for (const component of target.split('/')) {
+  const root = isAbsolute(target) ? getPathRoot(target) : '';
+  let current = root || baseCwd;
+  for (const component of getPathComponents(root ? target.slice(root.length) : target)) {
     if (component === '' || component === '.') {
       continue;
     }
@@ -941,7 +965,16 @@ function resolveChdirTarget(baseCwd: string, target: string): string {
 }
 
 function appendPathWithoutNormalizing(base: string, target: string): string {
-  return base.endsWith('/') ? `${base}${target}` : `${base}/${target}`;
+  return base.endsWith('/') || base.endsWith('\\') ? `${base}${target}` : `${base}${sep}${target}`;
+}
+
+function getPathRoot(target: string): string {
+  return parsePath(target).root;
+}
+
+function getPathComponents(target: string): string[] {
+  const separator = process.platform === 'win32' ? /[\\/]+/ : /\/+/;
+  return target.split(separator);
 }
 
 function stripCommand(tokens: string[]): string[] {

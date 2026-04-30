@@ -1570,7 +1570,7 @@ function hasRecursiveForceFlags(tokens) {
 
 // src/core/shell.ts
 import { lstatSync as lstatSync2, realpathSync as realpathSync2 } from "node:fs";
-import { dirname as dirname2, isAbsolute as isAbsolute2 } from "node:path";
+import { dirname as dirname2, isAbsolute as isAbsolute2, parse as parsePath2, sep as sep2 } from "node:path";
 
 // node_modules/shell-quote/index.js
 var $quote = require_quote();
@@ -1578,7 +1578,7 @@ var $parse = require_parse();
 
 // src/core/worktree.ts
 import { existsSync as existsSync4, lstatSync, readFileSync as readFileSync4, realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join as join3, resolve as resolve2 } from "node:path";
+import { dirname, isAbsolute, join as join3, parse as parsePath, resolve as resolve2, sep } from "node:path";
 var GIT_GLOBAL_OPTS_WITH_VALUE = new Set([
   "-c",
   "-C",
@@ -1771,8 +1771,9 @@ function resolveGitCwd(baseCwd, target) {
   }
 }
 function resolveChdirTarget(baseCwd, target) {
-  let current = isAbsolute(target) ? "/" : baseCwd;
-  for (const component of target.split("/")) {
+  const root = isAbsolute(target) ? getPathRoot(target) : "";
+  let current = root || baseCwd;
+  for (const component of getPathComponents(root ? target.slice(root.length) : target)) {
     if (component === "" || component === ".") {
       continue;
     }
@@ -1786,7 +1787,14 @@ function resolveChdirTarget(baseCwd, target) {
   return current;
 }
 function appendPathWithoutNormalizing(base, target) {
-  return base.endsWith("/") ? `${base}${target}` : `${base}/${target}`;
+  return base.endsWith("/") || base.endsWith("\\") ? `${base}${target}` : `${base}${sep}${target}`;
+}
+function getPathRoot(target) {
+  return parsePath(target).root;
+}
+function getPathComponents(target) {
+  const separator = process.platform === "win32" ? /[\\/]+/ : /\/+/;
+  return target.split(separator);
 }
 function isDirectory(path) {
   try {
@@ -2294,6 +2302,13 @@ function _stripAttachedIoNumbers(command) {
 var ENV_ASSIGNMENT_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
 var ENV_APPEND_ASSIGNMENT_RE = /^([A-Za-z_][A-Za-z0-9_]*)\+=/;
 var GIT_CONTEXT_ENV_OVERRIDE_NAMES = new Set(GIT_CONTEXT_ENV_OVERRIDES);
+var GIT_CONFIG_AFFECTING_ENV_NAMES = new Set([
+  "GIT_CONFIG_GLOBAL",
+  "GIT_CONFIG_NOSYSTEM",
+  "GIT_CONFIG_SYSTEM",
+  "HOME",
+  "XDG_CONFIG_HOME"
+]);
 function parseEnvAssignment(token) {
   if (!ENV_ASSIGNMENT_RE.test(token)) {
     return null;
@@ -2304,11 +2319,17 @@ function parseEnvAssignment(token) {
 function parseGitContextAppendEnvAssignment(token) {
   const match = token.match(ENV_APPEND_ASSIGNMENT_RE);
   const name = match?.[1];
-  if (!name || !GIT_CONTEXT_ENV_OVERRIDE_NAMES.has(name)) {
+  if (!name || !isTrackedGitEnvName(name)) {
     return null;
   }
   const eqIdx = token.indexOf("=");
   return { name, value: token.slice(eqIdx + 1) };
+}
+function isTrackedGitEnvName(name) {
+  return GIT_CONTEXT_ENV_OVERRIDE_NAMES.has(name) || GIT_CONFIG_AFFECTING_ENV_NAMES.has(name) || isGitConfigEnvName(name);
+}
+function isGitConfigEnvName(name) {
+  return name === "GIT_CONFIG_COUNT" || name === "GIT_CONFIG_PARAMETERS" || /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(name);
 }
 function stripEnvAssignmentsWithInfo(tokens) {
   const envAssignments = new Map;
@@ -2555,15 +2576,16 @@ function resolveWrapperCwd(cwd, target) {
     if (!cwd && !isAbsolute2(target)) {
       return null;
     }
-    const baseCwd = isAbsolute2(target) ? "/" : realpathSync2(cwd ?? "/");
+    const baseCwd = isAbsolute2(target) ? getPathRoot2(target) : realpathSync2(cwd ?? "/");
     return resolveChdirTarget2(baseCwd, target);
   } catch {
     return null;
   }
 }
 function resolveChdirTarget2(baseCwd, target) {
-  let current = isAbsolute2(target) ? "/" : baseCwd;
-  for (const component of target.split("/")) {
+  const root = isAbsolute2(target) ? getPathRoot2(target) : "";
+  let current = root || baseCwd;
+  for (const component of getPathComponents2(root ? target.slice(root.length) : target)) {
     if (component === "" || component === ".") {
       continue;
     }
@@ -2577,7 +2599,14 @@ function resolveChdirTarget2(baseCwd, target) {
   return current;
 }
 function appendPathWithoutNormalizing2(base, target) {
-  return base.endsWith("/") ? `${base}${target}` : `${base}/${target}`;
+  return base.endsWith("/") || base.endsWith("\\") ? `${base}${target}` : `${base}${sep2}${target}`;
+}
+function getPathRoot2(target) {
+  return parsePath2(target).root;
+}
+function getPathComponents2(target) {
+  const separator = process.platform === "win32" ? /[\\/]+/ : /\/+/;
+  return target.split(separator);
 }
 function stripCommand(tokens) {
   let i = 1;
@@ -2961,7 +2990,7 @@ var CHECKOUT_OPTS_WITH_VALUE = new Set([
 var CHECKOUT_OPTS_WITH_OPTIONAL_VALUE = new Set(["--recurse-submodules", "--track", "-t"]);
 var CHECKOUT_SHORT_OPTS_WITH_VALUE = new Set(["-b", "-B", "-U"]);
 var SWITCH_SHORT_OPTS_WITH_VALUE = new Set(["-c", "-C"]);
-var GIT_CONFIG_AFFECTING_ENV_NAMES = new Set([
+var GIT_CONFIG_AFFECTING_ENV_NAMES2 = new Set([
   "GIT_CONFIG_GLOBAL",
   "GIT_CONFIG_NOSYSTEM",
   "GIT_CONFIG_SYSTEM",
@@ -3365,7 +3394,7 @@ function hasConfigAffectingEnvAssignment(envAssignments) {
     return false;
   }
   for (const key of envAssignments.keys()) {
-    if (GIT_CONFIG_AFFECTING_ENV_NAMES.has(key)) {
+    if (GIT_CONFIG_AFFECTING_ENV_NAMES2.has(key)) {
       return true;
     }
   }
@@ -3541,7 +3570,7 @@ function analyzeGitWorktree(tokens) {
 // src/core/rules-rm.ts
 import { realpathSync as realpathSync3 } from "node:fs";
 import { homedir as homedir3, tmpdir } from "node:os";
-import { normalize, resolve as resolve3, sep } from "node:path";
+import { normalize, resolve as resolve3, sep as sep3 } from "node:path";
 var IS_WINDOWS = process.platform === "win32";
 function normalizePathForComparison(p) {
   let normalized = normalize(p);
@@ -3685,7 +3714,7 @@ function isTempTarget(path, allowTmpdirVar) {
   const systemTmpdir = tmpdir();
   const normalizedTmpdir = normalizePathForComparison(systemTmpdir);
   const pathToCompare = normalizePathForComparison(normalized);
-  if (pathToCompare.startsWith(`${normalizedTmpdir}${sep}`) || pathToCompare === normalizedTmpdir) {
+  if (pathToCompare.startsWith(`${normalizedTmpdir}${sep3}`) || pathToCompare === normalizedTmpdir) {
     return true;
   }
   if (allowTmpdirVar) {
@@ -3737,7 +3766,7 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
   if (target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target)) {
     try {
       const normalizedTarget = normalizePathForComparison(target);
-      const normalizedCwd = `${normalizePathForComparison(originalCwd)}${sep}`;
+      const normalizedCwd = `${normalizePathForComparison(originalCwd)}${sep3}`;
       return normalizedTarget.startsWith(normalizedCwd);
     } catch {
       return false;
@@ -3748,7 +3777,7 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
       const resolved = resolve3(resolveCwd, target);
       const normalizedResolved = normalizePathForComparison(resolved);
       const normalizedOriginalCwd = normalizePathForComparison(originalCwd);
-      return normalizedResolved.startsWith(`${normalizedOriginalCwd}${sep}`) || normalizedResolved === normalizedOriginalCwd;
+      return normalizedResolved.startsWith(`${normalizedOriginalCwd}${sep3}`) || normalizedResolved === normalizedOriginalCwd;
     } catch {
       return false;
     }
@@ -3760,7 +3789,7 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
     const resolved = resolve3(resolveCwd, target);
     const normalizedResolved = normalizePathForComparison(resolved);
     const normalizedCwd = normalizePathForComparison(originalCwd);
-    return normalizedResolved.startsWith(`${normalizedCwd}${sep}`) || normalizedResolved === normalizedCwd;
+    return normalizedResolved.startsWith(`${normalizedCwd}${sep3}`) || normalizedResolved === normalizedCwd;
   } catch {
     return false;
   }
@@ -3845,7 +3874,7 @@ function analyzeParallel(tokens, context) {
       for (const arg of args) {
         const expandedTokens = childTokens.map((t) => t.replace(/{}/g, arg));
         const rmResult = analyzeRm(expandedTokens, {
-          cwd: context.cwd,
+          cwd: childCwd,
           originalCwd: context.originalCwd,
           paranoid: context.paranoidRm,
           allowTmpdirVar: context.allowTmpdirVar
@@ -3859,7 +3888,7 @@ function analyzeParallel(tokens, context) {
     if (args.length > 0) {
       const expandedTokens = [...childTokens, args[0] ?? ""];
       const rmResult = analyzeRm(expandedTokens, {
-        cwd: context.cwd,
+        cwd: childCwd,
         originalCwd: context.originalCwd,
         paranoid: context.paranoidRm,
         allowTmpdirVar: context.allowTmpdirVar
@@ -4037,7 +4066,7 @@ function parseParallelCommand(tokens) {
 
 // src/core/analyze/tmpdir.ts
 import { tmpdir as tmpdir2 } from "node:os";
-import { normalize as normalize2, sep as sep2 } from "node:path";
+import { normalize as normalize2, sep as sep4 } from "node:path";
 function isTmpdirOverriddenToNonTemp(envAssignments) {
   if (!envAssignments.has("TMPDIR")) {
     return false;
@@ -4057,7 +4086,7 @@ function isPathOrSubpath(path, basePath) {
   if (path === basePath) {
     return true;
   }
-  const baseWithSlash = basePath.endsWith(sep2) ? basePath : `${basePath}${sep2}`;
+  const baseWithSlash = basePath.endsWith(sep4) ? basePath : `${basePath}${sep4}`;
   return path.startsWith(baseWithSlash);
 }
 
@@ -4087,7 +4116,7 @@ function analyzeXargs(tokens, context) {
   }
   if (head === "rm" && hasRecursiveForceFlags(childTokens)) {
     const rmResult = analyzeRm(childTokens, {
-      cwd: context.cwd,
+      cwd: childCwd,
       originalCwd: context.originalCwd,
       paranoid: context.paranoidRm,
       allowTmpdirVar: context.allowTmpdirVar
@@ -4483,7 +4512,7 @@ function stripLeadingGrouping(tokens) {
 var REASON_STRICT_UNPARSEABLE = "Command could not be safely analyzed (strict mode). Verify manually.";
 var REASON_RECURSION_LIMIT = "Command exceeds maximum recursion depth and cannot be safely analyzed.";
 var GIT_CONTEXT_ENV_OVERRIDE_NAMES2 = new Set(GIT_CONTEXT_ENV_OVERRIDES);
-var GIT_CONFIG_AFFECTING_ENV_NAMES2 = new Set([
+var GIT_CONFIG_AFFECTING_ENV_NAMES3 = new Set([
   "GIT_CONFIG_GLOBAL",
   "GIT_CONFIG_NOSYSTEM",
   "GIT_CONFIG_SYSTEM",
@@ -4544,7 +4573,7 @@ function createShellGitContextEnvState(effectiveEnvAssignments) {
   return {
     effectiveEnvAssignments,
     shellAssignments: new Map,
-    exportedNames: new Set,
+    exportedNames: getInitiallyExportedGitContextNames(effectiveEnvAssignments),
     allexport: false,
     keywordExport: false
   };
@@ -4622,7 +4651,7 @@ function getShellCommandInfo(tokens) {
     if (!assignment) {
       break;
     }
-    if (isTrackedGitEnvName(assignment.name)) {
+    if (isTrackedGitEnvName2(assignment.name)) {
       leadingAssignments.set(assignment.name, assignment);
     }
     i++;
@@ -4680,7 +4709,7 @@ function parseShellAssignment(token) {
 }
 function parseGitContextEnvAssignment(token) {
   const assignment = parseEnvAssignment(token) ?? parseGitContextAppendEnvAssignment2(token);
-  if (!assignment || !isTrackedGitEnvName(assignment.name)) {
+  if (!assignment || !isTrackedGitEnvName2(assignment.name)) {
     return null;
   }
   return assignment;
@@ -4688,17 +4717,31 @@ function parseGitContextEnvAssignment(token) {
 function parseGitContextAppendEnvAssignment2(token) {
   const match = token.match(GIT_CONTEXT_APPEND_ASSIGNMENT_RE);
   const name = match?.[1];
-  if (!name || !GIT_CONTEXT_ENV_OVERRIDE_NAMES2.has(name)) {
+  if (!name || !isTrackedGitEnvName2(name)) {
     return null;
   }
   const eqIdx = token.indexOf("=");
   return { name, value: token.slice(eqIdx + 1) };
 }
-function isTrackedGitEnvName(name) {
-  return GIT_CONTEXT_ENV_OVERRIDE_NAMES2.has(name) || GIT_CONFIG_AFFECTING_ENV_NAMES2.has(name) || isGitConfigEnvName(name);
+function isTrackedGitEnvName2(name) {
+  return GIT_CONTEXT_ENV_OVERRIDE_NAMES2.has(name) || GIT_CONFIG_AFFECTING_ENV_NAMES3.has(name) || isGitConfigEnvName2(name);
 }
-function isGitConfigEnvName(name) {
+function isGitConfigEnvName2(name) {
   return name === "GIT_CONFIG_COUNT" || name === "GIT_CONFIG_PARAMETERS" || /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(name);
+}
+function getInitiallyExportedGitContextNames(effectiveEnvAssignments) {
+  const exportedNames = new Set;
+  for (const name of Object.keys(process.env)) {
+    if (isTrackedGitEnvName2(name)) {
+      exportedNames.add(name);
+    }
+  }
+  for (const name of effectiveEnvAssignments?.keys() ?? []) {
+    if (isTrackedGitEnvName2(name)) {
+      exportedNames.add(name);
+    }
+  }
+  return exportedNames;
 }
 function setShellGitContextAssignment(state, assignment) {
   state.shellAssignments.set(assignment.name, assignment.value);
@@ -4719,7 +4762,7 @@ function addExportedGitContextEnvAssignment(state, token) {
     setEffectiveGitContextAssignment(state, assignment);
     return;
   }
-  if (isTrackedGitEnvName(token)) {
+  if (isTrackedGitEnvName2(token)) {
     state.exportedNames.add(token);
     const value = state.shellAssignments.get(token);
     if (value !== undefined) {
@@ -4747,7 +4790,7 @@ function addTypesetGitContextEnvAssignment(state, token, exports, readonlyLeadin
     setEffectiveGitContextAssignment(state, readonlyAssignment);
     return;
   }
-  if (exports && isTrackedGitEnvName(token)) {
+  if (exports && isTrackedGitEnvName2(token)) {
     state.exportedNames.add(token);
     const value = state.shellAssignments.get(token);
     if (value !== undefined) {

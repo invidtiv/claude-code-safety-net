@@ -67,6 +67,26 @@ describe('worktree git execution context', () => {
     }
   });
 
+  test.skipIf(process.platform !== 'win32')(
+    'resolves git -C targets with Windows separators',
+    () => {
+      const fixture = createLinkedWorktreeFixture();
+      try {
+        expect(
+          getGitExecutionContext(
+            ['git', '-C', fixture.mainWorktree, '-C', '..\\linked', 'status'],
+            fixture.rootDir,
+          ),
+        ).toEqual({
+          gitCwd: realpathSync(fixture.linkedWorktree),
+          hasExplicitGitContext: false,
+        });
+      } finally {
+        fixture.cleanup();
+      }
+    },
+  );
+
   test('resolves git -C targets with physical chdir semantics', () => {
     const fixture = createLinkedWorktreeFixture();
     const mainSubdir = join(fixture.mainWorktree, 'subdir');
