@@ -1176,6 +1176,51 @@ describe('git linked worktree mode', () => {
     }
   });
 
+  test('SAFETY_NET_WORKTREE allows disabled recursive submodule config', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        expect(runGuard('git -c submodule.recurse=false clean -f', fixture.linkedWorktree)).toBe(
+          null,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE fails closed on malformed recursive config env', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          'GIT_CONFIG_COUNT=not-a-number git reset --hard',
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+        assertBlocked(
+          'GIT_CONFIG_SYSTEM=/tmp/missing-gitconfig git reset --hard',
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('SAFETY_NET_WORKTREE fails closed on local include config', () => {
+    const fixture = createLinkedWorktreeFixture();
+    writeFileSync(join(fixture.mainWorktree, '.git', 'config'), '[include]\n\tpath = extra.conf\n');
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked('git reset --hard', 'git reset --hard', fixture.linkedWorktree);
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
   test('SAFETY_NET_WORKTREE honors recursive submodule config-env values', () => {
     const fixture = createLinkedWorktreeFixture();
     try {
