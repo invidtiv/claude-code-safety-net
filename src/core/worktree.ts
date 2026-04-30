@@ -1,5 +1,6 @@
 import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join, parse as parsePath, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { resolveChdirTarget } from '@/core/path';
 
 export const GIT_GLOBAL_OPTS_WITH_VALUE: ReadonlySet<string> = new Set([
   '-c',
@@ -17,6 +18,14 @@ export const GIT_CONTEXT_ENV_OVERRIDES = [
   'GIT_COMMON_DIR',
   'GIT_INDEX_FILE',
 ] as const;
+
+export const GIT_CONFIG_AFFECTING_ENV_NAMES: ReadonlySet<string> = new Set([
+  'GIT_CONFIG_GLOBAL',
+  'GIT_CONFIG_NOSYSTEM',
+  'GIT_CONFIG_SYSTEM',
+  'HOME',
+  'XDG_CONFIG_HOME',
+]);
 
 export interface GitExecutionContext {
   gitCwd: string | null;
@@ -246,22 +255,57 @@ function readCoreWorktree(configPath: string): string | null {
 
     const match = trimmed.match(/^worktree\s*=\s*(.*)$/i);
     if (match) {
-      configuredWorktree = unquoteGitConfigValue(match[1] ?? '');
+      configuredWorktree = parseGitConfigValue(match[1] ?? '');
     }
   }
 
   return configuredWorktree;
 }
 
-function unquoteGitConfigValue(value: string): string {
+function parseGitConfigValue(value: string): string {
   const trimmed = value.trim();
-  if (
-    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-    (trimmed.startsWith("'") && trimmed.endsWith("'"))
-  ) {
-    return trimmed.slice(1, -1);
+  if (!trimmed.startsWith('"') || !trimmed.endsWith('"')) {
+    return trimmed;
   }
-  return trimmed;
+  return unescapeDoubleQuotedGitConfigValue(trimmed.slice(1, -1));
+}
+
+function unescapeDoubleQuotedGitConfigValue(value: string): string {
+  let result = '';
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    if (char !== '\\') {
+      result += char;
+      continue;
+    }
+
+    const next = value[i + 1];
+    if (next === undefined) {
+      result += char;
+      continue;
+    }
+
+    switch (next) {
+      case '\\':
+      case '"':
+        result += next;
+        break;
+      case 'n':
+        result += '\n';
+        break;
+      case 't':
+        result += '\t';
+        break;
+      case 'b':
+        result += '\b';
+        break;
+      default:
+        result += `\\${next}`;
+        break;
+    }
+    i++;
+  }
+  return result;
 }
 
 function resolveGitCwd(baseCwd: string, target: string): string | null {
@@ -271,37 +315,6 @@ function resolveGitCwd(baseCwd: string, target: string): string | null {
   } catch {
     return null;
   }
-}
-
-function resolveChdirTarget(baseCwd: string, target: string): string {
-  const root = isAbsolute(target) ? getPathRoot(target) : '';
-  let current = root || baseCwd;
-  for (const component of getPathComponents(root ? target.slice(root.length) : target)) {
-    if (component === '' || component === '.') {
-      continue;
-    }
-    if (component === '..') {
-      current = dirname(current);
-      continue;
-    }
-
-    const candidate = appendPathWithoutNormalizing(current, component);
-    current = lstatSync(candidate).isSymbolicLink() ? realpathSync(candidate) : candidate;
-  }
-  return current;
-}
-
-function appendPathWithoutNormalizing(base: string, target: string): string {
-  return base.endsWith('/') || base.endsWith('\\') ? `${base}${target}` : `${base}${sep}${target}`;
-}
-
-function getPathRoot(target: string): string {
-  return parsePath(target).root;
-}
-
-function getPathComponents(target: string): string[] {
-  const separator = process.platform === 'win32' ? /[\\/]+/ : /\/+/;
-  return target.split(separator);
 }
 
 function isDirectory(path: string): boolean {
@@ -333,3 +346,6 @@ function findDotGit(cwd: string): string | null {
     current = parent;
   }
 }
+
+/** @internal Exported for testing */
+export { parseGitConfigValue as _parseGitConfigValue };

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { execFileSync } from 'node:child_process';
 import {
   mkdirSync,
   mkdtempSync,
@@ -11,6 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import {
+  _parseGitConfigValue,
   getGitExecutionContext,
   hasGitContextEnvOverride,
   isLinkedWorktree,
@@ -181,6 +183,16 @@ describe('worktree env context overrides', () => {
 });
 
 describe('linked worktree detection', () => {
+  test('parses double-quoted git config escapes', () => {
+    expect(_parseGitConfigValue('"/tmp/with \\"quotes\\""')).toBe('/tmp/with "quotes"');
+    expect(_parseGitConfigValue('"/tmp/backslash\\\\path"')).toBe('/tmp/backslash\\path');
+    expect(_parseGitConfigValue('"line\\nfeed\\ttab\\bbackspace"')).toBe(
+      'line\nfeed\ttab\bbackspace',
+    );
+    expect(_parseGitConfigValue('"unknown\\xpath"')).toBe('unknown\\xpath');
+    expect(_parseGitConfigValue("'/tmp/single'")).toBe("'/tmp/single'");
+  });
+
   test('normalizes Windows native realpath prefixes for comparison', () => {
     expect(normalizePathForComparison('\\\\?\\C:\\Temp\\Linked\\.git\\')).toBe(
       process.platform === 'win32' ? 'c:/temp/linked/.git' : 'C:/Temp/Linked/.git',
@@ -266,6 +278,44 @@ describe('linked worktree detection', () => {
     writeFileSync(
       join(gitDir, 'config.worktree'),
       `[core]\n\tworktree = ${fixture.linkedWorktree}\n\tworktree = ${fixture.mainWorktree}\n`,
+    );
+    try {
+      expect(isLinkedWorktree(fixture.linkedWorktree)).toBe(false);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test.skipIf(process.platform === 'win32')(
+    'accepts double-quoted escaped core.worktree values',
+    () => {
+      const fixture = createLinkedWorktreeFixture();
+      const quotedWorktree = join(fixture.rootDir, 'linked"quoted');
+      execFileSync(
+        'git',
+        ['worktree', 'add', '-b', 'feature/quoted-worktree-test', quotedWorktree],
+        {
+          cwd: fixture.mainWorktree,
+          stdio: 'ignore',
+        },
+      );
+      const gitDir = getLinkedGitDir(quotedWorktree);
+      const escapedWorktree = quotedWorktree.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      writeFileSync(join(gitDir, 'config.worktree'), `[core]\n\tworktree = "${escapedWorktree}"\n`);
+      try {
+        expect(isLinkedWorktree(quotedWorktree)).toBe(true);
+      } finally {
+        fixture.cleanup();
+      }
+    },
+  );
+
+  test('treats single-quoted core.worktree values as literal paths', () => {
+    const fixture = createLinkedWorktreeFixture();
+    const gitDir = getLinkedGitDir(fixture.linkedWorktree);
+    writeFileSync(
+      join(gitDir, 'config.worktree'),
+      `[core]\n\tworktree = '${fixture.linkedWorktree}'\n`,
     );
     try {
       expect(isLinkedWorktree(fixture.linkedWorktree)).toBe(false);
