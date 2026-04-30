@@ -1311,7 +1311,7 @@ describe('git linked worktree mode', () => {
     chmodSync(fakeGit, 0o755);
     try {
       withEnv({ SAFETY_NET_WORKTREE: '1', PATH: fakeBin }, () => {
-        runGuard('git reset --hard', fixture.linkedWorktree);
+        expect(runGuard('git reset --hard', fixture.linkedWorktree)).toBeNull();
       });
       expect(existsSync(marker)).toBe(false);
     } finally {
