@@ -7,6 +7,7 @@ import {
   _extractGitSubcommandAndRest,
   _TRUSTED_GIT_BINARIES,
   analyzeGit,
+  getGitWorktreeRelaxation,
 } from '@/core/rules-git';
 import {
   assertAllowed,
@@ -44,6 +45,23 @@ describe('analyzeGit direct', () => {
       subcommand: 'reset',
       rest: ['--hard'],
     });
+  });
+
+  test('classifies reset --hard before -- as local discard', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      expect(
+        getGitWorktreeRelaxation(['git', 'reset', '--hard', '--'], {
+          cwd: fixture.linkedWorktree,
+          worktreeMode: true,
+        }),
+      ).toEqual({
+        originalReason: expect.stringContaining('git reset --hard'),
+        gitCwd: expect.any(String),
+      });
+    } finally {
+      fixture.cleanup();
+    }
   });
 });
 
