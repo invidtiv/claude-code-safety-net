@@ -662,7 +662,7 @@ local working tree:
 - `git stash drop` / `git stash clear` (stash is shared across worktrees)
 - `git worktree remove --force` (could delete another worktree)
 
-Detection is fail-closed and pure-filesystem — no shelling out to git:
+Detection is fail-closed and mostly filesystem-based:
 
 - A linked worktree is identified by a `.git` *file* containing `gitdir:` whose
   resolved git directory contains a `commondir` file. Main worktrees and
@@ -673,6 +673,8 @@ Detection is fail-closed and pure-filesystem — no shelling out to git:
 - Relaxation is disabled if cwd becomes unknown (e.g., after `cd`/`pushd`),
   if `--git-dir` / `--work-tree` is passed, or if `GIT_DIR` / `GIT_WORK_TREE`
   / `GIT_COMMON_DIR` is set in the environment.
+- Git may be invoked from a trusted system path to inspect effective config that
+  could make submodule operations recursive.
 
 ### Shell Wrapper Detection
 
