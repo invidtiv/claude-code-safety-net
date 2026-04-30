@@ -266,6 +266,40 @@ describe('linked worktree detection', () => {
     }
   });
 
+  test('rejects worktree gitdirs with missing or empty backlinks', () => {
+    const fixture = createLinkedWorktreeFixture();
+    const missingBacklinkRoot = join(fixture.rootDir, 'missing-backlink-root');
+    const emptyBacklinkRoot = join(fixture.rootDir, 'empty-backlink-root');
+    const missingBacklinkGitDir = join(fixture.rootDir, 'missing-backlink-gitdir');
+    const emptyBacklinkGitDir = join(fixture.rootDir, 'empty-backlink-gitdir');
+    mkdirSync(missingBacklinkRoot);
+    mkdirSync(emptyBacklinkRoot);
+    mkdirSync(missingBacklinkGitDir);
+    mkdirSync(emptyBacklinkGitDir);
+    writeFileSync(join(missingBacklinkRoot, '.git'), `gitdir: ${missingBacklinkGitDir}\n`);
+    writeFileSync(join(emptyBacklinkRoot, '.git'), `gitdir: ${emptyBacklinkGitDir}\n`);
+    writeFileSync(join(missingBacklinkGitDir, 'commondir'), '../main/.git\n');
+    writeFileSync(join(emptyBacklinkGitDir, 'commondir'), '../main/.git\n');
+    writeFileSync(join(emptyBacklinkGitDir, 'gitdir'), '\n');
+    try {
+      expect(isLinkedWorktree(missingBacklinkRoot)).toBe(false);
+      expect(isLinkedWorktree(emptyBacklinkRoot)).toBe(false);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  test('accepts unparsable core.worktree config as conservative fallback', () => {
+    const fixture = createLinkedWorktreeFixture();
+    const gitDir = getLinkedGitDir(fixture.linkedWorktree);
+    writeFileSync(join(gitDir, 'config.worktree'), '[core\n\tworktree =');
+    try {
+      expect(isLinkedWorktree(fixture.linkedWorktree)).toBe(true);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
   test('rejects symlinked gitdir files', () => {
     const fixture = createLinkedWorktreeFixture();
     const symlinkedRoot = join(fixture.rootDir, 'symlinked-root');
