@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { extractShortOpts, getBasename } from '@/core/shell';
 import {
+  GIT_CONFIG_AFFECTING_ENV_NAMES,
   GIT_GLOBAL_OPTS_WITH_VALUE,
   getGitExecutionContext,
   hasGitContextEnvOverride,
@@ -55,14 +56,11 @@ const CHECKOUT_OPTS_WITH_VALUE = new Set([
 const CHECKOUT_OPTS_WITH_OPTIONAL_VALUE = new Set(['--recurse-submodules', '--track', '-t']);
 const CHECKOUT_SHORT_OPTS_WITH_VALUE = new Set(['-b', '-B', '-U']);
 const SWITCH_SHORT_OPTS_WITH_VALUE = new Set(['-c', '-C']);
-const GIT_CONFIG_AFFECTING_ENV_NAMES: ReadonlySet<string> = new Set([
-  'GIT_CONFIG_GLOBAL',
-  'GIT_CONFIG_NOSYSTEM',
-  'GIT_CONFIG_SYSTEM',
-  'HOME',
-  'XDG_CONFIG_HOME',
-]);
-const TRUSTED_GIT_BINARIES = ['/usr/bin/git'] as const;
+const TRUSTED_GIT_BINARIES = [
+  '/usr/bin/git',
+  '/usr/local/bin/git',
+  '/opt/homebrew/bin/git',
+] as const;
 
 const CHECKOUT_KNOWN_OPTS_NO_VALUE = new Set([
   '-q',
@@ -960,4 +958,5 @@ function analyzeGitWorktree(tokens: readonly string[]): string | null {
 export {
   extractGitSubcommandAndRest as _extractGitSubcommandAndRest,
   getCheckoutPositionalArgs as _getCheckoutPositionalArgs,
+  TRUSTED_GIT_BINARIES as _TRUSTED_GIT_BINARIES,
 };

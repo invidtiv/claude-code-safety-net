@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { analyzeGit } from '@/core/rules-git';
+import { _TRUSTED_GIT_BINARIES, analyzeGit } from '@/core/rules-git';
 import {
   assertAllowed,
   assertBlocked,
@@ -16,6 +16,12 @@ import {
 describe('analyzeGit direct', () => {
   test('empty tokens returns null', () => {
     expect(analyzeGit([])).toBeNull();
+  });
+
+  test('trusted git binaries cover common absolute install paths', () => {
+    expect(_TRUSTED_GIT_BINARIES).toContain('/usr/bin/git');
+    expect(_TRUSTED_GIT_BINARIES).toContain('/usr/local/bin/git');
+    expect(_TRUSTED_GIT_BINARIES).toContain('/opt/homebrew/bin/git');
   });
 });
 
