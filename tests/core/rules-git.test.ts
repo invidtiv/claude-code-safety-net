@@ -1091,6 +1091,21 @@ describe('git linked worktree mode', () => {
             fixture.linkedWorktree,
           );
           assertBlocked(
+            `HOME=${toShellPath(recurseHome)}; git reset --hard`,
+            'git reset --hard',
+            fixture.linkedWorktree,
+          );
+          assertBlocked(
+            `HOME+=${toShellPath(recurseHome)} git reset --hard`,
+            'git reset --hard',
+            fixture.linkedWorktree,
+          );
+          assertBlocked(
+            `export HOME+=${toShellPath(recurseHome)}; git reset --hard`,
+            'git reset --hard',
+            fixture.linkedWorktree,
+          );
+          assertBlocked(
             `GIT_CONFIG_PARAMETERS="'submodule.recurse=true'" git reset --hard`,
             'git reset --hard',
             fixture.linkedWorktree,
