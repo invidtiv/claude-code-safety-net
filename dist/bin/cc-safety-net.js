@@ -3032,7 +3032,9 @@ var SWITCH_SHORT_OPTS_WITH_VALUE = new Set(["-c", "-C"]);
 var TRUSTED_GIT_BINARIES = [
   "/usr/bin/git",
   "/usr/local/bin/git",
-  "/opt/homebrew/bin/git"
+  "/opt/homebrew/bin/git",
+  "C:\\Program Files\\Git\\cmd\\git.exe",
+  "C:\\Program Files\\Git\\bin\\git.exe"
 ];
 var CHECKOUT_KNOWN_OPTS_NO_VALUE = new Set([
   "-q",
@@ -3439,14 +3441,13 @@ function hasConfigAffectingEnvAssignment(envAssignments) {
 function getEnvConfigValue(name, envAssignments) {
   return envAssignments?.get(name) ?? process.env[name];
 }
-function effectiveGitConfigEnablesRecursiveSubmodules(cwd) {
+function effectiveGitConfigEnablesRecursiveSubmodules(cwd, gitBinary = getTrustedGitBinary()) {
   const localConfigResult = localGitConfigEnablesRecursiveSubmodules(cwd);
   if (localConfigResult === null || localConfigResult) {
     return true;
   }
-  const gitBinary = getTrustedGitBinary();
   if (gitBinary === null) {
-    return false;
+    return true;
   }
   try {
     const value = execFileSync(gitBinary, ["config", "--get", "submodule.recurse"], {

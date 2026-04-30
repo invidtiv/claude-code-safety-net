@@ -60,6 +60,8 @@ const TRUSTED_GIT_BINARIES = [
   '/usr/bin/git',
   '/usr/local/bin/git',
   '/opt/homebrew/bin/git',
+  'C:\\Program Files\\Git\\cmd\\git.exe',
+  'C:\\Program Files\\Git\\bin\\git.exe',
 ] as const;
 
 const CHECKOUT_KNOWN_OPTS_NO_VALUE = new Set([

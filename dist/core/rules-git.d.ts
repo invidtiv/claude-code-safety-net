@@ -1,4 +1,4 @@
-declare const TRUSTED_GIT_BINARIES: readonly ["/usr/bin/git", "/usr/local/bin/git", "/opt/homebrew/bin/git"];
+declare const TRUSTED_GIT_BINARIES: readonly ["/usr/bin/git", "/usr/local/bin/git", "/opt/homebrew/bin/git", "C:\\Program Files\\Git\\cmd\\git.exe", "C:\\Program Files\\Git\\bin\\git.exe"];
 export interface GitAnalyzeOptions {
     cwd?: string;
     envAssignments?: ReadonlyMap<string, string>;
@@ -15,5 +15,6 @@ declare function extractGitSubcommandAndRest(tokens: readonly string[]): {
     rest: string[];
 };
 declare function getCheckoutPositionalArgs(tokens: readonly string[]): string[];
+declare function effectiveGitConfigEnablesRecursiveSubmodules(cwd: string, gitBinary?: string | null): boolean;
 /** @internal Exported for testing */
-export { extractGitSubcommandAndRest as _extractGitSubcommandAndRest, getCheckoutPositionalArgs as _getCheckoutPositionalArgs, TRUSTED_GIT_BINARIES as _TRUSTED_GIT_BINARIES, };
+export { effectiveGitConfigEnablesRecursiveSubmodules as _effectiveGitConfigEnablesRecursiveSubmodules, extractGitSubcommandAndRest as _extractGitSubcommandAndRest, getCheckoutPositionalArgs as _getCheckoutPositionalArgs, TRUSTED_GIT_BINARIES as _TRUSTED_GIT_BINARIES, };
