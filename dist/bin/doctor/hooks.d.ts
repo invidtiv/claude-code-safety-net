@@ -5,6 +5,7 @@ import type { HookStatus } from '@/bin/doctor/types';
 import type { LoadConfigOptions } from '@/core/config';
 interface HookDetectOptions extends LoadConfigOptions {
     homeDir?: string;
+    geminiExtensionsListOutput?: string | null;
     copilotCliVersion?: string | null;
     copilotPluginInstalled?: boolean;
 }

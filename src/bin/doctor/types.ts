@@ -110,6 +110,8 @@ export interface SystemInfo {
   openCodeVersion: string | null;
   /** Gemini CLI version (from `gemini --version`) */
   geminiCliVersion: string | null;
+  /** Gemini CLI extension list output (from `gemini extensions list`) */
+  geminiExtensionsListOutput: string | null;
   /** Copilot CLI version (from `copilot --binary-version`, falling back to `copilot --version`) */
   copilotCliVersion: string | null;
   /** Node.js version (from `node --version`) */

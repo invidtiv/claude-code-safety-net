@@ -59,6 +59,19 @@ function _writeCopilotInlineConfig(
   );
 }
 
+function _geminiExtensionsListOutput(options: {
+  source?: string;
+  enabledUser?: boolean;
+  enabledWorkspace?: boolean;
+}): string {
+  return `✓ gemini-safety-net (1.0.0)
+ ID: 9ca2544181766a522b98bbd5d0b327b297d2582960a40db855dc048a3b8e91e3
+ Path: /Users/kenryu/.gemini/extensions/gemini-safety-net
+ Source: ${options.source ?? 'https://github.com/kenryu42/gemini-safety-net'} (Type: github-release)
+ Enabled (User): ${options.enabledUser ?? true}
+ Enabled (Workspace): ${options.enabledWorkspace ?? true}`;
+}
+
 describe('detectAllHooks', () => {
   test('detects configured hooks and runs self-test', () => {
     const tmpBase = join(tmpdir(), `doctor-hooks-${Date.now()}`);
@@ -86,28 +99,15 @@ describe('detectAllHooks', () => {
       }`,
     );
 
-    const geminiDir = join(homeDir, '.gemini');
-    const geminiExtDir = join(geminiDir, 'extensions');
-    mkdirSync(geminiExtDir, { recursive: true });
-    writeFileSync(
-      join(geminiExtDir, 'extension-enablement.json'),
-      JSON.stringify({
-        'gemini-safety-net': { overrides: ['/Users/kenryu/*'] },
-      }),
-    );
-    writeFileSync(
-      join(geminiDir, 'settings.json'),
-      JSON.stringify({
-        tools: { enableHooks: true },
-      }),
-    );
-
     const copilotDir = join(projectDir, '.github', 'hooks');
     mkdirSync(copilotDir, { recursive: true });
     _writeCopilotHook(join(copilotDir, 'safety-net.json'));
 
     try {
-      const hooks = detectAllHooks(projectDir, { homeDir });
+      const hooks = detectAllHooks(projectDir, {
+        homeDir,
+        geminiExtensionsListOutput: _geminiExtensionsListOutput({}),
+      });
 
       const claude = hooks.find((hook) => hook.platform === 'claude-code');
       expect(claude?.status).toBe('configured');
@@ -121,7 +121,7 @@ describe('detectAllHooks', () => {
 
       const gemini = hooks.find((hook) => hook.platform === 'gemini-cli');
       expect(gemini?.status).toBe('configured');
-      expect(gemini?.method).toBe('extension plugin');
+      expect(gemini?.method).toBe('extension list');
       expect(gemini?.selfTest?.passed).toBe(gemini?.selfTest?.total);
 
       const copilot = hooks.find((hook) => hook.platform === 'copilot-cli');
@@ -174,11 +174,6 @@ describe('detectAllHooks', () => {
     mkdirSync(opencodeDir, { recursive: true });
     writeFileSync(join(opencodeDir, 'opencode.json'), '{ invalid json }');
 
-    const geminiDir = join(homeDir, '.gemini');
-    const geminiExtDir = join(geminiDir, 'extensions');
-    mkdirSync(geminiExtDir, { recursive: true });
-    writeFileSync(join(geminiExtDir, 'extension-enablement.json'), '{ invalid json }');
-
     try {
       const hooks = detectAllHooks(projectDir, { homeDir });
 
@@ -192,7 +187,7 @@ describe('detectAllHooks', () => {
 
       const gemini = hooks.find((hook) => hook.platform === 'gemini-cli');
       expect(gemini?.status).toBe('n/a');
-      expect(gemini?.errors?.some((e) => e.includes('Failed to parse'))).toBe(true);
+      expect(gemini?.errors).toBeUndefined();
     } finally {
       rmSync(tmpBase, { recursive: true, force: true });
     }
@@ -249,172 +244,104 @@ describe('detectAllHooks', () => {
     }
   });
 
-  test('Gemini CLI: disabled when overrides is empty', () => {
+  test('Gemini CLI: configured when safety-net source is enabled for user and workspace', () => {
     const tmpBase = join(tmpdir(), `doctor-gemini-${Date.now()}`);
     const homeDir = join(tmpBase, 'home');
     const projectDir = join(tmpBase, 'project');
     mkdirSync(homeDir, { recursive: true });
     mkdirSync(projectDir, { recursive: true });
 
-    const geminiExtDir = join(homeDir, '.gemini', 'extensions');
-    mkdirSync(geminiExtDir, { recursive: true });
-    writeFileSync(
-      join(geminiExtDir, 'extension-enablement.json'),
-      JSON.stringify({
-        'gemini-safety-net': { overrides: [] },
-      }),
-    );
-
     try {
-      const hooks = detectAllHooks(projectDir, { homeDir });
-      const gemini = hooks.find((hook) => hook.platform === 'gemini-cli');
-      expect(gemini?.status).toBe('disabled');
-      expect(gemini?.errors?.some((e) => e.includes('no enabled workspace overrides'))).toBe(true);
-    } finally {
-      rmSync(tmpBase, { recursive: true, force: true });
-    }
-  });
-
-  test('Gemini CLI: disabled when all overrides are negated', () => {
-    const tmpBase = join(tmpdir(), `doctor-gemini-${Date.now()}`);
-    const homeDir = join(tmpBase, 'home');
-    const projectDir = join(tmpBase, 'project');
-    mkdirSync(homeDir, { recursive: true });
-    mkdirSync(projectDir, { recursive: true });
-
-    const geminiExtDir = join(homeDir, '.gemini', 'extensions');
-    mkdirSync(geminiExtDir, { recursive: true });
-    writeFileSync(
-      join(geminiExtDir, 'extension-enablement.json'),
-      JSON.stringify({
-        'gemini-safety-net': { overrides: ['!/Users/disabled/*', '!/other/*'] },
-      }),
-    );
-
-    try {
-      const hooks = detectAllHooks(projectDir, { homeDir });
-      const gemini = hooks.find((hook) => hook.platform === 'gemini-cli');
-      expect(gemini?.status).toBe('disabled');
-      expect(gemini?.errors?.some((e) => e.includes('no enabled workspace overrides'))).toBe(true);
-    } finally {
-      rmSync(tmpBase, { recursive: true, force: true });
-    }
-  });
-
-  test('Gemini CLI: not configured when hooks not enabled in settings', () => {
-    const tmpBase = join(tmpdir(), `doctor-gemini-${Date.now()}`);
-    const homeDir = join(tmpBase, 'home');
-    const projectDir = join(tmpBase, 'project');
-    mkdirSync(homeDir, { recursive: true });
-    mkdirSync(projectDir, { recursive: true });
-
-    const geminiDir = join(homeDir, '.gemini');
-    const geminiExtDir = join(geminiDir, 'extensions');
-    mkdirSync(geminiExtDir, { recursive: true });
-    writeFileSync(
-      join(geminiExtDir, 'extension-enablement.json'),
-      JSON.stringify({
-        'gemini-safety-net': { overrides: ['/Users/kenryu/*'] },
-      }),
-    );
-
-    try {
-      const hooks = detectAllHooks(projectDir, { homeDir });
-      const gemini = hooks.find((hook) => hook.platform === 'gemini-cli');
-      expect(gemini?.status).toBe('n/a');
-      expect(gemini?.errors?.some((e) => e.includes('tools.enableHooks'))).toBe(true);
-    } finally {
-      rmSync(tmpBase, { recursive: true, force: true });
-    }
-  });
-
-  test('Gemini CLI: uses local project settings.json for hooks check', () => {
-    const tmpBase = join(tmpdir(), `doctor-gemini-${Date.now()}`);
-    const homeDir = join(tmpBase, 'home');
-    const projectDir = join(tmpBase, 'project');
-    mkdirSync(homeDir, { recursive: true });
-    mkdirSync(projectDir, { recursive: true });
-
-    const geminiExtDir = join(homeDir, '.gemini', 'extensions');
-    mkdirSync(geminiExtDir, { recursive: true });
-    writeFileSync(
-      join(geminiExtDir, 'extension-enablement.json'),
-      JSON.stringify({
-        'gemini-safety-net': { overrides: ['/Users/kenryu/*'] },
-      }),
-    );
-
-    const localGeminiDir = join(projectDir, '.gemini');
-    mkdirSync(localGeminiDir, { recursive: true });
-    writeFileSync(
-      join(localGeminiDir, 'settings.json'),
-      JSON.stringify({
-        tools: { enableHooks: true },
-      }),
-    );
-
-    try {
-      const hooks = detectAllHooks(projectDir, { homeDir });
+      const hooks = detectAllHooks(projectDir, {
+        homeDir,
+        geminiExtensionsListOutput: _geminiExtensionsListOutput({}),
+      });
       const gemini = hooks.find((hook) => hook.platform === 'gemini-cli');
       expect(gemini?.status).toBe('configured');
-      expect(gemini?.method).toBe('extension plugin');
+      expect(gemini?.method).toBe('extension list');
+      expect(gemini?.selfTest?.failed).toBe(0);
     } finally {
       rmSync(tmpBase, { recursive: true, force: true });
     }
   });
 
-  test('Gemini CLI: not configured when plugin key does not exist', () => {
+  test('Gemini CLI: disabled when safety-net source is disabled for user', () => {
     const tmpBase = join(tmpdir(), `doctor-gemini-${Date.now()}`);
     const homeDir = join(tmpBase, 'home');
     const projectDir = join(tmpBase, 'project');
     mkdirSync(homeDir, { recursive: true });
     mkdirSync(projectDir, { recursive: true });
 
-    const geminiExtDir = join(homeDir, '.gemini', 'extensions');
-    mkdirSync(geminiExtDir, { recursive: true });
-    writeFileSync(
-      join(geminiExtDir, 'extension-enablement.json'),
-      JSON.stringify({
-        'other-plugin': { overrides: ['/Users/kenryu/*'] },
-      }),
-    );
+    try {
+      const hooks = detectAllHooks(projectDir, {
+        homeDir,
+        geminiExtensionsListOutput: _geminiExtensionsListOutput({ enabledUser: false }),
+      });
+      const gemini = hooks.find((hook) => hook.platform === 'gemini-cli');
+      expect(gemini?.status).toBe('disabled');
+      expect(gemini?.errors?.some((e) => e.includes('Enabled (User)'))).toBe(true);
+      expect(gemini?.selfTest).toBeUndefined();
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Gemini CLI: disabled when safety-net source is disabled for workspace', () => {
+    const tmpBase = join(tmpdir(), `doctor-gemini-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
 
     try {
-      const hooks = detectAllHooks(projectDir, { homeDir });
+      const hooks = detectAllHooks(projectDir, {
+        homeDir,
+        geminiExtensionsListOutput: _geminiExtensionsListOutput({ enabledWorkspace: false }),
+      });
+      const gemini = hooks.find((hook) => hook.platform === 'gemini-cli');
+      expect(gemini?.status).toBe('disabled');
+      expect(gemini?.errors?.some((e) => e.includes('Enabled (Workspace)'))).toBe(true);
+      expect(gemini?.selfTest).toBeUndefined();
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Gemini CLI: not configured when safety-net source is missing', () => {
+    const tmpBase = join(tmpdir(), `doctor-gemini-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+
+    try {
+      const hooks = detectAllHooks(projectDir, {
+        homeDir,
+        geminiExtensionsListOutput: _geminiExtensionsListOutput({
+          source: 'https://github.com/gemini-cli-extensions/code-review',
+        }),
+      });
+      const gemini = hooks.find((hook) => hook.platform === 'gemini-cli');
+      expect(gemini?.status).toBe('n/a');
+      expect(gemini?.selfTest).toBeUndefined();
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Gemini CLI: not configured when extensions list is unavailable', () => {
+    const tmpBase = join(tmpdir(), `doctor-gemini-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir, geminiExtensionsListOutput: null });
       const gemini = hooks.find((hook) => hook.platform === 'gemini-cli');
       expect(gemini?.status).toBe('n/a');
       expect(gemini?.errors).toBeUndefined();
-    } finally {
-      rmSync(tmpBase, { recursive: true, force: true });
-    }
-  });
-
-  test('Gemini CLI: reports error when settings.json is malformed', () => {
-    const tmpBase = join(tmpdir(), `doctor-gemini-${Date.now()}`);
-    const homeDir = join(tmpBase, 'home');
-    const projectDir = join(tmpBase, 'project');
-    mkdirSync(homeDir, { recursive: true });
-    mkdirSync(projectDir, { recursive: true });
-
-    const geminiDir = join(homeDir, '.gemini');
-    const geminiExtDir = join(geminiDir, 'extensions');
-    mkdirSync(geminiExtDir, { recursive: true });
-
-    writeFileSync(
-      join(geminiExtDir, 'extension-enablement.json'),
-      JSON.stringify({
-        'gemini-safety-net': { overrides: ['/Users/kenryu/*'] },
-      }),
-    );
-
-    writeFileSync(join(geminiDir, 'settings.json'), '{ invalid json }');
-
-    try {
-      const hooks = detectAllHooks(projectDir, { homeDir });
-      const gemini = hooks.find((hook) => hook.platform === 'gemini-cli');
-      expect(gemini?.status).toBe('n/a');
-      expect(gemini?.errors?.some((e) => e.includes('Failed to parse'))).toBe(true);
-      expect(gemini?.errors?.some((e) => e.includes('tools.enableHooks'))).toBe(true);
+      expect(gemini?.selfTest).toBeUndefined();
     } finally {
       rmSync(tmpBase, { recursive: true, force: true });
     }

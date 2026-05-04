@@ -12,6 +12,7 @@ import type { Config } from '@/types';
 
 interface HookDetectOptions extends LoadConfigOptions {
   homeDir?: string;
+  geminiExtensionsListOutput?: string | null;
   copilotCliVersion?: string | null;
   copilotPluginInstalled?: boolean;
 }
@@ -41,6 +42,8 @@ interface CopilotDetectionState {
 }
 
 const COPILOT_PLUGIN_CONFIG_PATH = 'copilot-plugin';
+const GEMINI_EXTENSIONS_LIST_CONFIG_PATH = 'gemini extensions list';
+const GEMINI_SAFETY_NET_SOURCE = 'https://github.com/kenryu42/gemini-safety-net';
 
 /** Self-test cases for validating the analyzer */
 const SELF_TEST_CASES: SelfTestCase[] = [
@@ -298,132 +301,79 @@ function detectOpenCode(homeDir: string): HookStatus {
 }
 
 /**
- * Check if hooks are enabled in Gemini CLI settings.
- * Returns true if tools.enableHooks is true in either global or local settings.
- */
-function checkGeminiHooksEnabled(
-  homeDir: string,
-  cwd: string,
-  errors: string[],
-): { enabled: boolean; configPath?: string } {
-  const candidates = [
-    join(homeDir, '.gemini', 'settings.json'), // Global settings
-    join(cwd, '.gemini', 'settings.json'), // Local project settings
-  ];
-
-  for (const settingsPath of candidates) {
-    if (existsSync(settingsPath)) {
-      try {
-        const settings = JSON.parse(readFileSync(settingsPath, 'utf-8')) as {
-          tools?: { enableHooks?: boolean };
-        };
-        if (settings.tools?.enableHooks === true) {
-          return { enabled: true, configPath: settingsPath };
-        }
-      } catch (e) {
-        errors.push(
-          `Failed to parse ${settingsPath}: ${e instanceof Error ? e.message : String(e)}`,
-        );
-      }
-    }
-  }
-
-  return { enabled: false };
-}
-
-/**
  * Detect Gemini CLI hook configuration.
  *
  * Checks:
- * 1. ~/.gemini/extensions/extension-enablement.json for plugin installation
- *    - Plugin key "gemini-safety-net" must exist
- *    - At least one override must NOT start with "!" (not negated)
- * 2. ~/.gemini/settings.json or .gemini/settings.json for hooks being enabled
- *    - tools.enableHooks must be true
+ * 1. `gemini extensions list` output for the safety-net source URL
+ * 2. Enabled (User) and Enabled (Workspace) are both true
  *
  * Status meanings:
- * - 'configured': Plugin installed, has enabled overrides, and hooks enabled
- * - 'disabled': Plugin installed but all overrides are negated (start with '!')
- * - 'n/a': Plugin not installed, or installed but hooks not enabled
+ * - 'configured': Extension source is installed and enabled for user and workspace
+ * - 'disabled': Extension source is installed but not enabled for user or workspace
+ * - 'n/a': Extension source is not installed, or list output is unavailable
  */
-function detectGeminiCLI(homeDir: string, cwd: string): HookStatus {
-  const errors: string[] = [];
-
-  // Step 1: Check extension enablement for plugin installation
-  const extensionPath = join(homeDir, '.gemini', 'extensions', 'extension-enablement.json');
-
-  if (!existsSync(extensionPath)) {
+function detectGeminiCLI(extensionsListOutput: string | null | undefined): HookStatus {
+  if (!extensionsListOutput) {
     return { platform: 'gemini-cli', status: 'n/a' };
   }
 
-  let isInstalled = false;
-  let isEnabled = false;
+  const extension = _parseGeminiExtensionsList(extensionsListOutput).find((item) =>
+    item.source?.includes(GEMINI_SAFETY_NET_SOURCE),
+  );
 
-  try {
-    const extensionConfig = JSON.parse(readFileSync(extensionPath, 'utf-8')) as Record<
-      string,
-      { overrides?: string[] }
-    >;
-    const pluginConfig = extensionConfig['gemini-safety-net'];
-
-    if (pluginConfig) {
-      isInstalled = true;
-      const overrides = pluginConfig.overrides ?? [];
-      // Plugin is enabled if there's at least one override that doesn't start with "!"
-      // Empty overrides array means disabled (no workspaces enabled)
-      isEnabled = overrides.some((o) => !o.startsWith('!'));
-    }
-  } catch (e) {
-    errors.push(
-      `Failed to parse extension-enablement.json: ${e instanceof Error ? e.message : String(e)}`,
-    );
+  if (!extension) {
+    return { platform: 'gemini-cli', status: 'n/a' };
   }
 
-  // Plugin not found
-  if (!isInstalled) {
-    return {
-      platform: 'gemini-cli',
-      status: 'n/a',
-      errors: errors.length > 0 ? errors : undefined,
-    };
-  }
+  const errors = [
+    ...(extension.enabledUser === true ? [] : ['Enabled (User) is not true']),
+    ...(extension.enabledWorkspace === true ? [] : ['Enabled (Workspace) is not true']),
+  ];
 
-  // Plugin installed but all overrides are negated (disabled)
-  if (!isEnabled) {
-    errors.push('Plugin is installed but disabled (no enabled workspace overrides)');
+  if (errors.length > 0) {
     return {
       platform: 'gemini-cli',
       status: 'disabled',
-      method: 'extension plugin',
-      configPath: extensionPath,
+      method: 'extension list',
+      configPath: GEMINI_EXTENSIONS_LIST_CONFIG_PATH,
       errors,
     };
   }
 
-  // Step 2: Check if hooks are enabled in settings
-  const hooksCheck = checkGeminiHooksEnabled(homeDir, cwd, errors);
-
-  // Plugin is fully configured if installed, enabled, and hooks are enabled
-  if (hooksCheck.enabled) {
-    return {
-      platform: 'gemini-cli',
-      status: 'configured',
-      method: 'extension plugin',
-      configPath: extensionPath,
-      selfTest: runSelfTest(),
-      errors: errors.length > 0 ? errors : undefined,
-    };
-  }
-
-  // Plugin enabled but hooks not enabled in settings
-  errors.push('Hooks are not enabled (set tools.enableHooks: true in settings.json)');
   return {
     platform: 'gemini-cli',
-    status: 'n/a',
-    method: 'extension plugin',
-    configPath: extensionPath,
-    errors,
+    status: 'configured',
+    method: 'extension list',
+    configPath: GEMINI_EXTENSIONS_LIST_CONFIG_PATH,
+    selfTest: runSelfTest(),
   };
+}
+
+function _parseGeminiExtensionsList(
+  output: string,
+): Array<{ source?: string; enabledUser?: boolean; enabledWorkspace?: boolean }> {
+  const blocks = output.split('\n').reduce<string[]>((result, line) => {
+    if (/^\S/.test(line) || result.length === 0) {
+      result.push(line);
+      return result;
+    }
+
+    const index = result.length - 1;
+    result[index] = `${result[index]}\n${line}`;
+    return result;
+  }, []);
+
+  return blocks.map((block) => ({
+    source: /^\s*Source:\s*(.+)$/m.exec(block)?.[1],
+    enabledUser: _parseGeminiEnabledValue(block, 'User'),
+    enabledWorkspace: _parseGeminiEnabledValue(block, 'Workspace'),
+  }));
+}
+
+function _parseGeminiEnabledValue(block: string, scope: 'User' | 'Workspace'): boolean | undefined {
+  const match = new RegExp(`^\\s*Enabled \\(${scope}\\):\\s*(true|false)\\s*$`, 'im').exec(block);
+  if (!match) return undefined;
+  return match[1] === 'true';
 }
 
 function _isSafetyNetCopilotCommand(command: string | undefined): boolean {
@@ -712,7 +662,7 @@ export function detectAllHooks(cwd: string, options?: HookDetectOptions): HookSt
   return [
     detectClaudeCode(homeDir),
     detectOpenCode(homeDir),
-    detectGeminiCLI(homeDir, cwd),
+    detectGeminiCLI(options?.geminiExtensionsListOutput),
     detectCopilot(),
   ];
 }

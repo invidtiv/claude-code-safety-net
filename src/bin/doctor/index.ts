@@ -28,6 +28,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<number> {
   // Collect all data
   const system = await getSystemInfo();
   const hooks = detectAllHooks(cwd, {
+    geminiExtensionsListOutput: system.geminiExtensionsListOutput,
     copilotCliVersion: system.copilotCliVersion,
     copilotPluginInstalled: system.copilotPluginInstalled,
   });

@@ -5050,6 +5050,8 @@ function analyzeCommand(command, options = {}) {
 
 // src/bin/doctor/hooks.ts
 var COPILOT_PLUGIN_CONFIG_PATH = "copilot-plugin";
+var GEMINI_EXTENSIONS_LIST_CONFIG_PATH = "gemini extensions list";
+var GEMINI_SAFETY_NET_SOURCE = "https://github.com/kenryu42/gemini-safety-net";
 var SELF_TEST_CASES = [
   { command: "git reset --hard", description: "git reset --hard", expectBlocked: true },
   { command: "rm -rf /", description: "rm -rf /", expectBlocked: true },
@@ -5234,80 +5236,58 @@ function detectOpenCode(homeDir) {
     errors: errors.length > 0 ? errors : undefined
   };
 }
-function checkGeminiHooksEnabled(homeDir, cwd, errors) {
-  const candidates = [
-    join5(homeDir, ".gemini", "settings.json"),
-    join5(cwd, ".gemini", "settings.json")
-  ];
-  for (const settingsPath of candidates) {
-    if (existsSync6(settingsPath)) {
-      try {
-        const settings = JSON.parse(readFileSync6(settingsPath, "utf-8"));
-        if (settings.tools?.enableHooks === true) {
-          return { enabled: true, configPath: settingsPath };
-        }
-      } catch (e) {
-        errors.push(`Failed to parse ${settingsPath}: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-  }
-  return { enabled: false };
-}
-function detectGeminiCLI(homeDir, cwd) {
-  const errors = [];
-  const extensionPath = join5(homeDir, ".gemini", "extensions", "extension-enablement.json");
-  if (!existsSync6(extensionPath)) {
+function detectGeminiCLI(extensionsListOutput) {
+  if (!extensionsListOutput) {
     return { platform: "gemini-cli", status: "n/a" };
   }
-  let isInstalled = false;
-  let isEnabled = false;
-  try {
-    const extensionConfig = JSON.parse(readFileSync6(extensionPath, "utf-8"));
-    const pluginConfig = extensionConfig["gemini-safety-net"];
-    if (pluginConfig) {
-      isInstalled = true;
-      const overrides = pluginConfig.overrides ?? [];
-      isEnabled = overrides.some((o) => !o.startsWith("!"));
-    }
-  } catch (e) {
-    errors.push(`Failed to parse extension-enablement.json: ${e instanceof Error ? e.message : String(e)}`);
+  const extension = _parseGeminiExtensionsList(extensionsListOutput).find((item) => item.source?.includes(GEMINI_SAFETY_NET_SOURCE));
+  if (!extension) {
+    return { platform: "gemini-cli", status: "n/a" };
   }
-  if (!isInstalled) {
-    return {
-      platform: "gemini-cli",
-      status: "n/a",
-      errors: errors.length > 0 ? errors : undefined
-    };
-  }
-  if (!isEnabled) {
-    errors.push("Plugin is installed but disabled (no enabled workspace overrides)");
+  const errors = [
+    ...extension.enabledUser === true ? [] : ["Enabled (User) is not true"],
+    ...extension.enabledWorkspace === true ? [] : ["Enabled (Workspace) is not true"]
+  ];
+  if (errors.length > 0) {
     return {
       platform: "gemini-cli",
       status: "disabled",
-      method: "extension plugin",
-      configPath: extensionPath,
+      method: "extension list",
+      configPath: GEMINI_EXTENSIONS_LIST_CONFIG_PATH,
       errors
     };
   }
-  const hooksCheck = checkGeminiHooksEnabled(homeDir, cwd, errors);
-  if (hooksCheck.enabled) {
-    return {
-      platform: "gemini-cli",
-      status: "configured",
-      method: "extension plugin",
-      configPath: extensionPath,
-      selfTest: runSelfTest(),
-      errors: errors.length > 0 ? errors : undefined
-    };
-  }
-  errors.push("Hooks are not enabled (set tools.enableHooks: true in settings.json)");
   return {
     platform: "gemini-cli",
-    status: "n/a",
-    method: "extension plugin",
-    configPath: extensionPath,
-    errors
+    status: "configured",
+    method: "extension list",
+    configPath: GEMINI_EXTENSIONS_LIST_CONFIG_PATH,
+    selfTest: runSelfTest()
   };
+}
+function _parseGeminiExtensionsList(output) {
+  const blocks = output.split(`
+`).reduce((result, line) => {
+    if (/^\S/.test(line) || result.length === 0) {
+      result.push(line);
+      return result;
+    }
+    const index = result.length - 1;
+    result[index] = `${result[index]}
+${line}`;
+    return result;
+  }, []);
+  return blocks.map((block) => ({
+    source: /^\s*Source:\s*(.+)$/m.exec(block)?.[1],
+    enabledUser: _parseGeminiEnabledValue(block, "User"),
+    enabledWorkspace: _parseGeminiEnabledValue(block, "Workspace")
+  }));
+}
+function _parseGeminiEnabledValue(block, scope) {
+  const match = new RegExp(`^\\s*Enabled \\(${scope}\\):\\s*(true|false)\\s*$`, "im").exec(block);
+  if (!match)
+    return;
+  return match[1] === "true";
 }
 function _isSafetyNetCopilotCommand(command) {
   if (!command?.includes("cc-safety-net"))
@@ -5519,7 +5499,7 @@ function detectAllHooks(cwd, options) {
   return [
     detectClaudeCode(homeDir),
     detectOpenCode(homeDir),
-    detectGeminiCLI(homeDir, cwd),
+    detectGeminiCLI(options?.geminiExtensionsListOutput),
     detectCopilot()
   ];
 }
@@ -5543,10 +5523,13 @@ var defaultVersionFetcher = async (args) => {
       });
       let isSettled = false;
       let output = "";
+      let errorOutput = "";
       proc.stdout.on("data", (data) => {
         output += data.toString();
       });
-      proc.stderr.on("data", () => {});
+      proc.stderr.on("data", (data) => {
+        errorOutput += data.toString();
+      });
       const finish = (value) => {
         if (isSettled)
           return;
@@ -5559,7 +5542,7 @@ var defaultVersionFetcher = async (args) => {
         finish(null);
       }, VERSION_FETCH_TIMEOUT_MS);
       proc.on("close", (code) => {
-        finish(code === 0 ? output.trim() || null : null);
+        finish(code === 0 ? output.trim() || errorOutput.trim() || null : null);
       });
       proc.on("error", () => {
         finish(null);
@@ -5598,10 +5581,21 @@ async function getSystemInfo(fetcher = defaultVersionFetcher) {
     }
     return fallbackVersionPromise;
   };
-  const [claudeRaw, openCodeRaw, geminiRaw, copilotRaw, nodeRaw, npmRaw, bunRaw, pluginListRaw] = await Promise.all([
+  const [
+    claudeRaw,
+    openCodeRaw,
+    geminiRaw,
+    geminiExtensionsListOutput,
+    copilotRaw,
+    nodeRaw,
+    npmRaw,
+    bunRaw,
+    pluginListRaw
+  ] = await Promise.all([
     fetcher(["claude", "--version"]),
     fetcher(["opencode", "--version"]),
     fetcher(["gemini", "--version"]),
+    fetcher(["gemini", "extensions", "list"]),
     fetchCopilotVersion(),
     fetcher(["node", "--version"]),
     fetcher(["npm", "--version"]),
@@ -5613,6 +5607,7 @@ async function getSystemInfo(fetcher = defaultVersionFetcher) {
     claudeCodeVersion: parseVersion(claudeRaw),
     openCodeVersion: parseVersion(openCodeRaw),
     geminiCliVersion: parseVersion(geminiRaw),
+    geminiExtensionsListOutput,
     copilotCliVersion: parseVersion(copilotRaw),
     nodeVersion: parseVersion(nodeRaw),
     npmVersion: parseVersion(npmRaw),
@@ -5684,6 +5679,7 @@ async function runDoctor(options = {}) {
   const cwd = options.cwd ?? process.cwd();
   const system = await getSystemInfo();
   const hooks = detectAllHooks(cwd, {
+    geminiExtensionsListOutput: system.geminiExtensionsListOutput,
     copilotCliVersion: system.copilotCliVersion,
     copilotPluginInstalled: system.copilotPluginInstalled
   });

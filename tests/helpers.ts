@@ -75,6 +75,13 @@ export const mockVersionFetcher: VersionFetcher = async (args: string[]) => {
     return 'Installed plugins:\n  • copilot-safety-net (v1.0.0)';
   }
 
+  if (args[0] === 'gemini' && args[1] === 'extensions') {
+    return `✓ gemini-safety-net (1.0.0)
+ Source: https://github.com/kenryu42/gemini-safety-net (Type: github-release)
+ Enabled (User): true
+ Enabled (Workspace): true`;
+  }
+
   const cmd = args[0];
   const mockVersions: Record<string, string> = {
     claude: '1.0.0',
