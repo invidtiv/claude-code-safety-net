@@ -42,11 +42,19 @@ interface CopilotDetectionState {
   disabledBy?: string;
 }
 
+interface CodexConfig {
+  pluginHooks?: boolean;
+  safetyNetEnabled?: boolean;
+}
+
 const COPILOT_PLUGIN_CONFIG_PATH = 'copilot-plugin';
 const CLAUDE_PLUGIN_LIST_CONFIG_PATH = 'claude plugin list';
 const CLAUDE_SAFETY_NET_PLUGIN_ID = 'safety-net@cc-marketplace';
 const GEMINI_EXTENSIONS_LIST_CONFIG_PATH = 'gemini extensions list';
 const GEMINI_SAFETY_NET_SOURCE = 'https://github.com/kenryu42/gemini-safety-net';
+const CODEX_PLUGIN_HOOKS_WARNING =
+  'Codex plugin hooks are behind a feature flag. Add `plugin_hooks = true` under [features] in $CODEX_HOME/config.toml.';
+const CODEX_SAFETY_NET_PLUGIN_ID = 'safety-net@cc-marketplace';
 
 /** Self-test cases for validating the analyzer */
 const SELF_TEST_CASES: SelfTestCase[] = [
@@ -387,6 +395,105 @@ function _parseGeminiEnabledValue(block: string, scope: 'User' | 'Workspace'): b
   return match[1] === 'true';
 }
 
+function _getCodexHome(homeDir: string): string {
+  return process.env.CODEX_HOME || join(homeDir, '.codex');
+}
+
+function _parseCodexConfig(content: string): CodexConfig {
+  const result: CodexConfig = {};
+  content.split('\n').reduce<string | undefined>((activeSection, line) => {
+    const trimmed = line.trim();
+    if (trimmed === '' || trimmed.startsWith('#')) return activeSection;
+
+    const sectionMatch = /^\[([^\]]+)]$/.exec(trimmed);
+    if (sectionMatch) return sectionMatch[1];
+
+    if (activeSection === 'features') {
+      const pluginHooksMatch = /^plugin_hooks\s*=\s*(true|false)\s*(?:#.*)?$/.exec(trimmed);
+      if (pluginHooksMatch) result.pluginHooks = pluginHooksMatch[1] === 'true';
+    }
+
+    if (activeSection === `plugins."${CODEX_SAFETY_NET_PLUGIN_ID}"`) {
+      const enabledMatch = /^enabled\s*=\s*(true|false)\s*(?:#.*)?$/.exec(trimmed);
+      if (enabledMatch) result.safetyNetEnabled = enabledMatch[1] === 'true';
+    }
+
+    return activeSection;
+  }, undefined);
+
+  return result;
+}
+
+function _readCodexConfig(configPath: string, errors: string[]): CodexConfig {
+  try {
+    return _parseCodexConfig(readFileSync(configPath, 'utf-8'));
+  } catch (e) {
+    errors.push(`Failed to read ${configPath}: ${e instanceof Error ? e.message : String(e)}`);
+    return {};
+  }
+}
+
+/**
+ * Detect Codex plugin configuration.
+ */
+function detectCodex(homeDir: string): HookStatus {
+  const codexHome = _getCodexHome(homeDir);
+  const pluginCachePath = join(codexHome, 'plugins', 'cache', 'cc-marketplace', 'safety-net');
+  const errors: string[] = [];
+
+  if (!existsSync(pluginCachePath)) {
+    return { platform: 'codex', status: 'n/a', configPath: pluginCachePath };
+  }
+
+  try {
+    if (readdirSync(pluginCachePath).length === 0) {
+      return { platform: 'codex', status: 'n/a', configPath: pluginCachePath };
+    }
+  } catch (e) {
+    return {
+      platform: 'codex',
+      status: 'n/a',
+      configPath: pluginCachePath,
+      errors: [`Failed to read ${pluginCachePath}: ${e instanceof Error ? e.message : String(e)}`],
+    };
+  }
+
+  const configPath = join(codexHome, 'config.toml');
+  const config = _readCodexConfig(configPath, errors);
+
+  if (config.safetyNetEnabled !== true) {
+    return {
+      platform: 'codex',
+      status: 'disabled',
+      method: 'plugin cache',
+      configPath,
+      errors: [
+        ...errors,
+        `Codex plugin ${CODEX_SAFETY_NET_PLUGIN_ID} is not enabled. Add enabled = true under [plugins."${CODEX_SAFETY_NET_PLUGIN_ID}"] in $CODEX_HOME/config.toml.`,
+      ],
+    };
+  }
+
+  if (config.pluginHooks !== true) {
+    return {
+      platform: 'codex',
+      status: 'disabled',
+      method: 'plugin cache',
+      configPath,
+      errors: [...errors, CODEX_PLUGIN_HOOKS_WARNING],
+    };
+  }
+
+  return {
+    platform: 'codex',
+    status: 'configured',
+    method: 'plugin cache',
+    configPath,
+    selfTest: runSelfTest(),
+    errors: errors.length > 0 ? errors : undefined,
+  };
+}
+
 function _isSafetyNetCopilotCommand(command: string | undefined): boolean {
   if (!command?.includes('cc-safety-net')) return false;
   return /(^|\s)(--copilot-cli|-cp)(\s|$)/.test(command);
@@ -675,5 +782,6 @@ export function detectAllHooks(cwd: string, options?: HookDetectOptions): HookSt
     detectOpenCode(homeDir),
     detectGeminiCLI(options?.geminiExtensionsListOutput),
     detectCopilotCLI(),
+    detectCodex(homeDir),
   ];
 }

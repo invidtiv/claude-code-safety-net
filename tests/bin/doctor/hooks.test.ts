@@ -86,6 +86,22 @@ function _claudePluginListOutput(options: { pluginId?: string; status?: string }
     ${options.status === undefined ? 'Status: ✔ enabled' : options.status}`;
 }
 
+function _writeCodexConfig(
+  codexHome: string,
+  options: { pluginHooks?: boolean; enabled?: boolean } = {},
+): void {
+  writeFileSync(
+    join(codexHome, 'config.toml'),
+    `${options.pluginHooks === undefined ? '' : `[features]\nplugin_hooks = ${options.pluginHooks}\n\n`}[plugins."safety-net@cc-marketplace"]\nenabled = ${options.enabled ?? true}\n`,
+  );
+}
+
+function _createCodexPluginVersion(codexHome: string): void {
+  mkdirSync(join(codexHome, 'plugins', 'cache', 'cc-marketplace', 'safety-net', '0.8.2'), {
+    recursive: true,
+  });
+}
+
 describe('detectAllHooks', () => {
   test('detects configured hooks and runs self-test', () => {
     const tmpBase = join(tmpdir(), `doctor-hooks-${Date.now()}`);
@@ -1204,6 +1220,153 @@ describe('detectAllHooks', () => {
             error.includes(join(projectDir, '.github', 'hooks')),
         ),
       ).toBe(true);
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Codex: configured when plugin is installed, enabled, and plugin hooks are enabled', () => {
+    const tmpBase = join(tmpdir(), `doctor-codex-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const codexHome = join(homeDir, '.codex');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(codexHome, { recursive: true });
+    _createCodexPluginVersion(codexHome);
+    _writeCodexConfig(codexHome, { pluginHooks: true, enabled: true });
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir });
+      const codex = hooks.find((hook) => hook.platform === 'codex');
+
+      expect(codex?.status).toBe('configured');
+      expect(codex?.method).toBe('plugin cache');
+      expect(codex?.configPath).toBe(join(codexHome, 'config.toml'));
+      expect(codex?.errors).toBeUndefined();
+      expect(codex?.selfTest?.failed).toBe(0);
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Codex: uses CODEX_HOME when set', () => {
+    const tmpBase = join(tmpdir(), `doctor-codex-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const codexHome = join(tmpBase, 'custom-codex');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(codexHome, { recursive: true });
+    _createCodexPluginVersion(codexHome);
+    _writeCodexConfig(codexHome, { pluginHooks: true, enabled: true });
+
+    try {
+      const hooks = withEnv({ CODEX_HOME: codexHome }, () =>
+        detectAllHooks(projectDir, { homeDir }),
+      );
+      const codex = hooks.find((hook) => hook.platform === 'codex');
+
+      expect(codex?.status).toBe('configured');
+      expect(codex?.configPath).toBe(join(codexHome, 'config.toml'));
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Codex: disabled with warning when plugin hooks feature flag is missing', () => {
+    const tmpBase = join(tmpdir(), `doctor-codex-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const codexHome = join(homeDir, '.codex');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(codexHome, { recursive: true });
+    _createCodexPluginVersion(codexHome);
+    _writeCodexConfig(codexHome, { enabled: true });
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir });
+      const codex = hooks.find((hook) => hook.platform === 'codex');
+
+      expect(codex?.status).toBe('disabled');
+      expect(
+        codex?.errors?.some((error) =>
+          error.includes('Codex plugin hooks are behind a feature flag'),
+        ),
+      ).toBe(true);
+      expect(codex?.selfTest).toBeUndefined();
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Codex: disabled when plugin enabled config is missing or false', () => {
+    const tmpBase = join(tmpdir(), `doctor-codex-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const missingEnabledHome = join(tmpBase, 'missing-enabled');
+    const disabledHome = join(tmpBase, 'disabled');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(missingEnabledHome, { recursive: true });
+    mkdirSync(disabledHome, { recursive: true });
+    _createCodexPluginVersion(missingEnabledHome);
+    _createCodexPluginVersion(disabledHome);
+    writeFileSync(join(missingEnabledHome, 'config.toml'), '[features]\nplugin_hooks = true\n');
+    _writeCodexConfig(disabledHome, { pluginHooks: true, enabled: false });
+
+    try {
+      const missingEnabledHooks = withEnv({ CODEX_HOME: missingEnabledHome }, () =>
+        detectAllHooks(projectDir, { homeDir }),
+      );
+      const disabledHooks = withEnv({ CODEX_HOME: disabledHome }, () =>
+        detectAllHooks(projectDir, { homeDir }),
+      );
+
+      expect(missingEnabledHooks.find((hook) => hook.platform === 'codex')?.status).toBe(
+        'disabled',
+      );
+      expect(disabledHooks.find((hook) => hook.platform === 'codex')?.status).toBe('disabled');
+      expect(disabledHooks.find((hook) => hook.platform === 'codex')?.selfTest).toBeUndefined();
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Codex: n/a when plugin cache is missing', () => {
+    const tmpBase = join(tmpdir(), `doctor-codex-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir });
+      const codex = hooks.find((hook) => hook.platform === 'codex');
+
+      expect(codex?.status).toBe('n/a');
+      expect(codex?.selfTest).toBeUndefined();
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Codex: n/a when plugin cache has no version entries', () => {
+    const tmpBase = join(tmpdir(), `doctor-codex-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const codexHome = join(homeDir, '.codex');
+    mkdirSync(join(codexHome, 'plugins', 'cache', 'cc-marketplace', 'safety-net'), {
+      recursive: true,
+    });
+    mkdirSync(projectDir, { recursive: true });
+    _writeCodexConfig(codexHome, { pluginHooks: true, enabled: true });
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir });
+      const codex = hooks.find((hook) => hook.platform === 'codex');
+
+      expect(codex?.status).toBe('n/a');
+      expect(codex?.selfTest).toBeUndefined();
     } finally {
       rmSync(tmpBase, { recursive: true, force: true });
     }

@@ -974,7 +974,8 @@ var PLATFORM_NAMES = {
   "claude-code": "Claude Code",
   opencode: "OpenCode",
   "gemini-cli": "Gemini CLI",
-  "copilot-cli": "Copilot CLI"
+  "copilot-cli": "Copilot CLI",
+  codex: "Codex"
 };
 function formatHooksSection(hooks) {
   const lines = [];
@@ -1014,7 +1015,7 @@ function formatHooksSection(hooks) {
     lines.push(`   Warning (${w.platform}): ${w.message}`);
   }
   for (const e of errors) {
-    lines.push(`   Error (${e.platform}): ${e.message}`);
+    lines.push(colors.red(`   Error (${e.platform}): ${e.message}`));
   }
   return lines.join(`
 `);
@@ -5054,6 +5055,8 @@ var CLAUDE_PLUGIN_LIST_CONFIG_PATH = "claude plugin list";
 var CLAUDE_SAFETY_NET_PLUGIN_ID = "safety-net@cc-marketplace";
 var GEMINI_EXTENSIONS_LIST_CONFIG_PATH = "gemini extensions list";
 var GEMINI_SAFETY_NET_SOURCE = "https://github.com/kenryu42/gemini-safety-net";
+var CODEX_PLUGIN_HOOKS_WARNING = "Codex plugin hooks are behind a feature flag. Add `plugin_hooks = true` under [features] in $CODEX_HOME/config.toml.";
+var CODEX_SAFETY_NET_PLUGIN_ID = "safety-net@cc-marketplace";
 var SELF_TEST_CASES = [
   { command: "git reset --hard", description: "git reset --hard", expectBlocked: true },
   { command: "rm -rf /", description: "rm -rf /", expectBlocked: true },
@@ -5296,6 +5299,92 @@ function _parseGeminiEnabledValue(block, scope) {
     return;
   return match[1] === "true";
 }
+function _getCodexHome(homeDir) {
+  return process.env.CODEX_HOME || join5(homeDir, ".codex");
+}
+function _parseCodexConfig(content) {
+  const result = {};
+  content.split(`
+`).reduce((activeSection, line) => {
+    const trimmed = line.trim();
+    if (trimmed === "" || trimmed.startsWith("#"))
+      return activeSection;
+    const sectionMatch = /^\[([^\]]+)]$/.exec(trimmed);
+    if (sectionMatch)
+      return sectionMatch[1];
+    if (activeSection === "features") {
+      const pluginHooksMatch = /^plugin_hooks\s*=\s*(true|false)\s*(?:#.*)?$/.exec(trimmed);
+      if (pluginHooksMatch)
+        result.pluginHooks = pluginHooksMatch[1] === "true";
+    }
+    if (activeSection === `plugins."${CODEX_SAFETY_NET_PLUGIN_ID}"`) {
+      const enabledMatch = /^enabled\s*=\s*(true|false)\s*(?:#.*)?$/.exec(trimmed);
+      if (enabledMatch)
+        result.safetyNetEnabled = enabledMatch[1] === "true";
+    }
+    return activeSection;
+  }, undefined);
+  return result;
+}
+function _readCodexConfig(configPath, errors) {
+  try {
+    return _parseCodexConfig(readFileSync6(configPath, "utf-8"));
+  } catch (e) {
+    errors.push(`Failed to read ${configPath}: ${e instanceof Error ? e.message : String(e)}`);
+    return {};
+  }
+}
+function detectCodex(homeDir) {
+  const codexHome = _getCodexHome(homeDir);
+  const pluginCachePath = join5(codexHome, "plugins", "cache", "cc-marketplace", "safety-net");
+  const errors = [];
+  if (!existsSync6(pluginCachePath)) {
+    return { platform: "codex", status: "n/a", configPath: pluginCachePath };
+  }
+  try {
+    if (readdirSync2(pluginCachePath).length === 0) {
+      return { platform: "codex", status: "n/a", configPath: pluginCachePath };
+    }
+  } catch (e) {
+    return {
+      platform: "codex",
+      status: "n/a",
+      configPath: pluginCachePath,
+      errors: [`Failed to read ${pluginCachePath}: ${e instanceof Error ? e.message : String(e)}`]
+    };
+  }
+  const configPath = join5(codexHome, "config.toml");
+  const config = _readCodexConfig(configPath, errors);
+  if (config.safetyNetEnabled !== true) {
+    return {
+      platform: "codex",
+      status: "disabled",
+      method: "plugin cache",
+      configPath,
+      errors: [
+        ...errors,
+        `Codex plugin ${CODEX_SAFETY_NET_PLUGIN_ID} is not enabled. Add enabled = true under [plugins."${CODEX_SAFETY_NET_PLUGIN_ID}"] in $CODEX_HOME/config.toml.`
+      ]
+    };
+  }
+  if (config.pluginHooks !== true) {
+    return {
+      platform: "codex",
+      status: "disabled",
+      method: "plugin cache",
+      configPath,
+      errors: [...errors, CODEX_PLUGIN_HOOKS_WARNING]
+    };
+  }
+  return {
+    platform: "codex",
+    status: "configured",
+    method: "plugin cache",
+    configPath,
+    selfTest: runSelfTest(),
+    errors: errors.length > 0 ? errors : undefined
+  };
+}
 function _isSafetyNetCopilotCommand(command) {
   if (!command?.includes("cc-safety-net"))
     return false;
@@ -5507,7 +5596,8 @@ function detectAllHooks(cwd, options) {
     detectClaudeCode(options?.claudePluginListOutput),
     detectOpenCode(homeDir),
     detectGeminiCLI(options?.geminiExtensionsListOutput),
-    detectCopilotCLI()
+    detectCopilotCLI(),
+    detectCodex(homeDir)
   ];
 }
 
