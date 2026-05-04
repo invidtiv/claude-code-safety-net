@@ -365,6 +365,7 @@ describe('formatSystemInfoSection', () => {
     const sysInfo = {
       version: 'dev',
       claudeCodeVersion: null,
+      claudePluginListOutput: null,
       openCodeVersion: null,
       geminiCliVersion: null,
       geminiExtensionsListOutput: null,
@@ -408,6 +409,7 @@ describe('formatConfigSection', () => {
       system: {
         version: '0.6.0',
         claudeCodeVersion: '1.0.0',
+        claudePluginListOutput: null,
         openCodeVersion: '0.1.0',
         geminiCliVersion: null,
         geminiExtensionsListOutput: null,
@@ -461,6 +463,7 @@ describe('formatConfigSection', () => {
       system: {
         version: '0.6.0',
         claudeCodeVersion: '1.0.0',
+        claudePluginListOutput: null,
         openCodeVersion: '0.1.0',
         geminiCliVersion: null,
         geminiExtensionsListOutput: null,
@@ -505,6 +508,7 @@ describe('formatConfigSection', () => {
       system: {
         version: '0.6.0',
         claudeCodeVersion: '1.0.0',
+        claudePluginListOutput: null,
         openCodeVersion: '0.1.0',
         geminiCliVersion: null,
         geminiExtensionsListOutput: null,
@@ -537,6 +541,7 @@ describe('formatSummary', () => {
       system: {
         version: '0.6.0',
         claudeCodeVersion: null,
+        claudePluginListOutput: null,
         openCodeVersion: null,
         geminiCliVersion: null,
         geminiExtensionsListOutput: null,
@@ -565,6 +570,7 @@ describe('formatSummary', () => {
       system: {
         version: '0.6.0',
         claudeCodeVersion: null,
+        claudePluginListOutput: null,
         openCodeVersion: null,
         geminiCliVersion: null,
         geminiExtensionsListOutput: null,
@@ -593,6 +599,7 @@ describe('formatSummary', () => {
       system: {
         version: '0.6.0',
         claudeCodeVersion: null,
+        claudePluginListOutput: null,
         openCodeVersion: null,
         geminiCliVersion: null,
         geminiExtensionsListOutput: null,

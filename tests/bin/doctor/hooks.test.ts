@@ -72,6 +72,20 @@ function _geminiExtensionsListOutput(options: {
  Enabled (Workspace): ${options.enabledWorkspace ?? true}`;
 }
 
+function _claudePluginListOutput(options: { pluginId?: string; status?: string } = {}): string {
+  return `Installed plugins:
+
+  ❯ code-simplifier@claude-plugins-official
+    Version: 1.0.0
+    Scope: user
+    Status: ✔ enabled
+
+  ❯ ${options.pluginId ?? 'safety-net@cc-marketplace'}
+    Version: 0.8.2
+    Scope: user
+    ${options.status === undefined ? 'Status: ✔ enabled' : options.status}`;
+}
+
 describe('detectAllHooks', () => {
   test('detects configured hooks and runs self-test', () => {
     const tmpBase = join(tmpdir(), `doctor-hooks-${Date.now()}`);
@@ -79,15 +93,6 @@ describe('detectAllHooks', () => {
     const projectDir = join(tmpBase, 'project');
     mkdirSync(homeDir, { recursive: true });
     mkdirSync(projectDir, { recursive: true });
-
-    const claudeDir = join(homeDir, '.claude');
-    mkdirSync(claudeDir, { recursive: true });
-    writeFileSync(
-      join(claudeDir, 'settings.json'),
-      JSON.stringify({
-        enabledPlugins: { 'safety-net@cc-marketplace': true },
-      }),
-    );
 
     const opencodeDir = join(homeDir, '.config', 'opencode');
     mkdirSync(opencodeDir, { recursive: true });
@@ -106,12 +111,14 @@ describe('detectAllHooks', () => {
     try {
       const hooks = detectAllHooks(projectDir, {
         homeDir,
+        claudePluginListOutput: _claudePluginListOutput(),
         geminiExtensionsListOutput: _geminiExtensionsListOutput({}),
       });
 
       const claude = hooks.find((hook) => hook.platform === 'claude-code');
       expect(claude?.status).toBe('configured');
-      expect(claude?.method).toBe('marketplace plugin');
+      expect(claude?.method).toBe('plugin list');
+      expect(claude?.configPath).toBe('claude plugin list');
       expect(claude?.selfTest?.failed).toBe(0);
 
       const opencode = hooks.find((hook) => hook.platform === 'opencode');
@@ -133,27 +140,126 @@ describe('detectAllHooks', () => {
     }
   });
 
-  test('Claude Code: disabled when enabledPlugins value is false', () => {
+  test('Claude Code: configured when plugin list shows safety-net enabled', () => {
     const tmpBase = join(tmpdir(), `doctor-hooks-${Date.now()}`);
     const homeDir = join(tmpBase, 'home');
     const projectDir = join(tmpBase, 'project');
     mkdirSync(homeDir, { recursive: true });
     mkdirSync(projectDir, { recursive: true });
 
-    const claudeDir = join(homeDir, '.claude');
-    mkdirSync(claudeDir, { recursive: true });
-    writeFileSync(
-      join(claudeDir, 'settings.json'),
-      JSON.stringify({
-        enabledPlugins: { 'safety-net@cc-marketplace': false },
-      }),
-    );
+    try {
+      const hooks = detectAllHooks(projectDir, {
+        homeDir,
+        claudePluginListOutput: _claudePluginListOutput(),
+      });
+      const claude = hooks.find((hook) => hook.platform === 'claude-code');
+      expect(claude?.status).toBe('configured');
+      expect(claude?.method).toBe('plugin list');
+      expect(claude?.configPath).toBe('claude plugin list');
+      expect(claude?.selfTest?.failed).toBe(0);
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Claude Code: disabled when plugin list shows safety-net disabled', () => {
+    const tmpBase = join(tmpdir(), `doctor-hooks-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
 
     try {
-      const hooks = detectAllHooks(projectDir, { homeDir });
+      const hooks = detectAllHooks(projectDir, {
+        homeDir,
+        claudePluginListOutput: _claudePluginListOutput({ status: 'Status: ✘ disabled' }),
+      });
       const claude = hooks.find((hook) => hook.platform === 'claude-code');
       expect(claude?.status).toBe('disabled');
-      expect(claude?.method).toBe('marketplace plugin');
+      expect(claude?.method).toBe('plugin list');
+      expect(claude?.configPath).toBe('claude plugin list');
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Claude Code: n/a when plugin list is unavailable', () => {
+    const tmpBase = join(tmpdir(), `doctor-hooks-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir, claudePluginListOutput: null });
+      const claude = hooks.find((hook) => hook.platform === 'claude-code');
+      expect(claude?.status).toBe('n/a');
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Claude Code: n/a when plugin list does not include safety-net', () => {
+    const tmpBase = join(tmpdir(), `doctor-hooks-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+
+    try {
+      const hooks = detectAllHooks(projectDir, {
+        homeDir,
+        claudePluginListOutput: `Installed plugins:
+
+  ❯ code-simplifier@claude-plugins-official
+    Version: 1.0.0
+    Scope: user
+    Status: ✔ enabled`,
+      });
+      const claude = hooks.find((hook) => hook.platform === 'claude-code');
+      expect(claude?.status).toBe('n/a');
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Claude Code: n/a for partial plugin id match', () => {
+    const tmpBase = join(tmpdir(), `doctor-hooks-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+
+    try {
+      const hooks = detectAllHooks(projectDir, {
+        homeDir,
+        claudePluginListOutput: _claudePluginListOutput({
+          pluginId: 'other-safety-net@cc-marketplace',
+        }),
+      });
+      const claude = hooks.find((hook) => hook.platform === 'claude-code');
+      expect(claude?.status).toBe('n/a');
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Claude Code: disabled with error when safety-net status is unrecognized', () => {
+    const tmpBase = join(tmpdir(), `doctor-hooks-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+
+    try {
+      const hooks = detectAllHooks(projectDir, {
+        homeDir,
+        claudePluginListOutput: _claudePluginListOutput({ status: 'Status: pending' }),
+      });
+      const claude = hooks.find((hook) => hook.platform === 'claude-code');
+      expect(claude?.status).toBe('disabled');
+      expect(claude?.method).toBe('plugin list');
+      expect(claude?.errors).toEqual(['Status is not enabled']);
     } finally {
       rmSync(tmpBase, { recursive: true, force: true });
     }
@@ -166,10 +272,6 @@ describe('detectAllHooks', () => {
     mkdirSync(homeDir, { recursive: true });
     mkdirSync(projectDir, { recursive: true });
 
-    const claudeDir = join(homeDir, '.claude');
-    mkdirSync(claudeDir, { recursive: true });
-    writeFileSync(join(claudeDir, 'settings.json'), '{ invalid json }');
-
     const opencodeDir = join(homeDir, '.config', 'opencode');
     mkdirSync(opencodeDir, { recursive: true });
     writeFileSync(join(opencodeDir, 'opencode.json'), '{ invalid json }');
@@ -179,7 +281,7 @@ describe('detectAllHooks', () => {
 
       const claude = hooks.find((hook) => hook.platform === 'claude-code');
       expect(claude?.status).toBe('n/a');
-      expect(claude?.errors?.some((e) => e.includes('Failed to parse'))).toBe(true);
+      expect(claude?.errors).toBeUndefined();
 
       const opencode = hooks.find((hook) => hook.platform === 'opencode');
       expect(opencode?.status).toBe('n/a');
@@ -193,7 +295,7 @@ describe('detectAllHooks', () => {
     }
   });
 
-  test('Claude Code: returns n/a with error when settings.json is invalid', () => {
+  test('Claude Code: ignores settings.json when plugin list is unavailable', () => {
     const tmpBase = join(tmpdir(), `doctor-hooks-${Date.now()}`);
     const homeDir = join(tmpBase, 'home');
     const projectDir = join(tmpBase, 'project');
@@ -205,10 +307,10 @@ describe('detectAllHooks', () => {
     writeFileSync(join(claudeDir, 'settings.json'), '{ invalid json }');
 
     try {
-      const hooks = detectAllHooks(projectDir, { homeDir });
+      const hooks = detectAllHooks(projectDir, { homeDir, claudePluginListOutput: null });
       const claude = hooks.find((hook) => hook.platform === 'claude-code');
       expect(claude?.status).toBe('n/a');
-      expect(claude?.errors?.some((e) => e.includes('Failed to parse'))).toBe(true);
+      expect(claude?.errors).toBeUndefined();
     } finally {
       rmSync(tmpBase, { recursive: true, force: true });
     }

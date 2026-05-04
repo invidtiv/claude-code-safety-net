@@ -125,6 +125,7 @@ export async function getSystemInfo(
   // Run all version fetches in parallel
   const [
     claudeRaw,
+    claudePluginListOutput,
     openCodeRaw,
     geminiRaw,
     geminiExtensionsListOutput,
@@ -135,6 +136,7 @@ export async function getSystemInfo(
     pluginListRaw,
   ] = await Promise.all([
     fetcher(['claude', '--version']),
+    fetcher(['claude', 'plugin', 'list']),
     fetcher(['opencode', '--version']),
     fetcher(['gemini', '--version']),
     fetcher(['gemini', 'extensions', 'list']),
@@ -148,6 +150,7 @@ export async function getSystemInfo(
   return {
     version: CURRENT_VERSION,
     claudeCodeVersion: parseVersion(claudeRaw),
+    claudePluginListOutput,
     openCodeVersion: parseVersion(openCodeRaw),
     geminiCliVersion: parseVersion(geminiRaw),
     geminiExtensionsListOutput,

@@ -29,6 +29,9 @@ describe('getSystemInfo', () => {
     expect(
       sysInfo.claudeCodeVersion === null || typeof sysInfo.claudeCodeVersion === 'string',
     ).toBe(true);
+    expect(
+      sysInfo.claudePluginListOutput === null || typeof sysInfo.claudePluginListOutput === 'string',
+    ).toBe(true);
     expect(sysInfo.openCodeVersion === null || typeof sysInfo.openCodeVersion === 'string').toBe(
       true,
     );
@@ -63,6 +66,11 @@ describe('getSystemInfo', () => {
     expect(sysInfo.geminiExtensionsListOutput).toContain(
       'https://github.com/kenryu42/gemini-safety-net',
     );
+  });
+
+  test('includes Claude plugin list output with mock fetcher', async () => {
+    const sysInfo = await getSystemInfo(mockVersionFetcher);
+    expect(sysInfo.claudePluginListOutput).toContain('safety-net@cc-marketplace');
   });
 
   test('starts both copilot version probes immediately and prefers --binary-version', async () => {
@@ -151,6 +159,7 @@ describe('getSystemInfo', () => {
     const failingFetcher = async (_args: string[]) => null;
     const result = await getSystemInfo(failingFetcher);
     expect(result.claudeCodeVersion).toBeNull();
+    expect(result.claudePluginListOutput).toBeNull();
     expect(result.copilotCliVersion).toBeNull();
     expect(result.geminiExtensionsListOutput).toBeNull();
     expect(result.copilotPluginInstalled).toBe(false);

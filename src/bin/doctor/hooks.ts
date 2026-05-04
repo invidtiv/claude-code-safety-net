@@ -12,6 +12,7 @@ import type { Config } from '@/types';
 
 interface HookDetectOptions extends LoadConfigOptions {
   homeDir?: string;
+  claudePluginListOutput?: string | null;
   geminiExtensionsListOutput?: string | null;
   copilotCliVersion?: string | null;
   copilotPluginInstalled?: boolean;
@@ -42,6 +43,8 @@ interface CopilotDetectionState {
 }
 
 const COPILOT_PLUGIN_CONFIG_PATH = 'copilot-plugin';
+const CLAUDE_PLUGIN_LIST_CONFIG_PATH = 'claude plugin list';
+const CLAUDE_SAFETY_NET_PLUGIN_ID = 'safety-net@cc-marketplace';
 const GEMINI_EXTENSIONS_LIST_CONFIG_PATH = 'gemini extensions list';
 const GEMINI_SAFETY_NET_SOURCE = 'https://github.com/kenryu42/gemini-safety-net';
 
@@ -213,47 +216,55 @@ export function stripJsonComments(content: string): string {
 /**
  * Detect Claude Code hook configuration.
  */
-function detectClaudeCode(homeDir: string): HookStatus {
-  const errors: string[] = [];
-  const settingsPath = join(homeDir, '.claude', 'settings.json');
-  const pluginKey = 'safety-net@cc-marketplace';
+function detectClaudeCode(pluginListOutput: string | null | undefined): HookStatus {
+  if (!pluginListOutput) {
+    return { platform: 'claude-code', status: 'n/a' };
+  }
 
-  // Check marketplace plugin in settings.json
-  if (existsSync(settingsPath)) {
-    try {
-      const settings = JSON.parse(readFileSync(settingsPath, 'utf-8')) as {
-        enabledPlugins?: Record<string, boolean>;
-      };
-      const pluginValue = settings.enabledPlugins?.[pluginKey];
+  const pluginBlock = _findClaudeSafetyNetPluginBlock(pluginListOutput);
+  if (!pluginBlock) {
+    return { platform: 'claude-code', status: 'n/a' };
+  }
 
-      if (pluginValue === true) {
-        return {
-          platform: 'claude-code',
-          status: 'configured',
-          method: 'marketplace plugin',
-          configPath: settingsPath,
-          selfTest: runSelfTest(),
-        };
-      }
+  if (/^\s*Status:\s*.*\bdisabled\b\s*$/im.test(pluginBlock)) {
+    return {
+      platform: 'claude-code',
+      status: 'disabled',
+      method: 'plugin list',
+      configPath: CLAUDE_PLUGIN_LIST_CONFIG_PATH,
+    };
+  }
 
-      if (pluginValue === false) {
-        return {
-          platform: 'claude-code',
-          status: 'disabled',
-          method: 'marketplace plugin',
-          configPath: settingsPath,
-        };
-      }
-    } catch (e) {
-      errors.push(`Failed to parse settings.json: ${e instanceof Error ? e.message : String(e)}`);
-    }
+  if (/^\s*Status:\s*.*\benabled\b\s*$/im.test(pluginBlock)) {
+    return {
+      platform: 'claude-code',
+      status: 'configured',
+      method: 'plugin list',
+      configPath: CLAUDE_PLUGIN_LIST_CONFIG_PATH,
+      selfTest: runSelfTest(),
+    };
   }
 
   return {
     platform: 'claude-code',
-    status: 'n/a',
-    errors: errors.length > 0 ? errors : undefined,
+    status: 'disabled',
+    method: 'plugin list',
+    configPath: CLAUDE_PLUGIN_LIST_CONFIG_PATH,
+    errors: ['Status is not enabled'],
   };
+}
+
+function _findClaudeSafetyNetPluginBlock(output: string): string | undefined {
+  const pluginLinePattern = new RegExp(
+    `^\\s*(?:\\S+\\s+)?${_escapeRegExp(CLAUDE_SAFETY_NET_PLUGIN_ID)}\\s*$`,
+    'm',
+  );
+
+  return output.split(/\n\s*\n/).find((block) => pluginLinePattern.test(block));
+}
+
+function _escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -660,7 +671,7 @@ export function detectAllHooks(cwd: string, options?: HookDetectOptions): HookSt
   };
 
   return [
-    detectClaudeCode(homeDir),
+    detectClaudeCode(options?.claudePluginListOutput),
     detectOpenCode(homeDir),
     detectGeminiCLI(options?.geminiExtensionsListOutput),
     detectCopilotCLI(),
