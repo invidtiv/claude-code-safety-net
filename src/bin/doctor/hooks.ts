@@ -622,7 +622,7 @@ function _checkCopilotEnabled(
  */
 export function detectAllHooks(cwd: string, options?: HookDetectOptions): HookStatus[] {
   const homeDir = options?.homeDir ?? homedir();
-  const detectCopilot = (): HookStatus => {
+  const detectCopilotCLI = (): HookStatus => {
     const errors: string[] = [];
     const hooksCheck = _checkCopilotEnabled(homeDir, cwd, options?.copilotCliVersion, errors);
 
@@ -663,6 +663,6 @@ export function detectAllHooks(cwd: string, options?: HookDetectOptions): HookSt
     detectClaudeCode(homeDir),
     detectOpenCode(homeDir),
     detectGeminiCLI(options?.geminiExtensionsListOutput),
-    detectCopilot(),
+    detectCopilotCLI(),
   ];
 }

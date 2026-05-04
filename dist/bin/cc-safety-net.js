@@ -5464,7 +5464,7 @@ function _checkCopilotEnabled(homeDir, cwd, copilotCliVersion, errors) {
 }
 function detectAllHooks(cwd, options) {
   const homeDir = options?.homeDir ?? homedir4();
-  const detectCopilot = () => {
+  const detectCopilotCLI = () => {
     const errors = [];
     const hooksCheck = _checkCopilotEnabled(homeDir, cwd, options?.copilotCliVersion, errors);
     if (hooksCheck.disabledBy) {
@@ -5500,7 +5500,7 @@ function detectAllHooks(cwd, options) {
     detectClaudeCode(homeDir),
     detectOpenCode(homeDir),
     detectGeminiCLI(options?.geminiExtensionsListOutput),
-    detectCopilot()
+    detectCopilotCLI()
   ];
 }
 
