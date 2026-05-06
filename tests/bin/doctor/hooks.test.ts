@@ -1277,6 +1277,36 @@ describe('detectAllHooks', () => {
     }
   });
 
+  test('Codex: parses config section headers with inline comments', () => {
+    const tmpBase = join(tmpdir(), `doctor-codex-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const codexHome = join(homeDir, '.codex');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(codexHome, { recursive: true });
+    _createCodexPluginVersion(codexHome);
+    writeFileSync(
+      join(codexHome, 'config.toml'),
+      `[features] # required for plugin hooks
+plugin_hooks = true
+
+[plugins."safety-net@cc-marketplace"] # installed from marketplace
+enabled = true
+`,
+    );
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir });
+      const codex = hooks.find((hook) => hook.platform === 'codex');
+
+      expect(codex?.status).toBe('configured');
+      expect(codex?.method).toBe('plugin cache');
+      expect(codex?.errors).toBeUndefined();
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
   test('Codex: uses CODEX_HOME when set', () => {
     const tmpBase = join(tmpdir(), `doctor-codex-${Date.now()}`);
     const homeDir = join(tmpBase, 'home');

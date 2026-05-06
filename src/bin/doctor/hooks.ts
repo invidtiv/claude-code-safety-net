@@ -412,7 +412,7 @@ function _parseCodexConfig(content: string): CodexConfig {
     const trimmed = line.trim();
     if (trimmed === '' || trimmed.startsWith('#')) return activeSection;
 
-    const sectionMatch = /^\[([^\]]+)]$/.exec(trimmed);
+    const sectionMatch = /^\[([^\]]+)]\s*(?:#.*)?$/.exec(trimmed);
     if (sectionMatch) return sectionMatch[1];
 
     if (activeSection === 'features') {
