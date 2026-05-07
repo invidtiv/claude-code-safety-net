@@ -1505,6 +1505,55 @@ enabled = true
       rmSync(tmpBase, { recursive: true, force: true });
     }
   });
+
+  test('Codex: n/a with error when plugin cache path cannot be listed', () => {
+    const tmpBase = join(tmpdir(), `doctor-codex-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const codexHome = join(homeDir, '.codex');
+    const pluginCacheParent = join(codexHome, 'plugins', 'cache', 'cc-marketplace');
+    const pluginCachePath = join(pluginCacheParent, 'safety-net');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(pluginCacheParent, { recursive: true });
+    writeFileSync(pluginCachePath, 'not a directory');
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir });
+      const codex = hooks.find((hook) => hook.platform === 'codex');
+
+      expect(codex?.status).toBe('n/a');
+      expect(codex?.configPath).toBe(pluginCachePath);
+      expect(codex?.errors?.some((error) => error.includes('Failed to read'))).toBe(true);
+      expect(codex?.selfTest).toBeUndefined();
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Codex: disabled with read error when config.toml cannot be read', () => {
+    const tmpBase = join(tmpdir(), `doctor-codex-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    const codexHome = join(homeDir, '.codex');
+    const configPath = join(codexHome, 'config.toml');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(codexHome, { recursive: true });
+    _createCodexPluginVersion(codexHome);
+    mkdirSync(configPath);
+
+    try {
+      const hooks = detectAllHooks(projectDir, { homeDir });
+      const codex = hooks.find((hook) => hook.platform === 'codex');
+
+      expect(codex?.status).toBe('disabled');
+      expect(codex?.method).toBe('plugin cache');
+      expect(codex?.configPath).toBe(configPath);
+      expect(codex?.errors?.some((error) => error.includes('Failed to read'))).toBe(true);
+      expect(codex?.selfTest).toBeUndefined();
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('stripJsonComments', () => {
