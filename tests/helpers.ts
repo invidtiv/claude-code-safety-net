@@ -64,10 +64,11 @@ export function withEnv<T>(env: Record<string, string>, fn: () => T): T {
   }
 }
 
-export function withTempDir<T>(prefix: string, fn: (dir: string) => T): T {
+export async function withTempDir<T>(prefix: string, fn: (dir: string) => T | Promise<T>) {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   try {
-    return fn(dir);
+    const result = await fn(dir);
+    return result;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -202,10 +203,13 @@ export function createLinkedWorktreeFixture(): LinkedWorktreeFixture {
   };
 }
 
-export function withLinkedWorktreeFixture<T>(fn: (fixture: LinkedWorktreeFixture) => T): T {
+export async function withLinkedWorktreeFixture<T>(
+  fn: (fixture: LinkedWorktreeFixture) => T | Promise<T>,
+) {
   const fixture = createLinkedWorktreeFixture();
   try {
-    return fn(fixture);
+    const result = await fn(fixture);
+    return result;
   } finally {
     fixture.cleanup();
   }

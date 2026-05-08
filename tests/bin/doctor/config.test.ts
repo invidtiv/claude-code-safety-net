@@ -10,8 +10,8 @@ import { getConfigInfo } from '@/bin/doctor/config';
 import { withTempDir } from '../../helpers.ts';
 
 describe('getConfigInfo', () => {
-  test('handles missing config files', () => {
-    withTempDir('doctor-test-', (tmpDir) => {
+  test('handles missing config files', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
       const info = getConfigInfo(tmpDir);
       expect(info.projectConfig.exists).toBe(false);
       expect(info.effectiveRules).toEqual([]);
@@ -19,8 +19,8 @@ describe('getConfigInfo', () => {
     });
   });
 
-  test('detects valid project config', () => {
-    withTempDir('doctor-test-', (tmpDir) => {
+  test('detects valid project config', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
       writeFileSync(
         join(tmpDir, '.safety-net.json'),
         JSON.stringify({
@@ -44,8 +44,8 @@ describe('getConfigInfo', () => {
     });
   });
 
-  test('detects invalid project config', () => {
-    withTempDir('doctor-test-', (tmpDir) => {
+  test('detects invalid project config', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
       writeFileSync(join(tmpDir, '.safety-net.json'), '{ "version": 2 }');
       const info = getConfigInfo(tmpDir);
       expect(info.projectConfig.exists).toBe(true);
@@ -54,8 +54,8 @@ describe('getConfigInfo', () => {
     });
   });
 
-  test('excludes rules from invalid config (wrong version)', () => {
-    withTempDir('doctor-test-', (tmpDir) => {
+  test('excludes rules from invalid config (wrong version)', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
       writeFileSync(
         join(tmpDir, '.safety-net.json'),
         JSON.stringify({
@@ -77,24 +77,24 @@ describe('getConfigInfo', () => {
     });
   });
 
-  test('handles malformed JSON in config', () => {
-    withTempDir('doctor-test-', (tmpDir) => {
+  test('handles malformed JSON in config', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
       writeFileSync(join(tmpDir, '.safety-net.json'), '{ invalid json }');
       const info = getConfigInfo(tmpDir);
       expect(info.effectiveRules).toEqual([]);
     });
   });
 
-  test('handles empty config file', () => {
-    withTempDir('doctor-test-', (tmpDir) => {
+  test('handles empty config file', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
       writeFileSync(join(tmpDir, '.safety-net.json'), '   ');
       const info = getConfigInfo(tmpDir);
       expect(info.effectiveRules).toEqual([]);
     });
   });
 
-  test('handles config without rules array', () => {
-    withTempDir('doctor-test-', (tmpDir) => {
+  test('handles config without rules array', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
       writeFileSync(join(tmpDir, '.safety-net.json'), '{ "version": 1 }');
       const info = getConfigInfo(tmpDir);
       expect(info.effectiveRules).toEqual([]);

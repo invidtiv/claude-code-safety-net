@@ -11,7 +11,7 @@ import {
 
 const EMPTY_CONFIG: Config = { version: 1, rules: [] };
 
-function analyzeInLinkedWorktree(command: (mainWorktree: string) => string) {
+async function analyzeInLinkedWorktree(command: (mainWorktree: string) => string) {
   return withLinkedWorktreeFixture((fixture) =>
     withEnv({ SAFETY_NET_WORKTREE: '1' }, () =>
       analyzeCommand(command(toShellPath(fixture.mainWorktree)), {
@@ -180,15 +180,15 @@ describe('analyzeCommand (coverage)', () => {
   });
 
   describe('shell git context env state branches', () => {
-    test('command -- export target is tracked across segments', () => {
-      const result = analyzeInLinkedWorktree(
+    test('command -- export target is tracked across segments', async () => {
+      const result = await analyzeInLinkedWorktree(
         (main) => `command -- export GIT_WORK_TREE=${main}; git reset --hard`,
       );
       expect(result?.reason).toContain('git reset --hard');
     });
 
-    test('command inspection with no executable target leaves later git context unchanged', () => {
-      withLinkedWorktreeFixture((fixture) => {
+    test('command inspection with no executable target leaves later git context unchanged', async () => {
+      await withLinkedWorktreeFixture((fixture) => {
         withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
           expect(
             analyzeCommand(
@@ -213,8 +213,8 @@ describe('analyzeCommand (coverage)', () => {
       });
     });
 
-    test('export option parsing tracks only valid export operands', () => {
-      withLinkedWorktreeFixture((fixture) => {
+    test('export option parsing tracks only valid export operands', async () => {
+      await withLinkedWorktreeFixture((fixture) => {
         withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
           expect(
             analyzeCommand(
@@ -227,16 +227,21 @@ describe('analyzeCommand (coverage)', () => {
             ),
           ).toBeNull();
 
-          const result = analyzeInLinkedWorktree(
-            (main) => `export -- GIT_WORK_TREE=${main}; git reset --hard`,
+          const result = analyzeCommand(
+            `export -- GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)}; git reset --hard`,
+            {
+              cwd: fixture.linkedWorktree,
+              config: EMPTY_CONFIG,
+              worktreeMode: true,
+            },
           );
           expect(result?.reason).toContain('git reset --hard');
         });
       });
     });
 
-    test('exporting an unset tracked name uses an empty effective value', () => {
-      withLinkedWorktreeFixture((fixture) => {
+    test('exporting an unset tracked name uses an empty effective value', async () => {
+      await withLinkedWorktreeFixture((fixture) => {
         withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
           const result = analyzeCommand('export GIT_WORK_TREE; git reset --hard', {
             cwd: fixture.linkedWorktree,

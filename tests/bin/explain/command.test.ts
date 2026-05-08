@@ -34,8 +34,11 @@ function expectDangerousTextStep(command: string): void {
   ).toBeDefined();
 }
 
-function expectWorktreeExplainBlocked(command: (mainWorktree: string) => string, reason: string) {
-  withLinkedWorktreeFixture((fixture) => {
+async function expectWorktreeExplainBlocked(
+  command: (mainWorktree: string) => string,
+  reason: string,
+) {
+  await withLinkedWorktreeFixture((fixture) => {
     withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
       const result = explainCommand(command(toShellPath(fixture.mainWorktree)), {
         cwd: fixture.linkedWorktree,
@@ -394,22 +397,14 @@ describe('explainCommand shell wrapper edge cases', () => {
 
 describe('explainCommand max recursion depth', () => {
   test('deeply nested command hits max recursion', () => {
-    const deepNested =
-      'bash -c "bash -c \\"bash -c \\\\\\"bash -c \\\\\\\\\\\\\\"bash -c \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"echo deep\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"\\\\\\\\\\\\\\"\\\\\\"\\"" ';
-    const steps = getTraceSteps(explainCommand(deepNested));
-    expect(
-      steps.filter((s) => s.type === 'recurse').length +
-        (recursionLimitErrorStep(deepNested) ? 1 : 0),
-    ).toBeGreaterThan(0);
+    const deepNested = nestedBashCommand('echo deep', 10);
+    expect(recursionLimitErrorStep(deepNested)).toBeTruthy();
   });
 
   test('hits exact max recursion depth of 5', () => {
     const level5 =
       'bash -c "bash -c \\"bash -c \\\\\\"bash -c \\\\\\\\\\\\\\"bash -c \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"echo hi\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"\\\\\\\\\\\\\\"\\\\\\"\\"" ';
-    const steps = getTraceSteps(explainCommand(level5));
-    expect(
-      steps.filter((s) => s.type === 'recurse').length >= 3 || recursionLimitErrorStep(level5),
-    ).toBeTruthy();
+    expect(recursionLimitErrorStep(level5)).toBeFalsy();
   });
 
   test('hits max recursion depth with 10 nested bash -c calls', () => {
@@ -581,54 +576,57 @@ describe('explainCommand fallback scan with find', () => {
 });
 
 describe('explainCommand worktree parity', () => {
-  test('uses wrapper cwd when explaining worktree relaxation', () => {
-    expectWorktreeExplainBlocked((main) => `env -C ${main} git reset --hard`, 'git reset --hard');
+  test('uses wrapper cwd when explaining worktree relaxation', async () => {
+    await expectWorktreeExplainBlocked(
+      (main) => `env -C ${main} git reset --hard`,
+      'git reset --hard',
+    );
   });
 
-  test('carries exported git context overrides into later segments', () => {
-    expectWorktreeExplainBlocked(
+  test('carries exported git context overrides into later segments', async () => {
+    await expectWorktreeExplainBlocked(
       (main) => `export GIT_WORK_TREE=${main}; git reset --hard`,
       'git reset --hard',
     );
   });
 
-  test('passes wrapper cwd into recursive explain analysis', () => {
-    expectWorktreeExplainBlocked(
+  test('passes wrapper cwd into recursive explain analysis', async () => {
+    await expectWorktreeExplainBlocked(
       (main) => `env -C ${main} sh -c "git reset --hard"`,
       'git reset --hard',
     );
   });
 
-  test('passes stripped env into recursive explain analysis', () => {
-    expectWorktreeExplainBlocked(
+  test('passes stripped env into recursive explain analysis', async () => {
+    await expectWorktreeExplainBlocked(
       (main) => `GIT_WORK_TREE=${main} sh -c "git reset --hard"`,
       'git reset --hard',
     );
   });
 
-  test('carries nested exported git context overrides across inner segments', () => {
-    expectWorktreeExplainBlocked(
+  test('carries nested exported git context overrides across inner segments', async () => {
+    await expectWorktreeExplainBlocked(
       (main) => `sh -c "export GIT_WORK_TREE=${main}; git reset --hard"`,
       'git reset --hard',
     );
   });
 
-  test('includes keyword-export git context overrides in current segment', () => {
-    expectWorktreeExplainBlocked(
+  test('includes keyword-export git context overrides in current segment', async () => {
+    await expectWorktreeExplainBlocked(
       (main) => `set -k; git restore file.txt GIT_WORK_TREE=${main}`,
       'git restore',
     );
   });
 
-  test('includes nested keyword-export git context overrides in current segment', () => {
-    expectWorktreeExplainBlocked(
+  test('includes nested keyword-export git context overrides in current segment', async () => {
+    await expectWorktreeExplainBlocked(
       (main) => `sh -c "set -k; git restore file.txt GIT_WORK_TREE=${main}"`,
       'git restore',
     );
   });
 
-  test('honors parallel nested overrides when explaining remote commands', () => {
-    withLinkedWorktreeFixture((fixture) => {
+  test('honors parallel nested overrides when explaining remote commands', async () => {
+    await withLinkedWorktreeFixture((fixture) => {
       withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
         const result = explainCommand('parallel -S host sh -c "git reset --hard" ::: x', {
           cwd: fixture.linkedWorktree,
@@ -640,8 +638,8 @@ describe('explainCommand worktree parity', () => {
     });
   });
 
-  test('does not report worktree relaxation for fallback embedded git', () => {
-    withLinkedWorktreeFixture((fixture) => {
+  test('does not report worktree relaxation for fallback embedded git', async () => {
+    await withLinkedWorktreeFixture((fixture) => {
       withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
         const result = explainCommand('ssh host git clean -f', { cwd: fixture.linkedWorktree });
         const worktreeStep = result.trace.segments
