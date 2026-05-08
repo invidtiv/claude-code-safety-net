@@ -3124,7 +3124,7 @@ function analyzeXargs(tokens, context) {
   }
   if (childCommand.head === "git") {
     const gitTokens = replacementToken === null ? [...childTokens, XARGS_APPENDED_INPUT] : childTokens;
-    const hasDynamicReplacement = replacementToken !== null && childTokens.some((token) => token.includes(replacementToken));
+    const hasDynamicReplacement = replacementToken !== null && (childTokens.some((token) => token.includes(replacementToken)) || Array.from(childCommand.envAssignments.values()).some((value) => value.includes(replacementToken)));
     const gitResult = analyzeGit(gitTokens, {
       cwd: childCommand.cwd,
       envAssignments: childCommand.envAssignments,
