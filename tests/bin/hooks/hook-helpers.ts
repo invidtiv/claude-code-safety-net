@@ -28,10 +28,6 @@ export function copilotRawToolArgsInput(toolArgs: string) {
   };
 }
 
-export function copilotToolArgsInput(toolArgs: object) {
-  return copilotRawToolArgsInput(JSON.stringify(toolArgs));
-}
-
 export function geminiShellInput(command: string) {
   return {
     hook_event_name: 'BeforeTool',
