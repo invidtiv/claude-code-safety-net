@@ -236,6 +236,7 @@ gemini extensions install https://github.com/kenryu42/gemini-safety-net
 4. In the TUI, run `/plugins`.
 5. Use arrow keys to select `[cc-marketplace]`.
 6. Press Enter to install the plugin.
+7. run `/hooks` and select the safety-net PreToolUse hook and press `t` to trust it.
 
 ---
 
