@@ -7,7 +7,7 @@ import type { VersionFetcher } from '@/bin/doctor/system-info';
 import { analyzeCommand } from '@/core/analyze';
 import { loadConfig } from '@/core/config';
 import { envTruthy } from '@/core/env';
-import type { AnalyzeOptions, Config } from '@/types';
+import type { AnalyzeOptions, Config, ExplainResult, TraceStep } from '@/types';
 
 // Default empty config for tests that don't specify a cwd
 // This prevents loading the project's .safety-net.json
@@ -62,6 +62,60 @@ export function withEnv<T>(env: Record<string, string>, fn: () => T): T {
       }
     }
   }
+}
+
+export function withTempDir<T>(prefix: string, fn: (dir: string) => T): T {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  try {
+    return fn(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+export async function runSafetyNetCli(
+  args: string[],
+  env?: Record<string, string>,
+): Promise<{ output: string; exitCode: number }> {
+  const proc = Bun.spawn(['bun', 'src/bin/cc-safety-net.ts', ...args], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+    env: { ...process.env, ...(env ?? {}) },
+  });
+  const output = await new Response(proc.stdout).text();
+  const exitCode = await proc.exited;
+  return { output, exitCode };
+}
+
+export function withStdoutColor<T>(enabled: boolean, fn: () => T): T {
+  const originalIsTTY = process.stdout.isTTY;
+  const originalNoColor = process.env.NO_COLOR;
+  Object.defineProperty(process.stdout, 'isTTY', {
+    value: enabled,
+    writable: true,
+    configurable: true,
+  });
+  if (enabled) {
+    delete process.env.NO_COLOR;
+  }
+  try {
+    return fn();
+  } finally {
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: originalIsTTY,
+      writable: true,
+      configurable: true,
+    });
+    if (originalNoColor === undefined) {
+      delete process.env.NO_COLOR;
+    } else {
+      process.env.NO_COLOR = originalNoColor;
+    }
+  }
+}
+
+export function getTraceSteps(result: Pick<ExplainResult, 'trace'>): TraceStep[] {
+  return result.trace.segments.flatMap((segment) => segment.steps);
 }
 
 /**
@@ -146,6 +200,15 @@ export function createLinkedWorktreeFixture(): LinkedWorktreeFixture {
       rmSync(rootDir, { recursive: true, force: true });
     },
   };
+}
+
+export function withLinkedWorktreeFixture<T>(fn: (fixture: LinkedWorktreeFixture) => T): T {
+  const fixture = createLinkedWorktreeFixture();
+  try {
+    return fn(fixture);
+  } finally {
+    fixture.cleanup();
+  }
 }
 
 export interface FakeGitFileFixture {

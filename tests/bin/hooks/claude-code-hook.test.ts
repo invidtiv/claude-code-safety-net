@@ -1,18 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { runClaudeCodeHook } from './hook-helpers';
+import { claudeCodeBashInput, expectNoHookOutput, runClaudeCodeHook } from './hook-helpers';
 
 describe('Claude Code hook', () => {
   describe('blocked commands', () => {
     test('blocked command produces correct JSON structure', async () => {
-      const input = {
-        hook_event_name: 'PreToolUse',
-        tool_name: 'Bash',
-        tool_input: {
-          command: 'git reset --hard',
-        },
-      };
-
-      const { stdout, exitCode } = await runClaudeCodeHook(input);
+      const { stdout, exitCode } = await runClaudeCodeHook(claudeCodeBashInput('git reset --hard'));
 
       const parsed = JSON.parse(stdout);
       expect(exitCode).toBe(0);
@@ -26,18 +18,7 @@ describe('Claude Code hook', () => {
 
   describe('allowed commands', () => {
     test('allowed command produces no output', async () => {
-      const input = {
-        hook_event_name: 'PreToolUse',
-        tool_name: 'Bash',
-        tool_input: {
-          command: 'git status',
-        },
-      };
-
-      const { stdout, exitCode } = await runClaudeCodeHook(input);
-
-      expect(stdout).toBe('');
-      expect(exitCode).toBe(0);
+      await expectNoHookOutput(runClaudeCodeHook, claudeCodeBashInput('git status'));
     });
   });
 
@@ -51,26 +32,17 @@ describe('Claude Code hook', () => {
         },
       };
 
-      const { stdout, exitCode } = await runClaudeCodeHook(input);
-
-      expect(stdout).toBe('');
-      expect(exitCode).toBe(0);
+      await expectNoHookOutput(runClaudeCodeHook, input);
     });
   });
 
   describe('empty stdin', () => {
     test('empty input produces no output', async () => {
-      const { stdout, exitCode } = await runClaudeCodeHook('');
-
-      expect(stdout).toBe('');
-      expect(exitCode).toBe(0);
+      await expectNoHookOutput(runClaudeCodeHook, '');
     });
 
     test('whitespace-only input produces no output', async () => {
-      const { stdout, exitCode } = await runClaudeCodeHook('   \n\t  ');
-
-      expect(stdout).toBe('');
-      expect(exitCode).toBe(0);
+      await expectNoHookOutput(runClaudeCodeHook, '   \n\t  ');
     });
   });
 
@@ -89,10 +61,7 @@ describe('Claude Code hook', () => {
     });
 
     test('non-strict mode silently ignores invalid JSON', async () => {
-      const { stdout, exitCode } = await runClaudeCodeHook('{invalid json');
-
-      expect(stdout).toBe('');
-      expect(exitCode).toBe(0);
+      await expectNoHookOutput(runClaudeCodeHook, '{invalid json');
     });
   });
 
@@ -104,10 +73,7 @@ describe('Claude Code hook', () => {
         tool_input: {},
       };
 
-      const { stdout, exitCode } = await runClaudeCodeHook(input);
-
-      expect(stdout).toBe('');
-      expect(exitCode).toBe(0);
+      await expectNoHookOutput(runClaudeCodeHook, input);
     });
 
     test('null tool_input produces no output', async () => {
@@ -117,10 +83,7 @@ describe('Claude Code hook', () => {
         tool_input: null,
       };
 
-      const { stdout, exitCode } = await runClaudeCodeHook(input);
-
-      expect(stdout).toBe('');
-      expect(exitCode).toBe(0);
+      await expectNoHookOutput(runClaudeCodeHook, input);
     });
 
     test('missing tool_input produces no output', async () => {
@@ -129,10 +92,7 @@ describe('Claude Code hook', () => {
         tool_name: 'Bash',
       };
 
-      const { stdout, exitCode } = await runClaudeCodeHook(input);
-
-      expect(stdout).toBe('');
-      expect(exitCode).toBe(0);
+      await expectNoHookOutput(runClaudeCodeHook, input);
     });
   });
 });

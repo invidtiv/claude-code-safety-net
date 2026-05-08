@@ -2,7 +2,7 @@
  * Tests for the doctor command formatting functions.
  */
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { getEnvironmentInfo } from '@/bin/doctor/environment';
 import {
   formatActivitySection,
@@ -16,7 +16,35 @@ import {
 } from '@/bin/doctor/format';
 import { getSystemInfo } from '@/bin/doctor/system-info';
 import type { DoctorReport, EffectiveRule, HookStatus } from '@/bin/doctor/types';
-import { mockVersionFetcher } from '../../helpers.ts';
+import { mockVersionFetcher, withStdoutColor } from '../../helpers.ts';
+
+function createDoctorReport(overrides: Partial<DoctorReport> = {}): DoctorReport {
+  return {
+    hooks: [],
+    userConfig: { path: '', exists: false, valid: false, ruleCount: 0 },
+    projectConfig: { path: '', exists: false, valid: false, ruleCount: 0 },
+    effectiveRules: [],
+    shadowedRules: [],
+    environment: [],
+    activity: { totalBlocked: 0, sessionCount: 0, recentEntries: [] },
+    update: { currentVersion: '0.6.0', latestVersion: '0.6.0', updateAvailable: false },
+    system: {
+      version: '0.6.0',
+      claudeCodeVersion: null,
+      claudePluginListOutput: null,
+      openCodeVersion: null,
+      geminiCliVersion: null,
+      geminiExtensionsListOutput: null,
+      copilotCliVersion: null,
+      nodeVersion: '22.0.0',
+      npmVersion: '10.0.0',
+      bunVersion: '1.0.0',
+      copilotPluginInstalled: false,
+      platform: 'darwin',
+    },
+    ...overrides,
+  };
+}
 
 describe('formatRulesTable', () => {
   test('formats rules as ASCII table', () => {
@@ -71,27 +99,6 @@ describe('formatRulesTable', () => {
 });
 
 describe('formatHooksSection', () => {
-  let originalIsTTY: boolean | undefined;
-  let originalNoColor: string | undefined;
-
-  beforeEach(() => {
-    originalIsTTY = process.stdout.isTTY;
-    originalNoColor = process.env.NO_COLOR;
-  });
-
-  afterEach(() => {
-    Object.defineProperty(process.stdout, 'isTTY', {
-      value: originalIsTTY,
-      writable: true,
-      configurable: true,
-    });
-    if (originalNoColor === undefined) {
-      delete process.env.NO_COLOR;
-      return;
-    }
-    process.env.NO_COLOR = originalNoColor;
-  });
-
   test('formats configured hooks with self-test', () => {
     const hooks: HookStatus[] = [
       {
@@ -161,19 +168,12 @@ describe('formatHooksSection', () => {
   });
 
   test('shows hook errors in red when colors are enabled', () => {
-    Object.defineProperty(process.stdout, 'isTTY', {
-      value: true,
-      writable: true,
-      configurable: true,
+    withStdoutColor(true, () => {
+      const hooks: HookStatus[] = [
+        { platform: 'codex', status: 'disabled', errors: ['Parse error'] },
+      ];
+      expect(formatHooksSection(hooks)).toContain('\x1b[31m   Error (Codex): Parse error\x1b[0m');
     });
-    delete process.env.NO_COLOR;
-
-    const hooks: HookStatus[] = [
-      { platform: 'codex', status: 'disabled', errors: ['Parse error'] },
-    ];
-
-    const output = formatHooksSection(hooks);
-    expect(output).toContain('\x1b[31m   Error (Codex): Parse error\x1b[0m');
   });
 
   test('shows warning for configured hooks with errors', () => {
@@ -420,8 +420,7 @@ describe('formatSystemInfoSection', () => {
 
 describe('formatConfigSection', () => {
   test('formats config with no rules', () => {
-    const report: DoctorReport = {
-      hooks: [],
+    const report = createDoctorReport({
       userConfig: {
         path: '/home/user/.cc-safety-net/config.json',
         exists: false,
@@ -434,30 +433,7 @@ describe('formatConfigSection', () => {
         valid: false,
         ruleCount: 0,
       },
-      effectiveRules: [],
-      shadowedRules: [],
-      environment: [],
-      activity: { totalBlocked: 0, sessionCount: 0, recentEntries: [] },
-      update: {
-        currentVersion: '0.6.0',
-        latestVersion: '0.6.0',
-        updateAvailable: false,
-      },
-      system: {
-        version: '0.6.0',
-        claudeCodeVersion: '1.0.0',
-        claudePluginListOutput: null,
-        openCodeVersion: '0.1.0',
-        geminiCliVersion: null,
-        geminiExtensionsListOutput: null,
-        copilotCliVersion: null,
-        nodeVersion: '22.0.0',
-        npmVersion: '10.0.0',
-        bunVersion: '1.0.0',
-        copilotPluginInstalled: false,
-        platform: 'darwin arm64',
-      },
-    };
+    });
     const output = formatConfigSection(report);
     expect(output).toContain('Configuration');
     expect(output).toContain('User');
@@ -466,8 +442,7 @@ describe('formatConfigSection', () => {
   });
 
   test('formats config with shadow warnings', () => {
-    const report: DoctorReport = {
-      hooks: [],
+    const report = createDoctorReport({
       userConfig: {
         path: '/home/user/.cc-safety-net/config.json',
         exists: true,
@@ -490,35 +465,13 @@ describe('formatConfigSection', () => {
         },
       ],
       shadowedRules: [{ name: 'test-rule', shadowedBy: 'project' }],
-      environment: [],
-      activity: { totalBlocked: 0, sessionCount: 0, recentEntries: [] },
-      update: {
-        currentVersion: '0.6.0',
-        latestVersion: '0.6.0',
-        updateAvailable: false,
-      },
-      system: {
-        version: '0.6.0',
-        claudeCodeVersion: '1.0.0',
-        claudePluginListOutput: null,
-        openCodeVersion: '0.1.0',
-        geminiCliVersion: null,
-        geminiExtensionsListOutput: null,
-        copilotCliVersion: null,
-        nodeVersion: '22.0.0',
-        npmVersion: '10.0.0',
-        bunVersion: '1.0.0',
-        copilotPluginInstalled: false,
-        platform: 'darwin arm64',
-      },
-    };
+    });
     const output = formatConfigSection(report);
     expect(output).toContain('shadows user rule');
   });
 
   test('formats config with invalid config showing errors', () => {
-    const report: DoctorReport = {
-      hooks: [],
+    const report = createDoctorReport({
       userConfig: {
         path: '/home/user/.cc-safety-net/config.json',
         exists: true,
@@ -533,30 +486,7 @@ describe('formatConfigSection', () => {
         ruleCount: 0,
         errors: ['Malformed JSON'],
       },
-      effectiveRules: [],
-      shadowedRules: [],
-      environment: [],
-      activity: { totalBlocked: 0, sessionCount: 0, recentEntries: [] },
-      update: {
-        currentVersion: '0.6.0',
-        latestVersion: '0.6.0',
-        updateAvailable: false,
-      },
-      system: {
-        version: '0.6.0',
-        claudeCodeVersion: '1.0.0',
-        claudePluginListOutput: null,
-        openCodeVersion: '0.1.0',
-        geminiCliVersion: null,
-        geminiExtensionsListOutput: null,
-        copilotCliVersion: null,
-        nodeVersion: '22.0.0',
-        npmVersion: '10.0.0',
-        bunVersion: '1.0.0',
-        copilotPluginInstalled: false,
-        platform: 'darwin arm64',
-      },
-    };
+    });
     const output = formatConfigSection(report);
     expect(output).toContain('Invalid');
     expect(output).toContain('Invalid version: expected 1, got 99');
@@ -566,88 +496,27 @@ describe('formatConfigSection', () => {
 
 describe('formatSummary', () => {
   test('formats all passed', () => {
-    const report: DoctorReport = {
+    const report = createDoctorReport({
       hooks: [{ platform: 'claude-code', status: 'configured' }],
-      userConfig: { path: '', exists: false, valid: false, ruleCount: 0 },
-      projectConfig: { path: '', exists: false, valid: false, ruleCount: 0 },
-      effectiveRules: [],
-      shadowedRules: [],
-      environment: [],
       activity: { totalBlocked: 1, sessionCount: 1, recentEntries: [] },
-      update: { currentVersion: '0.6.0', latestVersion: '0.6.0', updateAvailable: false },
-      system: {
-        version: '0.6.0',
-        claudeCodeVersion: null,
-        claudePluginListOutput: null,
-        openCodeVersion: null,
-        geminiCliVersion: null,
-        geminiExtensionsListOutput: null,
-        copilotCliVersion: null,
-        nodeVersion: '22.0.0',
-        npmVersion: '10.0.0',
-        bunVersion: '1.0.0',
-        copilotPluginInstalled: false,
-        platform: 'darwin',
-      },
-    };
+    });
     const output = formatSummary(report);
     expect(output).toContain('All checks passed');
   });
 
   test('formats with warnings', () => {
-    const report: DoctorReport = {
+    const report = createDoctorReport({
       hooks: [{ platform: 'claude-code', status: 'configured' }],
-      userConfig: { path: '', exists: false, valid: false, ruleCount: 0 },
-      projectConfig: { path: '', exists: false, valid: false, ruleCount: 0 },
-      effectiveRules: [],
-      shadowedRules: [],
-      environment: [],
-      activity: { totalBlocked: 0, sessionCount: 0, recentEntries: [] },
       update: { currentVersion: '0.6.0', latestVersion: '0.7.0', updateAvailable: true },
-      system: {
-        version: '0.6.0',
-        claudeCodeVersion: null,
-        claudePluginListOutput: null,
-        openCodeVersion: null,
-        geminiCliVersion: null,
-        geminiExtensionsListOutput: null,
-        copilotCliVersion: null,
-        nodeVersion: '22.0.0',
-        npmVersion: '10.0.0',
-        bunVersion: '1.0.0',
-        copilotPluginInstalled: false,
-        platform: 'darwin',
-      },
-    };
+    });
     const output = formatSummary(report);
     expect(output).toContain('warning');
   });
 
   test('formats with failures', () => {
-    const report: DoctorReport = {
+    const report = createDoctorReport({
       hooks: [],
-      userConfig: { path: '', exists: false, valid: false, ruleCount: 0 },
-      projectConfig: { path: '', exists: false, valid: false, ruleCount: 0 },
-      effectiveRules: [],
-      shadowedRules: [],
-      environment: [],
-      activity: { totalBlocked: 0, sessionCount: 0, recentEntries: [] },
-      update: { currentVersion: '0.6.0', latestVersion: '0.6.0', updateAvailable: false },
-      system: {
-        version: '0.6.0',
-        claudeCodeVersion: null,
-        claudePluginListOutput: null,
-        openCodeVersion: null,
-        geminiCliVersion: null,
-        geminiExtensionsListOutput: null,
-        copilotCliVersion: null,
-        nodeVersion: '22.0.0',
-        npmVersion: '10.0.0',
-        bunVersion: '1.0.0',
-        copilotPluginInstalled: false,
-        platform: 'darwin',
-      },
-    };
+    });
     const output = formatSummary(report);
     expect(output).toContain('failed');
   });

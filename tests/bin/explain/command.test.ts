@@ -11,7 +11,58 @@ import { explainSegment } from '@/bin/explain/segment';
 import { REASON_RECURSION_LIMIT } from '@/core/analyze/analyze-command';
 import type { TraceStep } from '@/types';
 import { MAX_RECURSION_DEPTH } from '@/types';
-import { createLinkedWorktreeFixture, toShellPath, withEnv } from '../../helpers.ts';
+import { getTraceSteps, toShellPath, withEnv, withLinkedWorktreeFixture } from '../../helpers.ts';
+
+function nestedBashCommand(command: string, levels: number): string {
+  return Array.from({ length: levels }).reduce<string>(
+    (cmd) => `bash -c ${JSON.stringify(cmd)}`,
+    command,
+  );
+}
+
+function recursionLimitErrorStep(command: string) {
+  return getTraceSteps(explainCommand(command)).find(
+    (s) => s.type === 'error' && s.message?.includes('exceeds maximum recursion depth'),
+  );
+}
+
+function expectDangerousTextStep(command: string): void {
+  const result = explainCommand(command);
+  expect(result.result).toBe('blocked');
+  expect(
+    getTraceSteps(result).find((s) => s.type === 'dangerous-text' && s.matched === true),
+  ).toBeDefined();
+}
+
+function expectWorktreeExplainBlocked(command: (mainWorktree: string) => string, reason: string) {
+  withLinkedWorktreeFixture((fixture) => {
+    withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+      const result = explainCommand(command(toShellPath(fixture.mainWorktree)), {
+        cwd: fixture.linkedWorktree,
+      });
+      expect(result.result).toBe('blocked');
+      expect(result.reason).toContain(reason);
+    });
+  });
+}
+
+function expectFallbackScan(command: string, embeddedCommand?: string): void {
+  const result = explainCommand(command);
+  expect(result.result).toBe('blocked');
+  const fallbackStep = getTraceSteps(result).find((s) => s.type === 'fallback-scan');
+  expect(fallbackStep).toBeDefined();
+  if (embeddedCommand && fallbackStep?.type === 'fallback-scan') {
+    expect(fallbackStep.embeddedCommandFound).toBe(embeddedCommand);
+  }
+}
+
+function expectParallelRuleStep(command: string) {
+  const result = explainCommand(command);
+  expect(result.result).toBe('blocked');
+  return getTraceSteps(result).find(
+    (s) => s.type === 'rule-check' && s.ruleModule === 'analyze/parallel.ts',
+  );
+}
 
 describe('explainCommand', () => {
   test('git status returns allowed', () => {
@@ -40,7 +91,7 @@ describe('explainCommand', () => {
   test('sudo git reset --hard traces wrapper stripping', () => {
     const result = explainCommand('sudo git reset --hard');
     expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const stripStep = allSteps.find((s) => s.type === 'leading-tokens-stripped');
     expect(stripStep).toBeDefined();
   });
@@ -73,14 +124,14 @@ describe('explainCommand', () => {
   test('bash -c with inner command traces shell wrapper', () => {
     const result = explainCommand('bash -c "git status"');
     expect(result.result).toBe('allowed');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const shellStep = allSteps.find((s) => s.type === 'shell-wrapper');
     expect(shellStep).toBeDefined();
   });
 
   test('env variables are redacted', () => {
     const result = explainCommand('SECRET=password git status');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const envStep = allSteps.find((s) => s.type === 'env-strip');
     if (envStep && envStep.type === 'env-strip') {
       expect(envStep.envVars.SECRET).toBe('<redacted>');
@@ -101,14 +152,14 @@ describe('explainCommand', () => {
 describe('explainCommand edge cases', () => {
   test('python interpreter command traces interpreter step', () => {
     const result = explainCommand('python -c "print(1)"');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const interpStep = allSteps.find((s) => s.type === 'interpreter');
     expect(interpStep).toBeDefined();
   });
 
   test('busybox rm traces busybox step', () => {
     const result = explainCommand('busybox rm -rf /tmp/test');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const busyboxStep = allSteps.find((s) => s.type === 'busybox');
     expect(busyboxStep).toBeDefined();
   });
@@ -116,7 +167,7 @@ describe('explainCommand edge cases', () => {
   test('rm command traces rule check', () => {
     const result = explainCommand('rm -rf /');
     expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const ruleStep = allSteps.find(
       (s) => s.type === 'rule-check' && s.ruleModule === 'rules-rm.ts',
     );
@@ -126,7 +177,7 @@ describe('explainCommand edge cases', () => {
   test('find -delete traces rule check', () => {
     const result = explainCommand('find . -delete');
     expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const ruleStep = allSteps.find(
       (s) => s.type === 'rule-check' && s.ruleModule === 'analyze/find.ts',
     );
@@ -135,14 +186,14 @@ describe('explainCommand edge cases', () => {
 
   test('xargs rm traces rule check and tmpdir check', () => {
     const result = explainCommand('echo | xargs rm -rf /');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const tmpStep = allSteps.find((s) => s.type === 'tmpdir-check');
     expect(tmpStep).toBeDefined();
   });
 
   test('parallel command traces rule check', () => {
     const result = explainCommand('parallel rm -rf ::: /');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const ruleStep = allSteps.find(
       (s) => s.type === 'rule-check' && s.ruleModule === 'analyze/parallel.ts',
     );
@@ -152,7 +203,7 @@ describe('explainCommand edge cases', () => {
   test('custom-rules-check shows rulesChecked false when no config', () => {
     // Pass explicit empty config to avoid picking up real .safety-net.json
     const result = explainCommand('echo hello', { config: { version: 1, rules: [] } });
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const customStep = allSteps.find((s) => s.type === 'custom-rules-check');
     expect(customStep).toBeDefined();
     if (customStep && customStep.type === 'custom-rules-check') {
@@ -162,7 +213,7 @@ describe('explainCommand edge cases', () => {
 
   test('deeply nested bash -c commands trace multiple recurse steps', () => {
     const result = explainCommand('bash -c "bash -c \\"git status\\""');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const recurseSteps = allSteps.filter((s) => s.type === 'recurse');
     expect(recurseSteps.length).toBeGreaterThanOrEqual(1);
   });
@@ -280,7 +331,7 @@ describe('explainCommand rm with home directory', () => {
     const result = explainCommand('rm -rf .', { cwd: homeDir });
     expect(result.result).toBe('blocked');
     expect(result.reason).toContain('home directory');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const ruleStep = allSteps.find(
       (s) =>
         s.type === 'rule-check' && s.ruleModule === 'rules-rm.ts' && s.ruleFunction === 'analyzeRm',
@@ -293,7 +344,7 @@ describe('explainCommand rm with home directory', () => {
     if (!homeDir) return;
     const result = explainCommand('rm -rf /tmp/test-dir', { cwd: homeDir });
     expect(result.result).toBe('allowed');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const analyzeRmStep = allSteps.find(
       (s) =>
         s.type === 'rule-check' && s.ruleModule === 'rules-rm.ts' && s.ruleFunction === 'analyzeRm',
@@ -304,19 +355,13 @@ describe('explainCommand rm with home directory', () => {
 
 describe('explainCommand parallel with nested blocked', () => {
   test('parallel rm -rf / is blocked', () => {
-    const result = explainCommand('parallel rm -rf ::: /');
-    expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const parallelStep = allSteps.find(
-      (s) => s.type === 'rule-check' && s.ruleModule === 'analyze/parallel.ts',
-    );
-    expect(parallelStep).toBeDefined();
+    expect(expectParallelRuleStep('parallel rm -rf ::: /')).toBeDefined();
   });
 
   test('sem is not treated as parallel (matches actual guard behavior)', () => {
     const result = explainCommand('sem rm -rf /');
     expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const tmpStep = allSteps.find((s) => s.type === 'tmpdir-check');
     expect(tmpStep).toBeUndefined();
     const fallbackStep = allSteps.find((s) => s.type === 'fallback-scan');
@@ -328,7 +373,7 @@ describe('explainCommand shell wrapper edge cases', () => {
   test('bash without -c argument returns null for wrapper', () => {
     const result = explainCommand('bash script.sh');
     expect(result.result).toBe('allowed');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const wrapperStep = allSteps.find((s) => s.type === 'shell-wrapper');
     expect(wrapperStep).toBeUndefined();
   });
@@ -336,7 +381,7 @@ describe('explainCommand shell wrapper edge cases', () => {
   test('sh -c with blocked inner command blocks', () => {
     const result = explainCommand('sh -c "git reset --hard"');
     expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const wrapperStep = allSteps.find((s) => s.type === 'shell-wrapper');
     expect(wrapperStep).toBeDefined();
   });
@@ -351,59 +396,32 @@ describe('explainCommand max recursion depth', () => {
   test('deeply nested command hits max recursion', () => {
     const deepNested =
       'bash -c "bash -c \\"bash -c \\\\\\"bash -c \\\\\\\\\\\\\\"bash -c \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"echo deep\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"\\\\\\\\\\\\\\"\\\\\\"\\"" ';
-    const result = explainCommand(deepNested);
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const errorStep = allSteps.find(
-      (s) => s.type === 'error' && s.message?.includes('exceeds maximum recursion depth'),
-    );
-    const recurseSteps = allSteps.filter((s) => s.type === 'recurse');
-    expect(recurseSteps.length + (errorStep ? 1 : 0)).toBeGreaterThan(0);
+    const steps = getTraceSteps(explainCommand(deepNested));
+    expect(
+      steps.filter((s) => s.type === 'recurse').length +
+        (recursionLimitErrorStep(deepNested) ? 1 : 0),
+    ).toBeGreaterThan(0);
   });
 
   test('hits exact max recursion depth of 5', () => {
     const level5 =
       'bash -c "bash -c \\"bash -c \\\\\\"bash -c \\\\\\\\\\\\\\"bash -c \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"echo hi\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"\\\\\\\\\\\\\\"\\\\\\"\\"" ';
-    const result = explainCommand(level5);
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const errorStep = allSteps.find(
-      (s) => s.type === 'error' && s.message?.includes('exceeds maximum recursion depth'),
-    );
-    const recurseSteps = allSteps.filter((s) => s.type === 'recurse');
-    expect(recurseSteps.length >= 3 || errorStep).toBeTruthy();
+    const steps = getTraceSteps(explainCommand(level5));
+    expect(
+      steps.filter((s) => s.type === 'recurse').length >= 3 || recursionLimitErrorStep(level5),
+    ).toBeTruthy();
   });
 
   test('hits max recursion depth with 10 nested bash -c calls', () => {
-    let cmd = 'echo ok';
-    for (let i = 0; i < 10; i++) {
-      cmd = `bash -c ${JSON.stringify(cmd)}`;
-    }
-    const result = explainCommand(cmd);
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const errorStep = allSteps.find(
-      (s) => s.type === 'error' && s.message?.includes('exceeds maximum recursion depth'),
-    );
-    expect(errorStep).toBeDefined();
+    expect(recursionLimitErrorStep(nestedBashCommand('echo ok', 10))).toBeDefined();
   });
 
   test('9 nested levels does not hit max recursion depth', () => {
-    let cmd = 'echo ok';
-    for (let i = 0; i < 9; i++) {
-      cmd = `bash -c ${JSON.stringify(cmd)}`;
-    }
-    const result = explainCommand(cmd);
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const errorStep = allSteps.find(
-      (s) => s.type === 'error' && s.message?.includes('exceeds maximum recursion depth'),
-    );
-    expect(errorStep).toBeUndefined();
+    expect(recursionLimitErrorStep(nestedBashCommand('echo ok', 9))).toBeUndefined();
   });
 
   test('unparseable inner command at depth limit is blocked by recursion limit', () => {
-    let cmd = "echo 'unclosed";
-    for (let i = 0; i < 10; i++) {
-      cmd = `bash -c ${JSON.stringify(cmd)}`;
-    }
-    const result = explainCommand(cmd);
+    const result = explainCommand(nestedBashCommand("echo 'unclosed", 10));
     expect(result.result).toBe('blocked');
     expect(result.reason).toContain('exceeds maximum recursion depth');
   });
@@ -432,7 +450,7 @@ describe('explainCommand guard parity fixes', () => {
 
   test('Fix #2: CWD changes tracked between segments - cd then rm', () => {
     const result = explainCommand('cd /tmp && rm -rf ./foo');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const cwdStep = allSteps.find((s) => s.type === 'cwd-change');
     expect(cwdStep).toBeDefined();
     if (cwdStep && cwdStep.type === 'cwd-change') {
@@ -442,7 +460,7 @@ describe('explainCommand guard parity fixes', () => {
 
   test('Fix #2: pushd changes CWD to unknown', () => {
     const result = explainCommand('pushd /tmp && rm -rf ./foo');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const cwdStep = allSteps.find((s) => s.type === 'cwd-change');
     expect(cwdStep).toBeDefined();
   });
@@ -464,29 +482,17 @@ describe('explainCommand guard parity fixes', () => {
   });
 
   test('Fix #4: fallback scan finds embedded git in non-head position', () => {
-    const result = explainCommand('nice git reset --hard');
-    expect(result.result).toBe('blocked');
-    expect(result.reason).toContain('git reset --hard');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const fallbackStep = allSteps.find((s) => s.type === 'fallback-scan');
-    expect(fallbackStep).toBeDefined();
-    if (fallbackStep && fallbackStep.type === 'fallback-scan') {
-      expect(fallbackStep.embeddedCommandFound).toBe('git');
-    }
+    expectFallbackScan('nice git reset --hard', 'git');
   });
 
   test('Fix #4: fallback scan finds embedded rm in non-head position', () => {
-    const result = explainCommand('nice rm -rf /');
-    expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const fallbackStep = allSteps.find((s) => s.type === 'fallback-scan');
-    expect(fallbackStep).toBeDefined();
+    expectFallbackScan('nice rm -rf /');
   });
 
   test('Fix #5: shell wrapper recurses and blocks dangerous nested commands', () => {
     const result = explainCommand('bash -c "git reset --hard"');
     expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const recurseStep = allSteps.find((s) => s.type === 'recurse' && s.reason === 'shell-wrapper');
     expect(recurseStep).toBeDefined();
   });
@@ -494,7 +500,7 @@ describe('explainCommand guard parity fixes', () => {
   test('Fix #5: interpreter recurses for nested dangerous code', () => {
     const result = explainCommand('bash -c "rm -rf /"');
     expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const recurseStep = allSteps.find((s) => s.type === 'recurse');
     expect(recurseStep).toBeDefined();
   });
@@ -566,148 +572,63 @@ describe('explainCommand strict mode inner commands', () => {
 
 describe('explainCommand fallback scan with find', () => {
   test('fallback scan finds embedded find -delete in non-head position', () => {
-    const result = explainCommand('nice find . -delete');
-    expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const fallbackStep = allSteps.find((s) => s.type === 'fallback-scan');
-    expect(fallbackStep).toBeDefined();
-    if (fallbackStep && fallbackStep.type === 'fallback-scan') {
-      expect(fallbackStep.embeddedCommandFound).toBe('find');
-    }
+    expectFallbackScan('nice find . -delete', 'find');
   });
 
   test('fallback scan finds find -exec with dangerous cmd in non-head position', () => {
-    const result = explainCommand('nice find . -name test -delete');
-    expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const fallbackStep = allSteps.find((s) => s.type === 'fallback-scan');
-    expect(fallbackStep).toBeDefined();
+    expectFallbackScan('nice find . -name test -delete');
   });
 });
 
 describe('explainCommand worktree parity', () => {
   test('uses wrapper cwd when explaining worktree relaxation', () => {
-    const fixture = createLinkedWorktreeFixture();
-    try {
-      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
-        const result = explainCommand(
-          `env -C ${toShellPath(fixture.mainWorktree)} git reset --hard`,
-          { cwd: fixture.linkedWorktree },
-        );
-
-        expect(result.result).toBe('blocked');
-        expect(result.reason).toContain('git reset --hard');
-      });
-    } finally {
-      fixture.cleanup();
-    }
+    expectWorktreeExplainBlocked((main) => `env -C ${main} git reset --hard`, 'git reset --hard');
   });
 
   test('carries exported git context overrides into later segments', () => {
-    const fixture = createLinkedWorktreeFixture();
-    try {
-      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
-        const result = explainCommand(
-          `export GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)}; git reset --hard`,
-          { cwd: fixture.linkedWorktree },
-        );
-
-        expect(result.result).toBe('blocked');
-        expect(result.reason).toContain('git reset --hard');
-      });
-    } finally {
-      fixture.cleanup();
-    }
+    expectWorktreeExplainBlocked(
+      (main) => `export GIT_WORK_TREE=${main}; git reset --hard`,
+      'git reset --hard',
+    );
   });
 
   test('passes wrapper cwd into recursive explain analysis', () => {
-    const fixture = createLinkedWorktreeFixture();
-    try {
-      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
-        const result = explainCommand(
-          `env -C ${toShellPath(fixture.mainWorktree)} sh -c "git reset --hard"`,
-          { cwd: fixture.linkedWorktree },
-        );
-
-        expect(result.result).toBe('blocked');
-        expect(result.reason).toContain('git reset --hard');
-      });
-    } finally {
-      fixture.cleanup();
-    }
+    expectWorktreeExplainBlocked(
+      (main) => `env -C ${main} sh -c "git reset --hard"`,
+      'git reset --hard',
+    );
   });
 
   test('passes stripped env into recursive explain analysis', () => {
-    const fixture = createLinkedWorktreeFixture();
-    try {
-      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
-        const result = explainCommand(
-          `GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)} sh -c "git reset --hard"`,
-          { cwd: fixture.linkedWorktree },
-        );
-
-        expect(result.result).toBe('blocked');
-        expect(result.reason).toContain('git reset --hard');
-      });
-    } finally {
-      fixture.cleanup();
-    }
+    expectWorktreeExplainBlocked(
+      (main) => `GIT_WORK_TREE=${main} sh -c "git reset --hard"`,
+      'git reset --hard',
+    );
   });
 
   test('carries nested exported git context overrides across inner segments', () => {
-    const fixture = createLinkedWorktreeFixture();
-    try {
-      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
-        const result = explainCommand(
-          `sh -c "export GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)}; git reset --hard"`,
-          { cwd: fixture.linkedWorktree },
-        );
-
-        expect(result.result).toBe('blocked');
-        expect(result.reason).toContain('git reset --hard');
-      });
-    } finally {
-      fixture.cleanup();
-    }
+    expectWorktreeExplainBlocked(
+      (main) => `sh -c "export GIT_WORK_TREE=${main}; git reset --hard"`,
+      'git reset --hard',
+    );
   });
 
   test('includes keyword-export git context overrides in current segment', () => {
-    const fixture = createLinkedWorktreeFixture();
-    try {
-      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
-        const result = explainCommand(
-          `set -k; git restore file.txt GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)}`,
-          { cwd: fixture.linkedWorktree },
-        );
-
-        expect(result.result).toBe('blocked');
-        expect(result.reason).toContain('git restore');
-      });
-    } finally {
-      fixture.cleanup();
-    }
+    expectWorktreeExplainBlocked(
+      (main) => `set -k; git restore file.txt GIT_WORK_TREE=${main}`,
+      'git restore',
+    );
   });
 
   test('includes nested keyword-export git context overrides in current segment', () => {
-    const fixture = createLinkedWorktreeFixture();
-    try {
-      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
-        const result = explainCommand(
-          `sh -c "set -k; git restore file.txt GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)}"`,
-          { cwd: fixture.linkedWorktree },
-        );
-
-        expect(result.result).toBe('blocked');
-        expect(result.reason).toContain('git restore');
-      });
-    } finally {
-      fixture.cleanup();
-    }
+    expectWorktreeExplainBlocked(
+      (main) => `sh -c "set -k; git restore file.txt GIT_WORK_TREE=${main}"`,
+      'git restore',
+    );
   });
 
   test('honors parallel nested overrides when explaining remote commands', () => {
-    const fixture = createLinkedWorktreeFixture();
-    try {
+    withLinkedWorktreeFixture((fixture) => {
       withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
         const result = explainCommand('parallel -S host sh -c "git reset --hard" ::: x', {
           cwd: fixture.linkedWorktree,
@@ -716,14 +637,11 @@ describe('explainCommand worktree parity', () => {
         expect(result.result).toBe('blocked');
         expect(result.reason).toContain('git reset --hard');
       });
-    } finally {
-      fixture.cleanup();
-    }
+    });
   });
 
   test('does not report worktree relaxation for fallback embedded git', () => {
-    const fixture = createLinkedWorktreeFixture();
-    try {
+    withLinkedWorktreeFixture((fixture) => {
       withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
         const result = explainCommand('ssh host git clean -f', { cwd: fixture.linkedWorktree });
         const worktreeStep = result.trace.segments
@@ -734,9 +652,7 @@ describe('explainCommand worktree parity', () => {
         expect(result.reason).toContain('git clean -f');
         expect(worktreeStep).toBeUndefined();
       });
-    } finally {
-      fixture.cleanup();
-    }
+    });
   });
 });
 
@@ -754,12 +670,7 @@ describe('explainCommand env from wrapper stripping', () => {
 
 describe('explainCommand parallel with analyzeNested', () => {
   test('parallel commands mode triggers analyzeNested', () => {
-    const result = explainCommand("parallel ::: 'rm -rf /'");
-    expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const parallelStep = allSteps.find(
-      (s) => s.type === 'rule-check' && s.ruleModule === 'analyze/parallel.ts',
-    );
+    const parallelStep = expectParallelRuleStep("parallel ::: 'rm -rf /'");
     expect(parallelStep).toBeDefined();
     if (parallelStep && parallelStep.type === 'rule-check') {
       expect(parallelStep.matched).toBe(true);
@@ -780,24 +691,20 @@ describe('explainCommand parallel with analyzeNested', () => {
 describe('explainCommand nested segment CWD tracking', () => {
   test('shell wrapper with cd then rm tracks CWD change in nested segments', () => {
     const result = explainCommand('bash -c "cd /somewhere && rm -rf foo"');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const cwdSteps = allSteps.filter((s) => s.type === 'cwd-change');
     expect(cwdSteps.length).toBeGreaterThan(0);
   });
 
   test('interpreter with cd then rm tracks CWD change in nested segments', () => {
     const result = explainCommand('python -c "cd /tmp && rm -rf foo"');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const cwdSteps = allSteps.filter((s) => s.type === 'cwd-change');
     expect(cwdSteps.length).toBeGreaterThan(0);
   });
 
   test('nested unparseable segment with dangerous text is blocked', () => {
-    const result = explainCommand('bash -c "\'rm -rf /tmp/cache"');
-    expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const dangerousStep = allSteps.find((s) => s.type === 'dangerous-text' && s.matched === true);
-    expect(dangerousStep).toBeDefined();
+    expectDangerousTextStep('bash -c "\'rm -rf /tmp/cache"');
   });
 
   test('nested unparseable segment without dangerous patterns is allowed', () => {
@@ -806,43 +713,31 @@ describe('explainCommand nested segment CWD tracking', () => {
   });
 
   test('interpreter nested unparseable segment with git reset is blocked', () => {
-    const result = explainCommand('python -c "\'git reset --hard HEAD"');
-    expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const dangerousStep = allSteps.find((s) => s.type === 'dangerous-text' && s.matched === true);
-    expect(dangerousStep).toBeDefined();
+    expectDangerousTextStep('python -c "\'git reset --hard HEAD"');
   });
 });
 
 describe('explainCommand unparseable segments', () => {
   test('unparseable segment with dangerous rm -rf pattern is blocked', () => {
-    const result = explainCommand("'rm -rf /tmp/cache");
-    expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const dangerousStep = allSteps.find((s) => s.type === 'dangerous-text' && s.matched === true);
-    expect(dangerousStep).toBeDefined();
+    expectDangerousTextStep("'rm -rf /tmp/cache");
   });
 
   test('unparseable segment with cd command triggers cwd-change step', () => {
     const result = explainCommand('cd /tmp "unclosed');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const cwdStep = allSteps.find((s) => s.type === 'cwd-change');
     expect(cwdStep).toBeDefined();
   });
 
   test('unparseable segment with pushd triggers cwd-change', () => {
     const result = explainCommand('pushd /somewhere "unclosed');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const cwdStep = allSteps.find((s) => s.type === 'cwd-change');
     expect(cwdStep).toBeDefined();
   });
 
   test('unparseable segment with git reset --hard is blocked', () => {
-    const result = explainCommand("'git reset --hard HEAD");
-    expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const dangerousStep = allSteps.find((s) => s.type === 'dangerous-text' && s.matched === true);
-    expect(dangerousStep).toBeDefined();
+    expectDangerousTextStep("'git reset --hard HEAD");
   });
 
   test('unparseable segment without dangerous patterns is allowed', () => {
@@ -854,7 +749,7 @@ describe('explainCommand unparseable segments', () => {
 describe('explainInnerSegments nested unparseable with cwd change', () => {
   test('nested unparseable segment with cd triggers cwd-change without dangerous text', () => {
     const result = explainCommand('bash -c "cd /tmp \'unclosed"');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const cwdSteps = allSteps.filter((s) => s.type === 'cwd-change');
     expect(cwdSteps.length).toBeGreaterThan(0);
     expect(result.result).toBe('allowed');
@@ -862,7 +757,7 @@ describe('explainInnerSegments nested unparseable with cwd change', () => {
 
   test('nested unparseable segment with pushd triggers cwd-change', () => {
     const result = explainCommand('bash -c "pushd /somewhere \'unclosed"');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const cwdSteps = allSteps.filter((s) => s.type === 'cwd-change');
     expect(cwdSteps.length).toBeGreaterThan(0);
   });
@@ -872,7 +767,7 @@ describe('interpreter code not dangerous returns null', () => {
   test('interpreter with safe code returns allowed', () => {
     const result = explainCommand('python -c "x = 1 + 2"');
     expect(result.result).toBe('allowed');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const interpStep = allSteps.find((s) => s.type === 'interpreter');
     expect(interpStep).toBeDefined();
     const dangerousStep = allSteps.find((s) => s.type === 'dangerous-text' && s.matched === true);
@@ -889,7 +784,7 @@ describe('explainCommand interpreter with dangerous code', () => {
   test('python -c with rm -rf traces recurse and blocks', () => {
     const result = explainCommand('python -c "import os; os.system(\\"rm -rf /\\")"');
     expect(result.result).toBe('blocked');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const recurseStep = allSteps.find((s) => s.type === 'recurse' && s.reason === 'interpreter');
     expect(recurseStep).toBeDefined();
   });

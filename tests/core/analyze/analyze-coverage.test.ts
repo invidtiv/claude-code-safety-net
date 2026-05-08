@@ -2,9 +2,26 @@ import { describe, expect, test } from 'bun:test';
 import { homedir } from 'node:os';
 import { analyzeCommand } from '@/core/analyze';
 import type { Config } from '@/types';
-import { createLinkedWorktreeFixture, toShellPath, withEnv } from '../../helpers.ts';
+import {
+  createLinkedWorktreeFixture,
+  toShellPath,
+  withEnv,
+  withLinkedWorktreeFixture,
+} from '../../helpers.ts';
 
 const EMPTY_CONFIG: Config = { version: 1, rules: [] };
+
+function analyzeInLinkedWorktree(command: (mainWorktree: string) => string) {
+  return withLinkedWorktreeFixture((fixture) =>
+    withEnv({ SAFETY_NET_WORKTREE: '1' }, () =>
+      analyzeCommand(command(toShellPath(fixture.mainWorktree)), {
+        cwd: fixture.linkedWorktree,
+        config: EMPTY_CONFIG,
+        worktreeMode: true,
+      }),
+    ),
+  );
+}
 
 describe('analyzeCommand (coverage)', () => {
   test('unclosed-quote cd segment handled', () => {
@@ -164,27 +181,14 @@ describe('analyzeCommand (coverage)', () => {
 
   describe('shell git context env state branches', () => {
     test('command -- export target is tracked across segments', () => {
-      const fixture = createLinkedWorktreeFixture();
-      try {
-        withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
-          const result = analyzeCommand(
-            `command -- export GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)}; git reset --hard`,
-            {
-              cwd: fixture.linkedWorktree,
-              config: EMPTY_CONFIG,
-              worktreeMode: true,
-            },
-          );
-          expect(result?.reason).toContain('git reset --hard');
-        });
-      } finally {
-        fixture.cleanup();
-      }
+      const result = analyzeInLinkedWorktree(
+        (main) => `command -- export GIT_WORK_TREE=${main}; git reset --hard`,
+      );
+      expect(result?.reason).toContain('git reset --hard');
     });
 
     test('command inspection with no executable target leaves later git context unchanged', () => {
-      const fixture = createLinkedWorktreeFixture();
-      try {
+      withLinkedWorktreeFixture((fixture) => {
         withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
           expect(
             analyzeCommand(
@@ -206,14 +210,11 @@ describe('analyzeCommand (coverage)', () => {
             }),
           ).toBeNull();
         });
-      } finally {
-        fixture.cleanup();
-      }
+      });
     });
 
     test('export option parsing tracks only valid export operands', () => {
-      const fixture = createLinkedWorktreeFixture();
-      try {
+      withLinkedWorktreeFixture((fixture) => {
         withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
           expect(
             analyzeCommand(
@@ -226,24 +227,16 @@ describe('analyzeCommand (coverage)', () => {
             ),
           ).toBeNull();
 
-          const result = analyzeCommand(
-            `export -- GIT_WORK_TREE=${toShellPath(fixture.mainWorktree)}; git reset --hard`,
-            {
-              cwd: fixture.linkedWorktree,
-              config: EMPTY_CONFIG,
-              worktreeMode: true,
-            },
+          const result = analyzeInLinkedWorktree(
+            (main) => `export -- GIT_WORK_TREE=${main}; git reset --hard`,
           );
           expect(result?.reason).toContain('git reset --hard');
         });
-      } finally {
-        fixture.cleanup();
-      }
+      });
     });
 
     test('exporting an unset tracked name uses an empty effective value', () => {
-      const fixture = createLinkedWorktreeFixture();
-      try {
+      withLinkedWorktreeFixture((fixture) => {
         withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
           const result = analyzeCommand('export GIT_WORK_TREE; git reset --hard', {
             cwd: fixture.linkedWorktree,
@@ -252,9 +245,7 @@ describe('analyzeCommand (coverage)', () => {
           });
           expect(result?.reason).toContain('git reset --hard');
         });
-      } finally {
-        fixture.cleanup();
-      }
+      });
     });
 
     test('typeset and readonly forms update tracked env state only when exported', () => {

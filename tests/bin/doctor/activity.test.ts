@@ -8,6 +8,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getActivitySummary } from '@/bin/doctor/activity';
 
+function createLogsDir(): string {
+  const logsDir = join(tmpdir(), `doctor-logs-${Date.now()}`);
+  mkdirSync(logsDir, { recursive: true });
+  return logsDir;
+}
+
 describe('getActivitySummary', () => {
   test('returns activity summary structure', () => {
     const activity = getActivitySummary(7);
@@ -27,8 +33,7 @@ describe('getActivitySummary', () => {
   });
 
   test('reads and parses log files from directory', () => {
-    const logsDir = join(tmpdir(), `doctor-logs-${Date.now()}`);
-    mkdirSync(logsDir, { recursive: true });
+    const logsDir = createLogsDir();
 
     const now = new Date();
     const entry1 = {
@@ -61,8 +66,7 @@ describe('getActivitySummary', () => {
   });
 
   test('filters entries older than specified days', () => {
-    const logsDir = join(tmpdir(), `doctor-logs-${Date.now()}`);
-    mkdirSync(logsDir, { recursive: true });
+    const logsDir = createLogsDir();
 
     const now = new Date();
     const recentEntry = {

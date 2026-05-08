@@ -5,7 +5,26 @@ import { describe, expect, test } from 'bun:test';
 import { formatStepStyleD, getBoxChars } from '@/bin/explain/format-helpers';
 import { explainCommand, formatTraceHuman, formatTraceJson } from '@/bin/explain/index';
 import type { ExplainResult, TraceStep } from '@/types';
-import { withEnv } from '../../helpers.ts';
+import { getTraceSteps, withEnv } from '../../helpers.ts';
+
+function mockExplainResult(
+  input: string,
+  segments: string[][],
+  step: TraceStep,
+  result: ExplainResult['result'] = 'allowed',
+  reason?: string,
+): ExplainResult {
+  return {
+    trace: {
+      steps: [{ type: 'parse', input, segments }],
+      segments: [{ index: 0, steps: [step] }],
+    },
+    result,
+    reason,
+    configSource: null,
+    configValid: true,
+  };
+}
 
 describe('formatTraceHuman', () => {
   test('includes Status: BLOCKED for blocked commands', () => {
@@ -158,25 +177,16 @@ describe('formatTraceHuman step formatting', () => {
       originalReason: 'git reset --hard destroys uncommitted changes',
       gitCwd: '/tmp/linked-worktree',
     };
-    const mockResult: ExplainResult = {
-      trace: {
-        steps: [
-          { type: 'parse', input: 'git reset --hard', segments: [['git', 'reset', '--hard']] },
-        ],
-        segments: [{ index: 0, steps: [worktreeStep] }],
-      },
-      result: 'allowed',
-      configSource: null,
-      configValid: true,
-    };
-    const output = formatTraceHuman(mockResult);
+    const output = formatTraceHuman(
+      mockExplainResult('git reset --hard', [['git', 'reset', '--hard']], worktreeStep),
+    );
     expect(output).toContain('Worktree relaxation');
     expect(output).toContain('SAFETY_NET_WORKTREE');
   });
 
   test('tmpdir-check is an internal detail not shown in human output', () => {
     const result = explainCommand('rm -rf /tmp/test');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const tmpStep = allSteps.find((s) => s.type === 'tmpdir-check');
     expect(tmpStep).toBeDefined();
   });
@@ -200,16 +210,9 @@ describe('formatTraceHuman step formatting', () => {
       tokensScanned: ['echo', 'rm', '-rf'],
       embeddedCommandFound: 'rm',
     };
-    const mockResult: ExplainResult = {
-      trace: {
-        steps: [{ type: 'parse', input: 'echo rm -rf', segments: [['echo', 'rm', '-rf']] }],
-        segments: [{ index: 0, steps: [step] }],
-      },
-      result: 'allowed',
-      configSource: null,
-      configValid: true,
-    };
-    const output = formatTraceHuman(mockResult);
+    const output = formatTraceHuman(
+      mockExplainResult('echo rm -rf', [['echo', 'rm', '-rf']], step),
+    );
     expect(output).toContain('Fallback scan');
     expect(output).toContain('Found: rm');
   });
@@ -220,16 +223,7 @@ describe('formatTraceHuman step formatting', () => {
       tokensScanned: ['echo', 'hello'],
       embeddedCommandFound: undefined,
     };
-    const mockResult: ExplainResult = {
-      trace: {
-        steps: [{ type: 'parse', input: 'echo hello', segments: [['echo', 'hello']] }],
-        segments: [{ index: 0, steps: [step] }],
-      },
-      result: 'allowed',
-      configSource: null,
-      configValid: true,
-    };
-    const output = formatTraceHuman(mockResult);
+    const output = formatTraceHuman(mockExplainResult('echo hello', [['echo', 'hello']], step));
     expect(output).not.toContain('Fallback scan');
   });
 
@@ -239,15 +233,7 @@ describe('formatTraceHuman step formatting', () => {
       segment: 'cd /tmp',
       effectiveCwdNowUnknown: true,
     };
-    const mockResult: ExplainResult = {
-      trace: {
-        steps: [{ type: 'parse', input: 'cd /tmp', segments: [['cd', '/tmp']] }],
-        segments: [{ index: 0, steps: [step] }],
-      },
-      result: 'allowed',
-      configSource: null,
-      configValid: true,
-    };
+    const mockResult = mockExplainResult('cd /tmp', [['cd', '/tmp']], step);
     expect(mockResult.trace.segments[0]?.steps[0]?.type).toBe('cwd-change');
   });
 
@@ -258,17 +244,9 @@ describe('formatTraceHuman step formatting', () => {
       matched: true,
       reason: 'contains dangerous rm command',
     };
-    const mockResult: ExplainResult = {
-      trace: {
-        steps: [{ type: 'parse', input: 'rm -rf /', segments: [['rm', '-rf', '/']] }],
-        segments: [{ index: 0, steps: [step] }],
-      },
-      result: 'blocked',
-      reason: 'contains dangerous rm command',
-      configSource: null,
-      configValid: true,
-    };
-    const output = formatTraceHuman(mockResult);
+    const output = formatTraceHuman(
+      mockExplainResult('rm -rf /', [['rm', '-rf', '/']], step, 'blocked', step.reason),
+    );
     expect(output).toContain('Dangerous text check');
     expect(output).toContain('MATCHED');
   });
@@ -279,16 +257,7 @@ describe('formatTraceHuman step formatting', () => {
       token: 'echo hello',
       matched: false,
     };
-    const mockResult: ExplainResult = {
-      trace: {
-        steps: [{ type: 'parse', input: 'echo hello', segments: [['echo', 'hello']] }],
-        segments: [{ index: 0, steps: [step] }],
-      },
-      result: 'allowed',
-      configSource: null,
-      configValid: true,
-    };
-    const output = formatTraceHuman(mockResult);
+    const output = formatTraceHuman(mockExplainResult('echo hello', [['echo', 'hello']], step));
     expect(output).not.toContain('Dangerous text check');
   });
 
@@ -298,19 +267,15 @@ describe('formatTraceHuman step formatting', () => {
       rawCommand: 'bash -c "unclosed',
       reason: 'unparseable command in strict mode',
     };
-    const mockResult: ExplainResult = {
-      trace: {
-        steps: [
-          { type: 'parse', input: 'bash -c "unclosed', segments: [['bash', '-c', '"unclosed']] },
-        ],
-        segments: [{ index: 0, steps: [step] }],
-      },
-      result: 'blocked',
-      reason: 'unparseable command in strict mode',
-      configSource: null,
-      configValid: true,
-    };
-    const output = formatTraceHuman(mockResult);
+    const output = formatTraceHuman(
+      mockExplainResult(
+        'bash -c "unclosed',
+        [['bash', '-c', '"unclosed']],
+        step,
+        'blocked',
+        step.reason,
+      ),
+    );
     expect(output).toContain('Strict mode check');
     expect(output).toContain('UNPARSEABLE');
   });
@@ -325,7 +290,7 @@ describe('formatTraceHuman coverage for internal step types', () => {
 
   test('tmpdir-check step is internal and not shown in human output', () => {
     const result = explainCommand('rm -rf /tmp/test');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const tmpStep = allSteps.find((s) => s.type === 'tmpdir-check');
     expect(tmpStep).toBeDefined();
     const output = formatTraceHuman(result);
@@ -334,7 +299,7 @@ describe('formatTraceHuman coverage for internal step types', () => {
 
   test('cwd-change step is internal and not shown in human output', () => {
     const result = explainCommand('cd /tmp && echo hello');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const cwdStep = allSteps.find((s) => s.type === 'cwd-change');
     expect(cwdStep).toBeDefined();
     const output = formatTraceHuman(result);
@@ -353,16 +318,7 @@ describe('formatTraceHuman coverage for internal step types', () => {
       type: 'error',
       message: 'Test error message',
     };
-    const mockResult: ExplainResult = {
-      trace: {
-        steps: [{ type: 'parse', input: 'test cmd', segments: [['test', 'cmd']] }],
-        segments: [{ index: 0, steps: [errorStep] }],
-      },
-      result: 'allowed',
-      configSource: null,
-      configValid: true,
-    };
-    const output = formatTraceHuman(mockResult);
+    const output = formatTraceHuman(mockExplainResult('test cmd', [['test', 'cmd']], errorStep));
     expect(output).toContain('ERROR: Test error message');
   });
 
