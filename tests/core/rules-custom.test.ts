@@ -2,32 +2,22 @@ import { describe, expect, test } from 'bun:test';
 import { checkCustomRules } from '@/core/rules-custom';
 import type { CustomRule } from '@/types';
 
+const blockGitAddAllRule: CustomRule = {
+  name: 'block-git-add-all',
+  command: 'git',
+  subcommand: 'add',
+  block_args: ['-A', '--all'],
+  reason: 'Use specific files.',
+};
+
 describe('custom rule matching', () => {
   test('basic command match', () => {
-    const rules: CustomRule[] = [
-      {
-        name: 'block-git-add-all',
-        command: 'git',
-        subcommand: 'add',
-        block_args: ['-A', '--all'],
-        reason: 'Use specific files.',
-      },
-    ];
-    const result = checkCustomRules(['git', 'add', '-A'], rules);
+    const result = checkCustomRules(['git', 'add', '-A'], [blockGitAddAllRule]);
     expect(result).toBe('[block-git-add-all] Use specific files.');
   });
 
   test('match with long option form', () => {
-    const rules: CustomRule[] = [
-      {
-        name: 'block-git-add-all',
-        command: 'git',
-        subcommand: 'add',
-        block_args: ['-A', '--all'],
-        reason: 'Use specific files.',
-      },
-    ];
-    const result = checkCustomRules(['git', 'add', '--all'], rules);
+    const result = checkCustomRules(['git', 'add', '--all'], [blockGitAddAllRule]);
     expect(result).toBe('[block-git-add-all] Use specific files.');
   });
 

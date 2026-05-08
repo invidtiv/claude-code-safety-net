@@ -726,12 +726,14 @@ function isDirectory(path) {
   }
 }
 function findDotGit(cwd) {
-  let current;
   try {
-    current = realpathSync2(cwd);
+    return findDotGitInAncestors(realpathSync2(cwd));
   } catch {
     return null;
   }
+}
+function findDotGitInAncestors(cwd) {
+  let current = cwd;
   while (true) {
     const dotGitPath = join(current, ".git");
     if (existsSync(dotGitPath)) {
@@ -1831,6 +1833,38 @@ function containsDangerousCode(code) {
   return false;
 }
 
+// src/core/analyze/child-command.ts
+function normalizeChildCommand(tokens, context) {
+  const wrapperInfo = stripWrappersWithInfo([...tokens], context.cwd);
+  const envAssignments = new Map(context.envAssignments ?? []);
+  for (const [k, v] of wrapperInfo.envAssignments) {
+    envAssignments.set(k, v);
+  }
+  const childTokens = getBasename(wrapperInfo.tokens[0] ?? "").toLowerCase() === "busybox" && wrapperInfo.tokens.length > 1 ? wrapperInfo.tokens.slice(1) : wrapperInfo.tokens;
+  return {
+    tokens: childTokens,
+    cwd: wrapperInfo.cwd === null ? undefined : wrapperInfo.cwd ?? context.cwd,
+    wrapperCwd: wrapperInfo.cwd,
+    envAssignments,
+    head: getBasename(childTokens[0] ?? "").toLowerCase()
+  };
+}
+function collectCommandTemplate(tokens, start) {
+  const templateTokens = [];
+  let i = start;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (token === undefined || token === ":::")
+      break;
+    templateTokens.push(token);
+    i++;
+  }
+  return {
+    markerIndex: i < tokens.length && tokens[i] === ":::" ? i : -1,
+    templateTokens
+  };
+}
+
 // src/core/analyze/shell-wrappers.ts
 function extractDashCArg(tokens) {
   for (let i = 1;i < tokens.length; i++) {
@@ -2352,7 +2386,7 @@ function isGitConfigUnsetError(error) {
   return typeof error === "object" && error !== null && "status" in error && error.status === 1;
 }
 function getLocalGitConfigPaths(cwd) {
-  const dotGitPath = findDotGitPath(cwd);
+  const dotGitPath = findDotGitInAncestors(cwd);
   if (dotGitPath === null) {
     return null;
   }
@@ -2365,20 +2399,6 @@ function getLocalGitConfigPaths(cwd) {
     return null;
   }
   return [join2(commonDir, "config"), join2(gitDir, "config.worktree")];
-}
-function findDotGitPath(cwd) {
-  let current = cwd;
-  while (true) {
-    const dotGitPath = join2(current, ".git");
-    if (existsSync2(dotGitPath)) {
-      return dotGitPath;
-    }
-    const parent = dirname3(current);
-    if (parent === current) {
-      return null;
-    }
-    current = parent;
-  }
 }
 function resolveGitDirFromDotGit(dotGitPath) {
   try {
@@ -2821,20 +2841,10 @@ function analyzeParallel(tokens, context) {
     }
     return null;
   }
-  const childWrapperInfo = stripWrappersWithInfo([...template], context.cwd);
-  let childTokens = childWrapperInfo.tokens;
-  const childEnvAssignments = new Map(context.envAssignments ?? []);
-  for (const [k, v] of childWrapperInfo.envAssignments) {
-    childEnvAssignments.set(k, v);
-  }
-  const childCwd = childWrapperInfo.cwd === null ? undefined : childWrapperInfo.cwd ?? context.cwd;
-  const nestedOverrides = buildNestedOverrides(childEnvAssignments, childWrapperInfo.cwd, runsRemotely || hasDynamicStdinPlaceholder);
-  let head = getBasename(childTokens[0] ?? "").toLowerCase();
-  if (head === "busybox" && childTokens.length > 1) {
-    childTokens = childTokens.slice(1);
-    head = getBasename(childTokens[0] ?? "").toLowerCase();
-  }
-  if (SHELL_WRAPPERS.has(head)) {
+  const childCommand = normalizeChildCommand(template, context);
+  const childTokens = childCommand.tokens;
+  const nestedOverrides = buildNestedOverrides(childCommand.envAssignments, childCommand.wrapperCwd, runsRemotely || hasDynamicStdinPlaceholder);
+  if (SHELL_WRAPPERS.has(childCommand.head)) {
     const dashCArg = extractDashCArg(childTokens);
     if (dashCArg) {
       if (isOnlyParallelPlaceholder(dashCArg)) {
@@ -2874,12 +2884,12 @@ function analyzeParallel(tokens, context) {
     }
     return null;
   }
-  if (head === "rm" && hasRecursiveForceFlags(childTokens)) {
+  if (childCommand.head === "rm" && hasRecursiveForceFlags(childTokens)) {
     if (hasPlaceholder && args.length > 0) {
       for (const arg of args) {
         const expandedTokens = childTokens.map((t) => t.replace(/{}/g, arg));
         const rmResult = analyzeRm(expandedTokens, {
-          cwd: childCwd,
+          cwd: childCommand.cwd,
           originalCwd: context.originalCwd,
           paranoid: context.paranoidRm,
           allowTmpdirVar: context.allowTmpdirVar
@@ -2893,7 +2903,7 @@ function analyzeParallel(tokens, context) {
     if (args.length > 0) {
       const expandedTokens = [...childTokens, args[0] ?? ""];
       const rmResult = analyzeRm(expandedTokens, {
-        cwd: childCwd,
+        cwd: childCommand.cwd,
         originalCwd: context.originalCwd,
         paranoid: context.paranoidRm,
         allowTmpdirVar: context.allowTmpdirVar
@@ -2905,19 +2915,19 @@ function analyzeParallel(tokens, context) {
     }
     return REASON_PARALLEL_RM;
   }
-  if (head === "find") {
+  if (childCommand.head === "find") {
     const findResult = analyzeFind(childTokens);
     if (findResult) {
       return findResult;
     }
   }
-  if (head === "git") {
+  if (childCommand.head === "git") {
     const gitTokenSets = hasPlaceholder && args.length > 0 ? args.map((arg) => childTokens.map((token) => replaceParallelPlaceholder(token, arg))) : !hasPlaceholder && args.length > 0 ? args.map((arg) => [...childTokens, arg]) : [childTokens];
     const dynamicGitArgs = usesStdin || hasPlaceholder;
     for (const gitTokens of gitTokenSets) {
       const gitResult = analyzeGit(gitTokens, {
-        cwd: childCwd,
-        envAssignments: childEnvAssignments,
+        cwd: childCommand.cwd,
+        envAssignments: childCommand.envAssignments,
         worktreeMode: runsRemotely || dynamicGitArgs ? false : context.worktreeMode
       });
       if (gitResult) {
@@ -2987,17 +2997,9 @@ function parseParallelCommand(tokens) {
       break;
     }
     if (token === "--") {
-      i++;
-      while (i < tokens.length) {
-        const token2 = tokens[i];
-        if (token2 === undefined || token2 === ":::")
-          break;
-        templateTokens.push(token2);
-        i++;
-      }
-      if (i < tokens.length && tokens[i] === ":::") {
-        markerIndex = i;
-      }
+      const template = collectCommandTemplate(tokens, i + 1);
+      templateTokens.push(...template.templateTokens);
+      markerIndex = template.markerIndex;
       break;
     }
     if (token.startsWith("-")) {
@@ -3034,16 +3036,9 @@ function parseParallelCommand(tokens) {
       }
       i++;
     } else {
-      while (i < tokens.length) {
-        const token2 = tokens[i];
-        if (token2 === undefined || token2 === ":::")
-          break;
-        templateTokens.push(token2);
-        i++;
-      }
-      if (i < tokens.length && tokens[i] === ":::") {
-        markerIndex = i;
-      }
+      const template = collectCommandTemplate(tokens, i);
+      templateTokens.push(...template.templateTokens);
+      markerIndex = template.markerIndex;
       break;
     }
   }
@@ -3101,27 +3096,17 @@ var REASON_XARGS_SHELL = "xargs with shell -c can execute arbitrary commands fro
 var XARGS_APPENDED_INPUT = "__CC_SAFETY_NET_XARGS_INPUT__";
 function analyzeXargs(tokens, context) {
   const { childTokens: rawChildTokens, replacementToken } = extractXargsChildCommandWithInfo(tokens);
-  const childWrapperInfo = stripWrappersWithInfo(rawChildTokens, context.cwd);
-  let childTokens = childWrapperInfo.tokens;
-  const childEnvAssignments = new Map(context.envAssignments ?? []);
-  for (const [k, v] of childWrapperInfo.envAssignments) {
-    childEnvAssignments.set(k, v);
-  }
-  const childCwd = childWrapperInfo.cwd === null ? undefined : childWrapperInfo.cwd ?? context.cwd;
+  const childCommand = normalizeChildCommand(rawChildTokens, context);
+  const childTokens = childCommand.tokens;
   if (childTokens.length === 0) {
     return null;
   }
-  let head = getBasename(childTokens[0] ?? "").toLowerCase();
-  if (head === "busybox" && childTokens.length > 1) {
-    childTokens = childTokens.slice(1);
-    head = getBasename(childTokens[0] ?? "").toLowerCase();
-  }
-  if (SHELL_WRAPPERS.has(head)) {
+  if (SHELL_WRAPPERS.has(childCommand.head)) {
     return REASON_XARGS_SHELL;
   }
-  if (head === "rm" && hasRecursiveForceFlags(childTokens)) {
+  if (childCommand.head === "rm" && hasRecursiveForceFlags(childTokens)) {
     const rmResult = analyzeRm(childTokens, {
-      cwd: childCwd,
+      cwd: childCommand.cwd,
       originalCwd: context.originalCwd,
       paranoid: context.paranoidRm,
       allowTmpdirVar: context.allowTmpdirVar
@@ -3131,18 +3116,18 @@ function analyzeXargs(tokens, context) {
     }
     return REASON_XARGS_RM;
   }
-  if (head === "find") {
+  if (childCommand.head === "find") {
     const findResult = analyzeFind(childTokens);
     if (findResult) {
       return findResult;
     }
   }
-  if (head === "git") {
+  if (childCommand.head === "git") {
     const gitTokens = replacementToken === null ? [...childTokens, XARGS_APPENDED_INPUT] : childTokens;
-    const hasDynamicReplacement = replacementToken !== null && childTokens.some((token) => token.includes(replacementToken));
+    const hasDynamicReplacement = replacementToken !== null && (childTokens.some((token) => token.includes(replacementToken)) || Array.from(childCommand.envAssignments.values()).some((value) => value.includes(replacementToken)));
     const gitResult = analyzeGit(gitTokens, {
-      cwd: childCwd,
-      envAssignments: childEnvAssignments,
+      cwd: childCommand.cwd,
+      envAssignments: childCommand.envAssignments,
       worktreeMode: replacementToken === null || hasDynamicReplacement ? false : context.worktreeMode
     });
     if (gitResult) {
@@ -3761,13 +3746,7 @@ function addExportedGitContextEnvAssignment(state, token) {
     return;
   }
   if (isTrackedGitEnvName2(token)) {
-    state.exportedNames.add(token);
-    const value = state.shellAssignments.get(token);
-    if (value !== undefined) {
-      setEffectiveGitContextAssignment(state, { name: token, value });
-    } else {
-      setEffectiveGitContextAssignment(state, { name: token, value: "" });
-    }
+    exportTrackedGitContextEnvName(state, token);
   }
 }
 function addTypesetGitContextEnvAssignment(state, token, exports, readonlyLeadingAssignments) {
@@ -3789,14 +3768,15 @@ function addTypesetGitContextEnvAssignment(state, token, exports, readonlyLeadin
     return;
   }
   if (exports && isTrackedGitEnvName2(token)) {
-    state.exportedNames.add(token);
-    const value = state.shellAssignments.get(token);
-    if (value !== undefined) {
-      setEffectiveGitContextAssignment(state, { name: token, value });
-    } else {
-      setEffectiveGitContextAssignment(state, { name: token, value: "" });
-    }
+    exportTrackedGitContextEnvName(state, token);
   }
+}
+function exportTrackedGitContextEnvName(state, name) {
+  state.exportedNames.add(name);
+  setEffectiveGitContextAssignment(state, {
+    name,
+    value: state.shellAssignments.get(name) ?? ""
+  });
 }
 function getExportOperandsStart(tokens, commandIndex) {
   let i = commandIndex + 1;

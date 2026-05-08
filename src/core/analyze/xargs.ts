@@ -1,8 +1,8 @@
+import { normalizeChildCommand } from '@/core/analyze/child-command';
 import { analyzeFind } from '@/core/analyze/find';
 import { hasRecursiveForceFlags } from '@/core/analyze/rm-flags';
 import { analyzeGit } from '@/core/rules-git';
 import { analyzeRm } from '@/core/rules-rm';
-import { getBasename, stripWrappersWithInfo } from '@/core/shell';
 import { SHELL_WRAPPERS } from '@/types';
 
 const REASON_XARGS_RM =
@@ -26,36 +26,23 @@ export function analyzeXargs(
   const { childTokens: rawChildTokens, replacementToken } =
     extractXargsChildCommandWithInfo(tokens);
 
-  const childWrapperInfo = stripWrappersWithInfo(rawChildTokens, context.cwd);
-  let childTokens = childWrapperInfo.tokens;
-  const childEnvAssignments = new Map(context.envAssignments ?? []);
-  for (const [k, v] of childWrapperInfo.envAssignments) {
-    childEnvAssignments.set(k, v);
-  }
-  const childCwd =
-    childWrapperInfo.cwd === null ? undefined : (childWrapperInfo.cwd ?? context.cwd);
+  const childCommand = normalizeChildCommand(rawChildTokens, context);
+  const childTokens = childCommand.tokens;
 
   if (childTokens.length === 0) {
     return null;
   }
 
-  let head = getBasename(childTokens[0] ?? '').toLowerCase();
-
-  if (head === 'busybox' && childTokens.length > 1) {
-    childTokens = childTokens.slice(1);
-    head = getBasename(childTokens[0] ?? '').toLowerCase();
-  }
-
   // Check for shell wrapper with -c
-  if (SHELL_WRAPPERS.has(head)) {
+  if (SHELL_WRAPPERS.has(childCommand.head)) {
     // xargs bash -c is always dangerous - stdin feeds into the shell execution
     // Either no script arg (stdin IS the script) or script with dynamic input
     return REASON_XARGS_SHELL;
   }
 
-  if (head === 'rm' && hasRecursiveForceFlags(childTokens)) {
+  if (childCommand.head === 'rm' && hasRecursiveForceFlags(childTokens)) {
     const rmResult = analyzeRm(childTokens, {
-      cwd: childCwd,
+      cwd: childCommand.cwd,
       originalCwd: context.originalCwd,
       paranoid: context.paranoidRm,
       allowTmpdirVar: context.allowTmpdirVar,
@@ -68,21 +55,25 @@ export function analyzeXargs(
     return REASON_XARGS_RM;
   }
 
-  if (head === 'find') {
+  if (childCommand.head === 'find') {
     const findResult = analyzeFind(childTokens);
     if (findResult) {
       return findResult;
     }
   }
 
-  if (head === 'git') {
+  if (childCommand.head === 'git') {
     const gitTokens =
       replacementToken === null ? [...childTokens, XARGS_APPENDED_INPUT] : childTokens;
     const hasDynamicReplacement =
-      replacementToken !== null && childTokens.some((token) => token.includes(replacementToken));
+      replacementToken !== null &&
+      (childTokens.some((token) => token.includes(replacementToken)) ||
+        Array.from(childCommand.envAssignments.values()).some((value) =>
+          value.includes(replacementToken),
+        ));
     const gitResult = analyzeGit(gitTokens, {
-      cwd: childCwd,
-      envAssignments: childEnvAssignments,
+      cwd: childCommand.cwd,
+      envAssignments: childCommand.envAssignments,
       worktreeMode:
         replacementToken === null || hasDynamicReplacement ? false : context.worktreeMode,
     });

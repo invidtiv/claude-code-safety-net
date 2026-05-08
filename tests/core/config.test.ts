@@ -416,68 +416,55 @@ describe('config scope merging', () => {
     writeFileSync(join(tempDir, '.safety-net.json'), JSON.stringify(data), 'utf-8');
   }
 
+  function configWithRule(rule: {
+    name: string;
+    command: string;
+    block_args: string[];
+    reason: string;
+  }): object {
+    return { version: 1, rules: [rule] };
+  }
+
+  const userRule = {
+    name: 'user-rule',
+    command: 'git',
+    block_args: ['-A'],
+    reason: 'user',
+  };
+
+  const projectRule = {
+    name: 'project-rule',
+    command: 'npm',
+    block_args: ['-g'],
+    reason: 'project',
+  };
+
+  function expectLoadedRuleName(name: string): void {
+    const config = loadConfig(tempDir, loadOptions);
+    expect(config.rules.length).toBe(1);
+    expect(config.rules[0]?.name).toBe(name);
+  }
+
   test('no config returns default', () => {
     const config = loadConfig(tempDir, loadOptions);
     expect(config.rules).toEqual([]);
   });
 
   test('user scope only', () => {
-    writeUserConfig({
-      version: 1,
-      rules: [
-        {
-          name: 'user-rule',
-          command: 'git',
-          block_args: ['-A'],
-          reason: 'user',
-        },
-      ],
-    });
+    writeUserConfig(configWithRule(userRule));
     const config = loadConfig(tempDir, loadOptions);
     expect(config.rules.length).toBe(1);
     expect(config.rules[0]?.name).toBe('user-rule');
   });
 
   test('project scope only', () => {
-    writeProjectConfig({
-      version: 1,
-      rules: [
-        {
-          name: 'project-rule',
-          command: 'npm',
-          block_args: ['-g'],
-          reason: 'project',
-        },
-      ],
-    });
-    const config = loadConfig(tempDir, loadOptions);
-    expect(config.rules.length).toBe(1);
-    expect(config.rules[0]?.name).toBe('project-rule');
+    writeProjectConfig(configWithRule(projectRule));
+    expectLoadedRuleName('project-rule');
   });
 
   test('both scopes merged', () => {
-    writeUserConfig({
-      version: 1,
-      rules: [
-        {
-          name: 'user-rule',
-          command: 'git',
-          block_args: ['-A'],
-          reason: 'user',
-        },
-      ],
-    });
-    writeProjectConfig({
-      version: 1,
-      rules: [
-        {
-          name: 'project-rule',
-          command: 'npm',
-          block_args: ['-g'],
-          reason: 'project',
-        },
-      ],
-    });
+    writeUserConfig(configWithRule(userRule));
+    writeProjectConfig(configWithRule(projectRule));
     const config = loadConfig(tempDir, loadOptions);
     expect(config.rules.length).toBe(2);
     const ruleNames = new Set(config.rules.map((r) => r.name));
@@ -590,34 +577,12 @@ describe('config scope merging', () => {
     mkdirSync(userConfigDir, { recursive: true });
     writeFileSync(join(userConfigDir, 'config.json'), '{"version": 2}', 'utf-8');
 
-    writeProjectConfig({
-      version: 1,
-      rules: [
-        {
-          name: 'project-rule',
-          command: 'npm',
-          block_args: ['-g'],
-          reason: 'project',
-        },
-      ],
-    });
-    const config = loadConfig(tempDir, loadOptions);
-    expect(config.rules.length).toBe(1);
-    expect(config.rules[0]?.name).toBe('project-rule');
+    writeProjectConfig(configWithRule(projectRule));
+    expectLoadedRuleName('project-rule');
   });
 
   test('invalid project config ignored', () => {
-    writeUserConfig({
-      version: 1,
-      rules: [
-        {
-          name: 'user-rule',
-          command: 'git',
-          block_args: ['-A'],
-          reason: 'user',
-        },
-      ],
-    });
+    writeUserConfig(configWithRule(userRule));
     writeFileSync(join(tempDir, '.safety-net.json'), '{"version": 2}', 'utf-8');
 
     const config = loadConfig(tempDir, loadOptions);
@@ -635,17 +600,7 @@ describe('config scope merging', () => {
   });
 
   test('empty project rules still merges', () => {
-    writeUserConfig({
-      version: 1,
-      rules: [
-        {
-          name: 'user-rule',
-          command: 'git',
-          block_args: ['-A'],
-          reason: 'user',
-        },
-      ],
-    });
+    writeUserConfig(configWithRule(userRule));
     writeProjectConfig({ version: 1, rules: [] });
 
     const config = loadConfig(tempDir, loadOptions);

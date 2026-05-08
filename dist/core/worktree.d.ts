@@ -11,5 +11,6 @@ export declare function isLinkedWorktree(cwd: string): boolean;
 /** @internal Exported for testing */
 export declare function normalizePathForComparison(path: string): string;
 declare function parseGitConfigValue(value: string): string;
+export declare function findDotGitInAncestors(cwd: string): string | null;
 /** @internal Exported for testing */
 export { parseGitConfigValue as _parseGitConfigValue };

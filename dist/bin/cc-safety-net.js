@@ -977,6 +977,24 @@ var PLATFORM_NAMES = {
   "copilot-cli": "Copilot CLI",
   codex: "Codex"
 };
+function formatAsciiTable(options) {
+  const rawRows = options.rawRows ?? options.rows;
+  const colWidths = (options.headers ?? rawRows[0] ?? []).map((h, i) => {
+    const maxDataWidth = Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
+    return Math.max(h.length, maxDataWidth);
+  });
+  const pad = (s, w, raw) => s + " ".repeat(Math.max(0, w - raw.length));
+  const line = (char, corners) => corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
+  const formatRow = (cells, rawCells) => `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? "")).join(" │ ")} │`;
+  const headerLines = options.headers ? [`   ${formatRow(options.headers, options.headers)}`, `   ${line("─", ["├", "┼", "┤"])}`] : [];
+  return [
+    `   ${line("─", ["┌", "┬", "┐"])}`,
+    ...headerLines,
+    ...options.rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
+    `   ${line("─", ["└", "┴", "┘"])}`
+  ].join(`
+`);
+}
 function formatHooksSection(hooks) {
   const lines = [];
   lines.push("Hook Integration");
@@ -1047,22 +1065,7 @@ function formatHooksTable(hooks) {
   });
   const rows = rowData.map((r) => r.colored);
   const rawRows = rowData.map((r) => r.raw);
-  const colWidths = headers.map((h, i) => {
-    const maxDataWidth = Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-  const pad = (s, w, raw) => s + " ".repeat(Math.max(0, w - raw.length));
-  const line = (char, corners) => corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-  const formatRow = (cells, rawCells) => `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? "")).join(" │ ")} │`;
-  const tableLines = [
-    `   ${line("─", ["┌", "┬", "┐"])}`,
-    `   ${formatRow(headers, headers)}`,
-    `   ${line("─", ["├", "┼", "┤"])}`,
-    ...rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
-    `   ${line("─", ["└", "┴", "┘"])}`
-  ];
-  return tableLines.join(`
-`);
+  return formatAsciiTable({ headers, rows, rawRows });
 }
 function formatRulesTable(rules) {
   if (rules.length === 0) {
@@ -1075,22 +1078,7 @@ function formatRulesTable(rules) {
     r.subcommand ? `${r.command} ${r.subcommand}` : r.command,
     r.blockArgs.join(", ")
   ]);
-  const colWidths = headers.map((h, i) => {
-    const maxDataWidth = Math.max(...rows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-  const pad = (s, w) => s.padEnd(w);
-  const line = (char, corners) => corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-  const formatRow = (cells) => `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0)).join(" │ ")} │`;
-  const tableLines = [
-    `   ${line("─", ["┌", "┬", "┐"])}`,
-    `   ${formatRow(headers)}`,
-    `   ${line("─", ["├", "┼", "┤"])}`,
-    ...rows.map((r) => `   ${formatRow(r)}`),
-    `   ${line("─", ["└", "┴", "┘"])}`
-  ];
-  return tableLines.join(`
-`);
+  return formatAsciiTable({ headers, rows });
 }
 function formatConfigSection(report) {
   const lines = [];
@@ -1133,22 +1121,7 @@ function formatConfigTable(userConfig, projectConfig) {
     ["User", userStatus.text],
     ["Project", projectStatus.text]
   ];
-  const colWidths = headers.map((h, i) => {
-    const maxDataWidth = Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-  const pad = (s, w, raw) => s + " ".repeat(Math.max(0, w - raw.length));
-  const line = (char, corners) => corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-  const formatRow = (cells, rawCells) => `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? "")).join(" │ ")} │`;
-  const tableLines = [
-    `   ${line("─", ["┌", "┬", "┐"])}`,
-    `   ${formatRow(headers, headers)}`,
-    `   ${line("─", ["├", "┼", "┤"])}`,
-    ...rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
-    `   ${line("─", ["└", "┴", "┘"])}`
-  ];
-  return tableLines.join(`
-`);
+  return formatAsciiTable({ headers, rows, rawRows });
 }
 function formatEnvironmentSection(envVars) {
   const lines = [];
@@ -1164,22 +1137,7 @@ function formatEnvironmentTable(envVars) {
     return [v.name, statusIcon];
   });
   const rawRows = envVars.map((v) => [v.name, v.isSet ? "✓" : "✗"]);
-  const colWidths = headers.map((h, i) => {
-    const maxDataWidth = Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-  const pad = (s, w, raw) => s + " ".repeat(Math.max(0, w - raw.length));
-  const line = (char, corners) => corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-  const formatRow = (cells, rawCells) => `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? "")).join(" │ ")} │`;
-  const tableLines = [
-    `   ${line("─", ["┌", "┬", "┐"])}`,
-    `   ${formatRow(headers, headers)}`,
-    `   ${line("─", ["├", "┼", "┤"])}`,
-    ...rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
-    `   ${line("─", ["└", "┴", "┘"])}`
-  ];
-  return tableLines.join(`
-`);
+  return formatAsciiTable({ headers, rows, rawRows });
 }
 function formatActivitySection(activity) {
   const lines = [];
@@ -1200,22 +1158,7 @@ function formatActivityTable(entries) {
     const cmd = e.command.length > 40 ? `${e.command.slice(0, 37)}...` : e.command;
     return [e.relativeTime, cmd];
   });
-  const colWidths = headers.map((h, i) => {
-    const maxDataWidth = Math.max(...rows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-  const pad = (s, w) => s.padEnd(w);
-  const line = (char, corners) => corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-  const formatRow = (cells) => `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0)).join(" │ ")} │`;
-  const tableLines = [
-    `   ${line("─", ["┌", "┬", "┐"])}`,
-    `   ${formatRow(headers)}`,
-    `   ${line("─", ["├", "┼", "┤"])}`,
-    ...rows.map((r) => `   ${formatRow(r)}`),
-    `   ${line("─", ["└", "┴", "┘"])}`
-  ];
-  return tableLines.join(`
-`);
+  return formatAsciiTable({ headers, rows });
 }
 function formatUpdateSection(update) {
   const lines = [];
@@ -1296,19 +1239,7 @@ function formatUpdateSection(update) {
 function formatUpdateTable(rowData) {
   const rows = rowData.map((r) => [r.label, r.value]);
   const rawRows = rowData.map((r) => [r.label, r.rawValue]);
-  const colWidths = [0, 1].map((i) => {
-    return Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
-  });
-  const pad = (s, w, raw) => s + " ".repeat(Math.max(0, w - raw.length));
-  const line = (char, corners) => corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-  const formatRow = (cells, rawCells) => `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? "")).join(" │ ")} │`;
-  const tableLines = [
-    `   ${line("─", ["┌", "┬", "┐"])}`,
-    ...rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
-    `   ${line("─", ["└", "┴", "┘"])}`
-  ];
-  return tableLines.join(`
-`);
+  return formatAsciiTable({ rows, rawRows });
 }
 function formatSystemInfoSection(system) {
   const lines = [];
@@ -1340,22 +1271,7 @@ function formatSystemInfoTable(system) {
   ];
   const rows = rowData.map((r) => [r.label, formatValue(r.value)]);
   const rawRows = rowData.map((r) => [r.label, rawValue(r.value)]);
-  const colWidths = headers.map((h, i) => {
-    const maxDataWidth = Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-  const pad = (s, w, raw) => s + " ".repeat(Math.max(0, w - raw.length));
-  const line = (char, corners) => corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-  const formatRow = (cells, rawCells) => `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? "")).join(" │ ")} │`;
-  const tableLines = [
-    `   ${line("─", ["┌", "┬", "┐"])}`,
-    `   ${formatRow(headers, headers)}`,
-    `   ${line("─", ["├", "┼", "┤"])}`,
-    ...rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
-    `   ${line("─", ["└", "┴", "┘"])}`
-  ];
-  return tableLines.join(`
-`);
+  return formatAsciiTable({ headers, rows, rawRows });
 }
 function formatSummary(report) {
   const hooksFailed = report.hooks.every((h) => h.status !== "configured");
@@ -1873,12 +1789,14 @@ function isDirectory(path) {
   }
 }
 function findDotGit(cwd) {
-  let current;
   try {
-    current = realpathSync2(cwd);
+    return findDotGitInAncestors(realpathSync2(cwd));
   } catch {
     return null;
   }
+}
+function findDotGitInAncestors(cwd) {
+  let current = cwd;
   while (true) {
     const dotGitPath = join3(current, ".git");
     if (existsSync4(dotGitPath)) {
@@ -2978,6 +2896,38 @@ function containsDangerousCode(code) {
   return false;
 }
 
+// src/core/analyze/child-command.ts
+function normalizeChildCommand(tokens, context) {
+  const wrapperInfo = stripWrappersWithInfo([...tokens], context.cwd);
+  const envAssignments = new Map(context.envAssignments ?? []);
+  for (const [k, v] of wrapperInfo.envAssignments) {
+    envAssignments.set(k, v);
+  }
+  const childTokens = getBasename(wrapperInfo.tokens[0] ?? "").toLowerCase() === "busybox" && wrapperInfo.tokens.length > 1 ? wrapperInfo.tokens.slice(1) : wrapperInfo.tokens;
+  return {
+    tokens: childTokens,
+    cwd: wrapperInfo.cwd === null ? undefined : wrapperInfo.cwd ?? context.cwd,
+    wrapperCwd: wrapperInfo.cwd,
+    envAssignments,
+    head: getBasename(childTokens[0] ?? "").toLowerCase()
+  };
+}
+function collectCommandTemplate(tokens, start) {
+  const templateTokens = [];
+  let i = start;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    if (token === undefined || token === ":::")
+      break;
+    templateTokens.push(token);
+    i++;
+  }
+  return {
+    markerIndex: i < tokens.length && tokens[i] === ":::" ? i : -1,
+    templateTokens
+  };
+}
+
 // src/core/analyze/shell-wrappers.ts
 function extractDashCArg(tokens) {
   for (let i = 1;i < tokens.length; i++) {
@@ -3499,7 +3449,7 @@ function isGitConfigUnsetError(error) {
   return typeof error === "object" && error !== null && "status" in error && error.status === 1;
 }
 function getLocalGitConfigPaths(cwd) {
-  const dotGitPath = findDotGitPath(cwd);
+  const dotGitPath = findDotGitInAncestors(cwd);
   if (dotGitPath === null) {
     return null;
   }
@@ -3512,20 +3462,6 @@ function getLocalGitConfigPaths(cwd) {
     return null;
   }
   return [join4(commonDir, "config"), join4(gitDir, "config.worktree")];
-}
-function findDotGitPath(cwd) {
-  let current = cwd;
-  while (true) {
-    const dotGitPath = join4(current, ".git");
-    if (existsSync5(dotGitPath)) {
-      return dotGitPath;
-    }
-    const parent = dirname3(current);
-    if (parent === current) {
-      return null;
-    }
-    current = parent;
-  }
 }
 function resolveGitDirFromDotGit(dotGitPath) {
   try {
@@ -3968,20 +3904,10 @@ function analyzeParallel(tokens, context) {
     }
     return null;
   }
-  const childWrapperInfo = stripWrappersWithInfo([...template], context.cwd);
-  let childTokens = childWrapperInfo.tokens;
-  const childEnvAssignments = new Map(context.envAssignments ?? []);
-  for (const [k, v] of childWrapperInfo.envAssignments) {
-    childEnvAssignments.set(k, v);
-  }
-  const childCwd = childWrapperInfo.cwd === null ? undefined : childWrapperInfo.cwd ?? context.cwd;
-  const nestedOverrides = buildNestedOverrides(childEnvAssignments, childWrapperInfo.cwd, runsRemotely || hasDynamicStdinPlaceholder);
-  let head = getBasename(childTokens[0] ?? "").toLowerCase();
-  if (head === "busybox" && childTokens.length > 1) {
-    childTokens = childTokens.slice(1);
-    head = getBasename(childTokens[0] ?? "").toLowerCase();
-  }
-  if (SHELL_WRAPPERS.has(head)) {
+  const childCommand = normalizeChildCommand(template, context);
+  const childTokens = childCommand.tokens;
+  const nestedOverrides = buildNestedOverrides(childCommand.envAssignments, childCommand.wrapperCwd, runsRemotely || hasDynamicStdinPlaceholder);
+  if (SHELL_WRAPPERS.has(childCommand.head)) {
     const dashCArg = extractDashCArg(childTokens);
     if (dashCArg) {
       if (isOnlyParallelPlaceholder(dashCArg)) {
@@ -4021,12 +3947,12 @@ function analyzeParallel(tokens, context) {
     }
     return null;
   }
-  if (head === "rm" && hasRecursiveForceFlags(childTokens)) {
+  if (childCommand.head === "rm" && hasRecursiveForceFlags(childTokens)) {
     if (hasPlaceholder && args.length > 0) {
       for (const arg of args) {
         const expandedTokens = childTokens.map((t) => t.replace(/{}/g, arg));
         const rmResult = analyzeRm(expandedTokens, {
-          cwd: childCwd,
+          cwd: childCommand.cwd,
           originalCwd: context.originalCwd,
           paranoid: context.paranoidRm,
           allowTmpdirVar: context.allowTmpdirVar
@@ -4040,7 +3966,7 @@ function analyzeParallel(tokens, context) {
     if (args.length > 0) {
       const expandedTokens = [...childTokens, args[0] ?? ""];
       const rmResult = analyzeRm(expandedTokens, {
-        cwd: childCwd,
+        cwd: childCommand.cwd,
         originalCwd: context.originalCwd,
         paranoid: context.paranoidRm,
         allowTmpdirVar: context.allowTmpdirVar
@@ -4052,19 +3978,19 @@ function analyzeParallel(tokens, context) {
     }
     return REASON_PARALLEL_RM;
   }
-  if (head === "find") {
+  if (childCommand.head === "find") {
     const findResult = analyzeFind(childTokens);
     if (findResult) {
       return findResult;
     }
   }
-  if (head === "git") {
+  if (childCommand.head === "git") {
     const gitTokenSets = hasPlaceholder && args.length > 0 ? args.map((arg) => childTokens.map((token) => replaceParallelPlaceholder(token, arg))) : !hasPlaceholder && args.length > 0 ? args.map((arg) => [...childTokens, arg]) : [childTokens];
     const dynamicGitArgs = usesStdin || hasPlaceholder;
     for (const gitTokens of gitTokenSets) {
       const gitResult = analyzeGit(gitTokens, {
-        cwd: childCwd,
-        envAssignments: childEnvAssignments,
+        cwd: childCommand.cwd,
+        envAssignments: childCommand.envAssignments,
         worktreeMode: runsRemotely || dynamicGitArgs ? false : context.worktreeMode
       });
       if (gitResult) {
@@ -4134,17 +4060,9 @@ function parseParallelCommand(tokens) {
       break;
     }
     if (token === "--") {
-      i++;
-      while (i < tokens.length) {
-        const token2 = tokens[i];
-        if (token2 === undefined || token2 === ":::")
-          break;
-        templateTokens.push(token2);
-        i++;
-      }
-      if (i < tokens.length && tokens[i] === ":::") {
-        markerIndex = i;
-      }
+      const template = collectCommandTemplate(tokens, i + 1);
+      templateTokens.push(...template.templateTokens);
+      markerIndex = template.markerIndex;
       break;
     }
     if (token.startsWith("-")) {
@@ -4181,16 +4099,9 @@ function parseParallelCommand(tokens) {
       }
       i++;
     } else {
-      while (i < tokens.length) {
-        const token2 = tokens[i];
-        if (token2 === undefined || token2 === ":::")
-          break;
-        templateTokens.push(token2);
-        i++;
-      }
-      if (i < tokens.length && tokens[i] === ":::") {
-        markerIndex = i;
-      }
+      const template = collectCommandTemplate(tokens, i);
+      templateTokens.push(...template.templateTokens);
+      markerIndex = template.markerIndex;
       break;
     }
   }
@@ -4248,27 +4159,17 @@ var REASON_XARGS_SHELL = "xargs with shell -c can execute arbitrary commands fro
 var XARGS_APPENDED_INPUT = "__CC_SAFETY_NET_XARGS_INPUT__";
 function analyzeXargs(tokens, context) {
   const { childTokens: rawChildTokens, replacementToken } = extractXargsChildCommandWithInfo(tokens);
-  const childWrapperInfo = stripWrappersWithInfo(rawChildTokens, context.cwd);
-  let childTokens = childWrapperInfo.tokens;
-  const childEnvAssignments = new Map(context.envAssignments ?? []);
-  for (const [k, v] of childWrapperInfo.envAssignments) {
-    childEnvAssignments.set(k, v);
-  }
-  const childCwd = childWrapperInfo.cwd === null ? undefined : childWrapperInfo.cwd ?? context.cwd;
+  const childCommand = normalizeChildCommand(rawChildTokens, context);
+  const childTokens = childCommand.tokens;
   if (childTokens.length === 0) {
     return null;
   }
-  let head = getBasename(childTokens[0] ?? "").toLowerCase();
-  if (head === "busybox" && childTokens.length > 1) {
-    childTokens = childTokens.slice(1);
-    head = getBasename(childTokens[0] ?? "").toLowerCase();
-  }
-  if (SHELL_WRAPPERS.has(head)) {
+  if (SHELL_WRAPPERS.has(childCommand.head)) {
     return REASON_XARGS_SHELL;
   }
-  if (head === "rm" && hasRecursiveForceFlags(childTokens)) {
+  if (childCommand.head === "rm" && hasRecursiveForceFlags(childTokens)) {
     const rmResult = analyzeRm(childTokens, {
-      cwd: childCwd,
+      cwd: childCommand.cwd,
       originalCwd: context.originalCwd,
       paranoid: context.paranoidRm,
       allowTmpdirVar: context.allowTmpdirVar
@@ -4278,18 +4179,18 @@ function analyzeXargs(tokens, context) {
     }
     return REASON_XARGS_RM;
   }
-  if (head === "find") {
+  if (childCommand.head === "find") {
     const findResult = analyzeFind(childTokens);
     if (findResult) {
       return findResult;
     }
   }
-  if (head === "git") {
+  if (childCommand.head === "git") {
     const gitTokens = replacementToken === null ? [...childTokens, XARGS_APPENDED_INPUT] : childTokens;
-    const hasDynamicReplacement = replacementToken !== null && childTokens.some((token) => token.includes(replacementToken));
+    const hasDynamicReplacement = replacementToken !== null && (childTokens.some((token) => token.includes(replacementToken)) || Array.from(childCommand.envAssignments.values()).some((value) => value.includes(replacementToken)));
     const gitResult = analyzeGit(gitTokens, {
-      cwd: childCwd,
-      envAssignments: childEnvAssignments,
+      cwd: childCommand.cwd,
+      envAssignments: childCommand.envAssignments,
       worktreeMode: replacementToken === null || hasDynamicReplacement ? false : context.worktreeMode
     });
     if (gitResult) {
@@ -4908,13 +4809,7 @@ function addExportedGitContextEnvAssignment(state, token) {
     return;
   }
   if (isTrackedGitEnvName2(token)) {
-    state.exportedNames.add(token);
-    const value = state.shellAssignments.get(token);
-    if (value !== undefined) {
-      setEffectiveGitContextAssignment(state, { name: token, value });
-    } else {
-      setEffectiveGitContextAssignment(state, { name: token, value: "" });
-    }
+    exportTrackedGitContextEnvName(state, token);
   }
 }
 function addTypesetGitContextEnvAssignment(state, token, exports, readonlyLeadingAssignments) {
@@ -4936,14 +4831,15 @@ function addTypesetGitContextEnvAssignment(state, token, exports, readonlyLeadin
     return;
   }
   if (exports && isTrackedGitEnvName2(token)) {
-    state.exportedNames.add(token);
-    const value = state.shellAssignments.get(token);
-    if (value !== undefined) {
-      setEffectiveGitContextAssignment(state, { name: token, value });
-    } else {
-      setEffectiveGitContextAssignment(state, { name: token, value: "" });
-    }
+    exportTrackedGitContextEnvName(state, token);
   }
+}
+function exportTrackedGitContextEnvName(state, name) {
+  state.exportedNames.add(name);
+  setEffectiveGitContextAssignment(state, {
+    name,
+    value: state.shellAssignments.get(name) ?? ""
+  });
 }
 function getExportOperandsStart(tokens, commandIndex) {
   let i = commandIndex + 1;
@@ -6907,6 +6803,49 @@ function redactSecrets(text) {
   return result;
 }
 
+// src/bin/hooks/common.ts
+async function readHookInput(outputDeny) {
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
+  }
+  const inputText = Buffer.concat(chunks).toString("utf-8").trim();
+  if (!inputText) {
+    return null;
+  }
+  return parseHookJson(inputText, outputDeny, "Failed to parse hook input JSON (strict mode)");
+}
+function parseHookJson(inputText, outputDeny, strictReason) {
+  try {
+    return JSON.parse(inputText);
+  } catch {
+    if (envTruthy("SAFETY_NET_STRICT"))
+      outputDeny(strictReason);
+    return null;
+  }
+}
+function analyzeHookCommand(command, cwd) {
+  const paranoidAll = envTruthy("SAFETY_NET_PARANOID");
+  return analyzeCommand(command, {
+    cwd,
+    config: loadConfig(cwd),
+    strict: envTruthy("SAFETY_NET_STRICT"),
+    paranoidRm: paranoidAll || envTruthy("SAFETY_NET_PARANOID_RM"),
+    paranoidInterpreters: paranoidAll || envTruthy("SAFETY_NET_PARANOID_INTERPRETERS"),
+    worktreeMode: envTruthy("SAFETY_NET_WORKTREE")
+  });
+}
+function handleBlockedHookCommand(command, cwd, sessionId, outputDeny) {
+  const result = analyzeHookCommand(command, cwd);
+  if (!result) {
+    return;
+  }
+  if (sessionId) {
+    writeAuditLog(sessionId, command, result.segment, result.reason, cwd);
+  }
+  outputDeny(result.reason, command, result.segment);
+}
+
 // src/core/format.ts
 function formatBlockedMessage(input) {
   const { reason, command, segment } = input;
@@ -6954,21 +6893,8 @@ function outputDeny(reason, command, segment) {
   console.log(JSON.stringify(output));
 }
 async function runClaudeCodeHook() {
-  const chunks = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk);
-  }
-  const inputText = Buffer.concat(chunks).toString("utf-8").trim();
-  if (!inputText) {
-    return;
-  }
-  let input;
-  try {
-    input = JSON.parse(inputText);
-  } catch {
-    if (envTruthy("SAFETY_NET_STRICT")) {
-      outputDeny("Failed to parse hook input JSON (strict mode)");
-    }
+  const input = await readHookInput(outputDeny);
+  if (!input) {
     return;
   }
   if (input.tool_name !== "Bash") {
@@ -6978,28 +6904,7 @@ async function runClaudeCodeHook() {
   if (!command) {
     return;
   }
-  const cwd = input.cwd ?? process.cwd();
-  const strict = envTruthy("SAFETY_NET_STRICT");
-  const paranoidAll = envTruthy("SAFETY_NET_PARANOID");
-  const paranoidRm = paranoidAll || envTruthy("SAFETY_NET_PARANOID_RM");
-  const paranoidInterpreters = paranoidAll || envTruthy("SAFETY_NET_PARANOID_INTERPRETERS");
-  const worktreeMode = envTruthy("SAFETY_NET_WORKTREE");
-  const config = loadConfig(cwd);
-  const result = analyzeCommand(command, {
-    cwd,
-    config,
-    strict,
-    paranoidRm,
-    paranoidInterpreters,
-    worktreeMode
-  });
-  if (result) {
-    const sessionId = input.session_id;
-    if (sessionId) {
-      writeAuditLog(sessionId, command, result.segment, result.reason, cwd);
-    }
-    outputDeny(result.reason, command, result.segment);
-  }
+  handleBlockedHookCommand(command, input.cwd ?? process.cwd(), input.session_id, outputDeny);
 }
 
 // src/bin/hooks/copilot-cli.ts
@@ -7017,59 +6922,22 @@ function outputCopilotDeny(reason, command, segment) {
   console.log(JSON.stringify(output));
 }
 async function runCopilotCliHook() {
-  const chunks = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk);
-  }
-  const inputText = Buffer.concat(chunks).toString("utf-8").trim();
-  if (!inputText) {
-    return;
-  }
-  let input;
-  try {
-    input = JSON.parse(inputText);
-  } catch {
-    if (envTruthy("SAFETY_NET_STRICT")) {
-      outputCopilotDeny("Failed to parse hook input JSON (strict mode)");
-    }
+  const input = await readHookInput(outputCopilotDeny);
+  if (!input) {
     return;
   }
   if (input.toolName !== "bash") {
     return;
   }
-  let toolArgs;
-  try {
-    toolArgs = JSON.parse(input.toolArgs);
-  } catch {
-    if (envTruthy("SAFETY_NET_STRICT")) {
-      outputCopilotDeny("Failed to parse toolArgs JSON (strict mode)");
-    }
+  const toolArgs = parseHookJson(input.toolArgs, outputCopilotDeny, "Failed to parse toolArgs JSON (strict mode)");
+  if (!toolArgs) {
     return;
   }
   const command = toolArgs.command;
   if (!command) {
     return;
   }
-  const cwd = input.cwd ?? process.cwd();
-  const strict = envTruthy("SAFETY_NET_STRICT");
-  const paranoidAll = envTruthy("SAFETY_NET_PARANOID");
-  const paranoidRm = paranoidAll || envTruthy("SAFETY_NET_PARANOID_RM");
-  const paranoidInterpreters = paranoidAll || envTruthy("SAFETY_NET_PARANOID_INTERPRETERS");
-  const worktreeMode = envTruthy("SAFETY_NET_WORKTREE");
-  const config = loadConfig(cwd);
-  const result = analyzeCommand(command, {
-    cwd,
-    config,
-    strict,
-    paranoidRm,
-    paranoidInterpreters,
-    worktreeMode
-  });
-  if (result) {
-    const sessionId = `copilot-${input.timestamp ?? Date.now()}`;
-    writeAuditLog(sessionId, command, result.segment, result.reason, cwd);
-    outputCopilotDeny(result.reason, command, result.segment);
-  }
+  handleBlockedHookCommand(command, input.cwd ?? process.cwd(), `copilot-${input.timestamp ?? Date.now()}`, outputCopilotDeny);
 }
 
 // src/bin/hooks/gemini-cli.ts
@@ -7088,21 +6956,8 @@ function outputGeminiDeny(reason, command, segment) {
   console.log(JSON.stringify(output));
 }
 async function runGeminiCLIHook() {
-  const chunks = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk);
-  }
-  const inputText = Buffer.concat(chunks).toString("utf-8").trim();
-  if (!inputText) {
-    return;
-  }
-  let input;
-  try {
-    input = JSON.parse(inputText);
-  } catch {
-    if (envTruthy("SAFETY_NET_STRICT")) {
-      outputGeminiDeny("Failed to parse hook input JSON (strict mode)");
-    }
+  const input = await readHookInput(outputGeminiDeny);
+  if (!input) {
     return;
   }
   if (input.hook_event_name !== "BeforeTool") {
@@ -7115,28 +6970,7 @@ async function runGeminiCLIHook() {
   if (!command) {
     return;
   }
-  const cwd = input.cwd ?? process.cwd();
-  const strict = envTruthy("SAFETY_NET_STRICT");
-  const paranoidAll = envTruthy("SAFETY_NET_PARANOID");
-  const paranoidRm = paranoidAll || envTruthy("SAFETY_NET_PARANOID_RM");
-  const paranoidInterpreters = paranoidAll || envTruthy("SAFETY_NET_PARANOID_INTERPRETERS");
-  const worktreeMode = envTruthy("SAFETY_NET_WORKTREE");
-  const config = loadConfig(cwd);
-  const result = analyzeCommand(command, {
-    cwd,
-    config,
-    strict,
-    paranoidRm,
-    paranoidInterpreters,
-    worktreeMode
-  });
-  if (result) {
-    const sessionId = input.session_id;
-    if (sessionId) {
-      writeAuditLog(sessionId, command, result.segment, result.reason, cwd);
-    }
-    outputGeminiDeny(result.reason, command, result.segment);
-  }
+  handleBlockedHookCommand(command, input.cwd ?? process.cwd(), input.session_id, outputGeminiDeny);
 }
 
 // src/bin/statusline.ts

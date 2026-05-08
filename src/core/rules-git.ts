@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { extractShortOpts, getBasename } from '@/core/shell';
 import {
+  findDotGitInAncestors,
   GIT_CONFIG_AFFECTING_ENV_NAMES,
   GIT_GLOBAL_OPTS_WITH_VALUE,
   getGitExecutionContext,
@@ -686,7 +687,7 @@ function isGitConfigUnsetError(error: unknown): boolean {
 }
 
 function getLocalGitConfigPaths(cwd: string): string[] | null {
-  const dotGitPath = findDotGitPath(cwd);
+  const dotGitPath = findDotGitInAncestors(cwd);
   if (dotGitPath === null) {
     return null;
   }
@@ -702,22 +703,6 @@ function getLocalGitConfigPaths(cwd: string): string[] | null {
   }
 
   return [join(commonDir, 'config'), join(gitDir, 'config.worktree')];
-}
-
-function findDotGitPath(cwd: string): string | null {
-  let current = cwd;
-  while (true) {
-    const dotGitPath = join(current, '.git');
-    if (existsSync(dotGitPath)) {
-      return dotGitPath;
-    }
-
-    const parent = dirname(current);
-    if (parent === current) {
-      return null;
-    }
-    current = parent;
-  }
 }
 
 function resolveGitDirFromDotGit(dotGitPath: string): string | null {

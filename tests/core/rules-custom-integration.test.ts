@@ -26,6 +26,19 @@ function assertAllowed(command: string, cwd?: string): void {
   expect(result).toBeNull();
 }
 
+const blockGitAddAllConfig = {
+  version: 1,
+  rules: [
+    {
+      name: 'block-git-add-all',
+      command: 'git',
+      subcommand: 'add',
+      block_args: ['-A', '--all', '.'],
+      reason: 'Use specific files.',
+    },
+  ],
+};
+
 describe('custom rules integration', () => {
   let tempDir: string;
 
@@ -38,34 +51,12 @@ describe('custom rules integration', () => {
   });
 
   test('custom rule blocks command', () => {
-    writeConfig(tempDir, {
-      version: 1,
-      rules: [
-        {
-          name: 'block-git-add-all',
-          command: 'git',
-          subcommand: 'add',
-          block_args: ['-A', '--all', '.'],
-          reason: 'Use specific files.',
-        },
-      ],
-    });
+    writeConfig(tempDir, blockGitAddAllConfig);
     assertBlocked('git add -A', '[block-git-add-all] Use specific files.', tempDir);
   });
 
   test('custom rule blocks with dot', () => {
-    writeConfig(tempDir, {
-      version: 1,
-      rules: [
-        {
-          name: 'block-git-add-all',
-          command: 'git',
-          subcommand: 'add',
-          block_args: ['-A', '--all', '.'],
-          reason: 'Use specific files.',
-        },
-      ],
-    });
+    writeConfig(tempDir, blockGitAddAllConfig);
     assertBlocked('git add .', '[block-git-add-all]', tempDir);
   });
 

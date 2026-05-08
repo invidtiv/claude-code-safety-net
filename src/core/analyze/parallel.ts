@@ -1,9 +1,9 @@
+import { collectCommandTemplate, normalizeChildCommand } from '@/core/analyze/child-command';
 import { analyzeFind } from '@/core/analyze/find';
 import { hasRecursiveForceFlags } from '@/core/analyze/rm-flags';
 import { extractDashCArg } from '@/core/analyze/shell-wrappers';
 import { analyzeGit } from '@/core/rules-git';
 import { analyzeRm } from '@/core/rules-rm';
-import { getBasename, stripWrappersWithInfo } from '@/core/shell';
 import { type AnalyzeNestedOverrides, SHELL_WRAPPERS } from '@/types';
 
 const REASON_PARALLEL_RM =
@@ -48,28 +48,16 @@ export function analyzeParallel(
     return null;
   }
 
-  const childWrapperInfo = stripWrappersWithInfo([...template], context.cwd);
-  let childTokens = childWrapperInfo.tokens;
-  const childEnvAssignments = new Map(context.envAssignments ?? []);
-  for (const [k, v] of childWrapperInfo.envAssignments) {
-    childEnvAssignments.set(k, v);
-  }
-  const childCwd =
-    childWrapperInfo.cwd === null ? undefined : (childWrapperInfo.cwd ?? context.cwd);
+  const childCommand = normalizeChildCommand(template, context);
+  const childTokens = childCommand.tokens;
   const nestedOverrides = buildNestedOverrides(
-    childEnvAssignments,
-    childWrapperInfo.cwd,
+    childCommand.envAssignments,
+    childCommand.wrapperCwd,
     runsRemotely || hasDynamicStdinPlaceholder,
   );
-  let head = getBasename(childTokens[0] ?? '').toLowerCase();
-
-  if (head === 'busybox' && childTokens.length > 1) {
-    childTokens = childTokens.slice(1);
-    head = getBasename(childTokens[0] ?? '').toLowerCase();
-  }
 
   // Check for shell wrapper with -c
-  if (SHELL_WRAPPERS.has(head)) {
+  if (SHELL_WRAPPERS.has(childCommand.head)) {
     const dashCArg = extractDashCArg(childTokens);
     if (dashCArg) {
       // If script IS just the placeholder, stdin provides entire script - dangerous
@@ -123,13 +111,13 @@ export function analyzeParallel(
   }
 
   // For rm -rf, expand with actual args and analyze each expansion
-  if (head === 'rm' && hasRecursiveForceFlags(childTokens)) {
+  if (childCommand.head === 'rm' && hasRecursiveForceFlags(childTokens)) {
     if (hasPlaceholder && args.length > 0) {
       // Expand template with each arg and analyze
       for (const arg of args) {
         const expandedTokens = childTokens.map((t) => t.replace(/{}/g, arg));
         const rmResult = analyzeRm(expandedTokens, {
-          cwd: childCwd,
+          cwd: childCommand.cwd,
           originalCwd: context.originalCwd,
           paranoid: context.paranoidRm,
           allowTmpdirVar: context.allowTmpdirVar,
@@ -145,7 +133,7 @@ export function analyzeParallel(
     if (args.length > 0) {
       const expandedTokens = [...childTokens, args[0] ?? ''];
       const rmResult = analyzeRm(expandedTokens, {
-        cwd: childCwd,
+        cwd: childCommand.cwd,
         originalCwd: context.originalCwd,
         paranoid: context.paranoidRm,
         allowTmpdirVar: context.allowTmpdirVar,
@@ -158,14 +146,14 @@ export function analyzeParallel(
     return REASON_PARALLEL_RM;
   }
 
-  if (head === 'find') {
+  if (childCommand.head === 'find') {
     const findResult = analyzeFind(childTokens);
     if (findResult) {
       return findResult;
     }
   }
 
-  if (head === 'git') {
+  if (childCommand.head === 'git') {
     const gitTokenSets =
       hasPlaceholder && args.length > 0
         ? args.map((arg) => childTokens.map((token) => replaceParallelPlaceholder(token, arg)))
@@ -175,8 +163,8 @@ export function analyzeParallel(
     const dynamicGitArgs = usesStdin || hasPlaceholder;
     for (const gitTokens of gitTokenSets) {
       const gitResult = analyzeGit(gitTokens, {
-        cwd: childCwd,
-        envAssignments: childEnvAssignments,
+        cwd: childCommand.cwd,
+        envAssignments: childCommand.envAssignments,
         worktreeMode: runsRemotely || dynamicGitArgs ? false : context.worktreeMode,
       });
       if (gitResult) {
@@ -274,16 +262,9 @@ function parseParallelCommand(tokens: readonly string[]): ParallelParseResult | 
 
     if (token === '--') {
       // Everything after -- until ::: is the template
-      i++;
-      while (i < tokens.length) {
-        const token = tokens[i];
-        if (token === undefined || token === ':::') break;
-        templateTokens.push(token);
-        i++;
-      }
-      if (i < tokens.length && tokens[i] === ':::') {
-        markerIndex = i;
-      }
+      const template = collectCommandTemplate(tokens, i + 1);
+      templateTokens.push(...template.templateTokens);
+      markerIndex = template.markerIndex;
       break;
     }
 
@@ -343,15 +324,9 @@ function parseParallelCommand(tokens: readonly string[]): ParallelParseResult | 
       i++;
     } else {
       // Start of template
-      while (i < tokens.length) {
-        const token = tokens[i];
-        if (token === undefined || token === ':::') break;
-        templateTokens.push(token);
-        i++;
-      }
-      if (i < tokens.length && tokens[i] === ':::') {
-        markerIndex = i;
-      }
+      const template = collectCommandTemplate(tokens, i);
+      templateTokens.push(...template.templateTokens);
+      markerIndex = template.markerIndex;
       break;
     }
   }

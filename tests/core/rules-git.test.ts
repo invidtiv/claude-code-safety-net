@@ -1050,6 +1050,21 @@ describe('git linked worktree mode', () => {
     }
   });
 
+  test('SAFETY_NET_WORKTREE fails closed on dynamic xargs git env assignments', () => {
+    const fixture = createLinkedWorktreeFixture();
+    try {
+      withEnv({ SAFETY_NET_WORKTREE: '1' }, () => {
+        assertBlocked(
+          'echo ignored | xargs -I{} env EXTRA={} git reset --hard',
+          'git reset --hard',
+          fixture.linkedWorktree,
+        );
+      });
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
   test('SAFETY_NET_WORKTREE fails closed on dynamic parallel git arguments', () => {
     const fixture = createLinkedWorktreeFixture();
     try {

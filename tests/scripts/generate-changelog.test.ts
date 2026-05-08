@@ -33,6 +33,17 @@ function createRunner(responses: Record<string, RunnerResponse>): CommandRunner 
   };
 }
 
+function contributorRunner(compare: string): CommandRunner {
+  return createRunner({
+    'gh api "/repos/example/repo/compare/v1.0.0...HEAD" --jq \'.commits[] | {login: .author.login, message: .commit.message}\'':
+      compare,
+  });
+}
+
+function compareCommit(login: string | null, message: string): string {
+  return JSON.stringify({ login, message });
+}
+
 describe('isIncludedCommit', () => {
   describe('simple prefixes', () => {
     test('includes feat: commits', () => {
@@ -202,38 +213,19 @@ describe('generateChangelog', () => {
 describe('getContributorsForRepo', () => {
   test('includes unique contributors and their commits', async () => {
     const compare = [
-      JSON.stringify({
-        login: 'alice',
-        message: 'feat: add thing\n\nBody',
-      }),
-      JSON.stringify({
-        login: 'bob',
-        message: 'fix: resolve issue',
-      }),
-      JSON.stringify({
-        login: 'alice',
-        message: 'feat: follow-up',
-      }),
-      JSON.stringify({
-        login: 'kenryu42',
-        message: 'feat: excluded author',
-      }),
-      JSON.stringify({
-        login: null,
-        message: 'feat: missing author',
-      }),
-      JSON.stringify({
-        login: 'carol',
-        message: 'chore: ignore',
-      }),
+      compareCommit('alice', 'feat: add thing\n\nBody'),
+      compareCommit('bob', 'fix: resolve issue'),
+      compareCommit('alice', 'feat: follow-up'),
+      compareCommit('kenryu42', 'feat: excluded author'),
+      compareCommit(null, 'feat: missing author'),
+      compareCommit('carol', 'chore: ignore'),
     ].join('\n');
 
-    const runner = createRunner({
-      'gh api "/repos/example/repo/compare/v1.0.0...HEAD" --jq \'.commits[] | {login: .author.login, message: .commit.message}\'':
-        compare,
-    });
-
-    const notes = await getContributorsForRepo('v1.0.0', 'example/repo', runner);
+    const notes = await getContributorsForRepo(
+      'v1.0.0',
+      'example/repo',
+      contributorRunner(compare),
+    );
 
     expect(notes).toEqual([
       '',
@@ -248,22 +240,15 @@ describe('getContributorsForRepo', () => {
 
   test('returns empty list when no contributors qualify', async () => {
     const compare = [
-      JSON.stringify({
-        login: 'kenryu42',
-        message: 'feat: excluded author',
-      }),
-      JSON.stringify({
-        login: 'carol',
-        message: 'chore: ignore',
-      }),
+      compareCommit('kenryu42', 'feat: excluded author'),
+      compareCommit('carol', 'chore: ignore'),
     ].join('\n');
 
-    const runner = createRunner({
-      'gh api "/repos/example/repo/compare/v1.0.0...HEAD" --jq \'.commits[] | {login: .author.login, message: .commit.message}\'':
-        compare,
-    });
-
-    const notes = await getContributorsForRepo('v1.0.0', 'example/repo', runner);
+    const notes = await getContributorsForRepo(
+      'v1.0.0',
+      'example/repo',
+      contributorRunner(compare),
+    );
 
     expect(notes).toEqual([]);
   });

@@ -326,13 +326,15 @@ function isDirectory(path: string): boolean {
 }
 
 function findDotGit(cwd: string): string | null {
-  let current: string;
   try {
-    current = realpathSync(cwd);
+    return findDotGitInAncestors(realpathSync(cwd));
   } catch {
     return null;
   }
+}
 
+export function findDotGitInAncestors(cwd: string): string | null {
+  let current = cwd;
   while (true) {
     const dotGitPath = join(current, '.git');
     if (existsSync(dotGitPath)) {

@@ -1,3 +1,5 @@
+import { expect } from 'bun:test';
+
 /**
  * Shared test helpers for CLI hook integration tests.
  */
@@ -7,6 +9,40 @@ export type HookResult = {
   stderr: string;
   exitCode: number;
 };
+
+export function copilotBashInput(command: string) {
+  return {
+    timestamp: Date.now(),
+    cwd: process.cwd(),
+    toolName: 'bash',
+    toolArgs: JSON.stringify({ command }),
+  };
+}
+
+export function copilotRawToolArgsInput(toolArgs: string) {
+  return {
+    timestamp: Date.now(),
+    cwd: process.cwd(),
+    toolName: 'bash',
+    toolArgs,
+  };
+}
+
+export function geminiShellInput(command: string) {
+  return {
+    hook_event_name: 'BeforeTool',
+    tool_name: 'run_shell_command',
+    tool_input: { command },
+  };
+}
+
+export function claudeCodeBashInput(command: string) {
+  return {
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Bash',
+    tool_input: { command },
+  };
+}
 
 /**
  * Runs a hook CLI with the given input and optional environment variables.
@@ -44,6 +80,16 @@ export async function runHook(
   const [stdout, stderr] = await Promise.all([stdoutPromise, stderrPromise]);
   const exitCode = await proc.exited;
   return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
+}
+
+export async function expectNoHookOutput(
+  run: (input: object | string, env?: Record<string, string>) => Promise<HookResult>,
+  input: object | string,
+  env?: Record<string, string>,
+): Promise<void> {
+  const { stdout, exitCode } = await run(input, env);
+  expect(stdout).toBe('');
+  expect(exitCode).toBe(0);
 }
 
 /**

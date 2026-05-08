@@ -3,30 +3,32 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { explainCommand, formatTraceHuman, formatTraceJson } from '@/bin/explain/index';
+import { getTraceSteps } from '../../helpers.ts';
+
+function expectLeadingTokenRedacted(command: string, secret: string, redacted: string): void {
+  const result = explainCommand(command);
+  const stripStep = getTraceSteps(result).find((s) => s.type === 'leading-tokens-stripped');
+  expect(stripStep).toBeDefined();
+  if (stripStep?.type !== 'leading-tokens-stripped') return;
+  expect(stripStep.removed.join(', ')).not.toContain(secret);
+  expect(stripStep.removed.join(', ')).toContain(redacted);
+}
 
 describe('explainCommand env wrapper redaction', () => {
   test('env wrapper with secret is redacted in leading-tokens-stripped step', () => {
-    const result = explainCommand('env TOKEN=supersecret git status');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const stripStep = allSteps.find((s) => s.type === 'leading-tokens-stripped');
-    expect(stripStep).toBeDefined();
-    if (stripStep && stripStep.type === 'leading-tokens-stripped') {
-      const removedStr = stripStep.removed.join(', ');
-      expect(removedStr).not.toContain('supersecret');
-      expect(removedStr).toContain('TOKEN=<redacted>');
-    }
+    expectLeadingTokenRedacted(
+      'env TOKEN=supersecret git status',
+      'supersecret',
+      'TOKEN=<redacted>',
+    );
   });
 
   test('sudo env with secret is redacted in leading-tokens-stripped step', () => {
-    const result = explainCommand('sudo env API_KEY=my-api-key-123 git status');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
-    const stripStep = allSteps.find((s) => s.type === 'leading-tokens-stripped');
-    expect(stripStep).toBeDefined();
-    if (stripStep && stripStep.type === 'leading-tokens-stripped') {
-      const removedStr = stripStep.removed.join(', ');
-      expect(removedStr).not.toContain('my-api-key-123');
-      expect(removedStr).toContain('API_KEY=<redacted>');
-    }
+    expectLeadingTokenRedacted(
+      'sudo env API_KEY=my-api-key-123 git status',
+      'my-api-key-123',
+      'API_KEY=<redacted>',
+    );
   });
 
   test('formatTraceHuman does not leak secrets from env wrapper', () => {
@@ -40,7 +42,7 @@ describe('explainCommand env wrapper redaction', () => {
     const result = explainCommand('env SECRET=topsecret git status');
     const json = formatTraceJson(result);
     const parsed = JSON.parse(json);
-    const allSteps = parsed.trace.segments.flatMap((s: { steps: unknown[] }) => s.steps);
+    const allSteps = getTraceSteps(parsed);
     const stripStep = allSteps.find(
       (s: { type: string }) => s.type === 'leading-tokens-stripped',
     ) as { input: string[]; removed: string[] } | undefined;
@@ -57,7 +59,7 @@ describe('explainCommand env wrapper redaction', () => {
 describe('secret redaction in shell wrappers and interpreters', () => {
   test('shell-wrapper step redacts env assignments in innerCommand', () => {
     const result = explainCommand('bash -c "TOKEN=secret git status"');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const wrapperStep = allSteps.find((s) => s.type === 'shell-wrapper');
     expect(wrapperStep).toBeDefined();
     expect(wrapperStep?.type === 'shell-wrapper' && wrapperStep.innerCommand).toBe(
@@ -70,7 +72,7 @@ describe('secret redaction in shell wrappers and interpreters', () => {
 
   test('interpreter step redacts env assignments in codeArg', () => {
     const result = explainCommand('python -c "API_KEY=xyz123 print(1)"');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const interpStep = allSteps.find((s) => s.type === 'interpreter');
     expect(interpStep).toBeDefined();
     expect(interpStep?.type === 'interpreter' && interpStep.codeArg).toBe(
@@ -81,7 +83,7 @@ describe('secret redaction in shell wrappers and interpreters', () => {
 
   test('recurse step for shell-wrapper redacts innerCommand', () => {
     const result = explainCommand('bash -c "SECRET=abc123 echo test"');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const recurseStep = allSteps.find((s) => s.type === 'recurse' && s.reason === 'shell-wrapper');
     expect(recurseStep).toBeDefined();
     expect(recurseStep?.type === 'recurse' && recurseStep.innerCommand).toBe(
@@ -91,7 +93,7 @@ describe('secret redaction in shell wrappers and interpreters', () => {
 
   test('recurse step for interpreter redacts innerCommand', () => {
     const result = explainCommand('node -e "PASSWORD=hunter2 console.log(1)"');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const recurseStep = allSteps.find((s) => s.type === 'recurse' && s.reason === 'interpreter');
     expect(recurseStep).toBeDefined();
     expect(recurseStep?.type === 'recurse' && recurseStep.innerCommand).toBe(
@@ -101,7 +103,7 @@ describe('secret redaction in shell wrappers and interpreters', () => {
 
   test('busybox recurse step redacts env assignments', () => {
     const result = explainCommand('busybox TOKEN=secret rm -rf /');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const recurseStep = allSteps.find((s) => s.type === 'recurse' && s.reason === 'busybox');
     expect(recurseStep).toBeDefined();
     expect(recurseStep?.type === 'recurse' && recurseStep.innerCommand).toBe(
@@ -125,7 +127,7 @@ describe('secret redaction in shell wrappers and interpreters', () => {
 
   test('redaction handles quoted env values in shell wrapper', () => {
     const result = explainCommand('bash -c "TOKEN=\\"secret value\\" git status"');
-    const allSteps = result.trace.segments.flatMap((s) => s.steps);
+    const allSteps = getTraceSteps(result);
     const wrapperStep = allSteps.find((s) => s.type === 'shell-wrapper');
     expect(wrapperStep?.type === 'shell-wrapper' && wrapperStep.innerCommand).toContain(
       'TOKEN=<redacted>',

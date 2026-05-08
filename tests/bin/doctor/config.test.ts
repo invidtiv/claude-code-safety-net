@@ -7,147 +7,98 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getConfigInfo } from '@/bin/doctor/config';
+import { withTempDir } from '../../helpers.ts';
 
 describe('getConfigInfo', () => {
-  test('handles missing config files', () => {
-    const tmpDir = join(tmpdir(), `doctor-test-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
-
-    try {
+  test('handles missing config files', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
       const info = getConfigInfo(tmpDir);
       expect(info.projectConfig.exists).toBe(false);
       expect(info.effectiveRules).toEqual([]);
       expect(info.shadowedRules).toEqual([]);
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
-    }
+    });
   });
 
-  test('detects valid project config', () => {
-    const tmpDir = join(tmpdir(), `doctor-test-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
-
-    const configPath = join(tmpDir, '.safety-net.json');
-    writeFileSync(
-      configPath,
-      JSON.stringify({
-        version: 1,
-        rules: [
-          {
-            name: 'test-rule',
-            command: 'test',
-            block_args: ['--dangerous'],
-            reason: 'Test reason',
-          },
-        ],
-      }),
-    );
-
-    try {
+  test('detects valid project config', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
+      writeFileSync(
+        join(tmpDir, '.safety-net.json'),
+        JSON.stringify({
+          version: 1,
+          rules: [
+            {
+              name: 'test-rule',
+              command: 'test',
+              block_args: ['--dangerous'],
+              reason: 'Test reason',
+            },
+          ],
+        }),
+      );
       const info = getConfigInfo(tmpDir);
       expect(info.projectConfig.exists).toBe(true);
       expect(info.projectConfig.valid).toBe(true);
       expect(info.projectConfig.ruleCount).toBe(1);
       expect(info.effectiveRules.length).toBe(1);
       expect(info.effectiveRules[0]?.source).toBe('project');
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
-    }
+    });
   });
 
-  test('detects invalid project config', () => {
-    const tmpDir = join(tmpdir(), `doctor-test-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
-
-    const configPath = join(tmpDir, '.safety-net.json');
-    writeFileSync(configPath, '{ "version": 2 }');
-
-    try {
+  test('detects invalid project config', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
+      writeFileSync(join(tmpDir, '.safety-net.json'), '{ "version": 2 }');
       const info = getConfigInfo(tmpDir);
       expect(info.projectConfig.exists).toBe(true);
       expect(info.projectConfig.valid).toBe(false);
       expect(info.projectConfig.errors?.length).toBeGreaterThan(0);
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
-    }
+    });
   });
 
-  test('excludes rules from invalid config (wrong version)', () => {
-    const tmpDir = join(tmpdir(), `doctor-test-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
-
-    const configPath = join(tmpDir, '.safety-net.json');
-    // Invalid config: version 2 is not supported, but contains valid-looking rules
-    writeFileSync(
-      configPath,
-      JSON.stringify({
-        version: 2,
-        rules: [
-          {
-            name: 'should-not-appear',
-            command: 'test',
-            block_args: ['--dangerous'],
-            reason: 'This rule should not be shown as effective',
-          },
-        ],
-      }),
-    );
-
-    try {
+  test('excludes rules from invalid config (wrong version)', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
+      writeFileSync(
+        join(tmpDir, '.safety-net.json'),
+        JSON.stringify({
+          version: 2,
+          rules: [
+            {
+              name: 'should-not-appear',
+              command: 'test',
+              block_args: ['--dangerous'],
+              reason: 'This rule should not be shown as effective',
+            },
+          ],
+        }),
+      );
       const info = getConfigInfo(tmpDir);
       expect(info.projectConfig.exists).toBe(true);
       expect(info.projectConfig.valid).toBe(false);
-      // Rules from invalid configs should NOT appear as effective
       expect(info.effectiveRules).toEqual([]);
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
-    }
+    });
   });
 
-  test('handles malformed JSON in config', () => {
-    const tmpDir = join(tmpdir(), `doctor-test-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
-
-    const configPath = join(tmpDir, '.safety-net.json');
-    writeFileSync(configPath, '{ invalid json }');
-
-    try {
+  test('handles malformed JSON in config', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
+      writeFileSync(join(tmpDir, '.safety-net.json'), '{ invalid json }');
       const info = getConfigInfo(tmpDir);
-      // Malformed JSON means rules can't be loaded
       expect(info.effectiveRules).toEqual([]);
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
-    }
+    });
   });
 
-  test('handles empty config file', () => {
-    const tmpDir = join(tmpdir(), `doctor-test-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
-
-    const configPath = join(tmpDir, '.safety-net.json');
-    writeFileSync(configPath, '   ');
-
-    try {
+  test('handles empty config file', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
+      writeFileSync(join(tmpDir, '.safety-net.json'), '   ');
       const info = getConfigInfo(tmpDir);
       expect(info.effectiveRules).toEqual([]);
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
-    }
+    });
   });
 
-  test('handles config without rules array', () => {
-    const tmpDir = join(tmpdir(), `doctor-test-${Date.now()}`);
-    mkdirSync(tmpDir, { recursive: true });
-
-    const configPath = join(tmpDir, '.safety-net.json');
-    writeFileSync(configPath, '{ "version": 1 }');
-
-    try {
+  test('handles config without rules array', async () => {
+    await withTempDir('doctor-test-', (tmpDir) => {
+      writeFileSync(join(tmpDir, '.safety-net.json'), '{ "version": 1 }');
       const info = getConfigInfo(tmpDir);
       expect(info.effectiveRules).toEqual([]);
-    } finally {
-      rmSync(tmpDir, { recursive: true, force: true });
-    }
+    });
   });
 
   test('merges user and project rules with shadowing', () => {

@@ -377,13 +377,7 @@ function addExportedGitContextEnvAssignment(state: ShellGitContextEnvState, toke
   }
 
   if (isTrackedGitEnvName(token)) {
-    state.exportedNames.add(token);
-    const value = state.shellAssignments.get(token);
-    if (value !== undefined) {
-      setEffectiveGitContextAssignment(state, { name: token, value });
-    } else {
-      setEffectiveGitContextAssignment(state, { name: token, value: '' });
-    }
+    exportTrackedGitContextEnvName(state, token);
   }
 }
 
@@ -413,14 +407,16 @@ function addTypesetGitContextEnvAssignment(
   }
 
   if (exports && isTrackedGitEnvName(token)) {
-    state.exportedNames.add(token);
-    const value = state.shellAssignments.get(token);
-    if (value !== undefined) {
-      setEffectiveGitContextAssignment(state, { name: token, value });
-    } else {
-      setEffectiveGitContextAssignment(state, { name: token, value: '' });
-    }
+    exportTrackedGitContextEnvName(state, token);
   }
+}
+
+function exportTrackedGitContextEnvName(state: ShellGitContextEnvState, name: string): void {
+  state.exportedNames.add(name);
+  setEffectiveGitContextAssignment(state, {
+    name,
+    value: state.shellAssignments.get(name) ?? '',
+  });
 }
 
 function getExportOperandsStart(tokens: readonly string[], commandIndex: number): number | null {
