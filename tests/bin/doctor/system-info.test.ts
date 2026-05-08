@@ -97,8 +97,7 @@ describe('getSystemInfo', () => {
 
   test('starts both copilot version probes immediately and prefers --binary-version', async () => {
     const probes = createCopilotDeferredFetcher();
-    const fetcher = probes.fetcher;
-    const sysInfoPromise = getSystemInfo(fetcher);
+    const sysInfoPromise = getSystemInfo(probes.fetcher);
     await Promise.resolve();
 
     expectCopilotVersionProbesStarted(probes.calls);

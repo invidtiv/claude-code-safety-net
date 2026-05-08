@@ -5,34 +5,34 @@ import { printCommandHelp, printHelp, printVersion, showCommandHelp } from '@/bi
 /**
  * Capture console.log output during a function call.
  */
-function captureOutput(fn: () => void): string {
+function captureOutput<T>(fn: () => T) {
   const originalLog = console.log;
   let output = '';
   console.log = (...args: unknown[]) => {
     output += `${args.map(String).join(' ')}\n`;
   };
   try {
-    fn();
+    const result = fn();
+    return { output, result };
   } finally {
     console.log = originalLog;
   }
-  return output;
 }
 
 describe('help output', () => {
   describe('printHelp (main help)', () => {
     test('contains version header', () => {
-      const output = captureOutput(() => printHelp());
+      const { output } = captureOutput(() => printHelp());
       expect(output).toContain('cc-safety-net v');
     });
 
     test('contains description', () => {
-      const output = captureOutput(() => printHelp());
+      const { output } = captureOutput(() => printHelp());
       expect(output).toContain('Blocks destructive git and filesystem commands');
     });
 
     test('lists all visible commands', () => {
-      const output = captureOutput(() => printHelp());
+      const { output } = captureOutput(() => printHelp());
       expect(output).toContain('doctor');
       expect(output).toContain('explain');
       expect(output).toContain('claude-code');
@@ -40,26 +40,26 @@ describe('help output', () => {
     });
 
     test('contains COMMANDS section', () => {
-      const output = captureOutput(() => printHelp());
+      const { output } = captureOutput(() => printHelp());
       expect(output).toContain('COMMANDS:');
     });
 
     test('contains GLOBAL OPTIONS section', () => {
-      const output = captureOutput(() => printHelp());
+      const { output } = captureOutput(() => printHelp());
       expect(output).toContain('GLOBAL OPTIONS:');
       expect(output).toContain('--help');
       expect(output).toContain('--version');
     });
 
     test('contains HELP section with usage hints', () => {
-      const output = captureOutput(() => printHelp());
+      const { output } = captureOutput(() => printHelp());
       expect(output).toContain('HELP:');
       expect(output).toContain('help <command>');
       expect(output).toContain('<command> --help');
     });
 
     test('contains ENVIRONMENT VARIABLES section', () => {
-      const output = captureOutput(() => printHelp());
+      const { output } = captureOutput(() => printHelp());
       expect(output).toContain('ENVIRONMENT VARIABLES:');
       expect(output).toContain('SAFETY_NET_STRICT');
       expect(output).toContain('SAFETY_NET_PARANOID');
@@ -67,7 +67,7 @@ describe('help output', () => {
     });
 
     test('contains CONFIG FILES section', () => {
-      const output = captureOutput(() => printHelp());
+      const { output } = captureOutput(() => printHelp());
       expect(output).toContain('CONFIG FILES:');
       expect(output).toContain('.safety-net.json');
     });
@@ -75,7 +75,7 @@ describe('help output', () => {
 
   describe('printVersion', () => {
     test('prints version string', () => {
-      const output = captureOutput(() => printVersion());
+      const { output } = captureOutput(() => printVersion());
       // Version is either "dev" or a semver string
       expect(output.trim()).toMatch(/^(dev|\d+\.\d+\.\d+.*)$/);
     });
@@ -85,21 +85,21 @@ describe('help output', () => {
     test('prints command name', () => {
       const cmd = findCommand('doctor');
       if (!cmd) throw new Error('doctor command not found');
-      const output = captureOutput(() => printCommandHelp(cmd));
+      const { output } = captureOutput(() => printCommandHelp(cmd));
       expect(output).toContain('cc-safety-net doctor');
     });
 
     test('prints description', () => {
       const cmd = findCommand('doctor');
       if (!cmd) throw new Error('doctor command not found');
-      const output = captureOutput(() => printCommandHelp(cmd));
+      const { output } = captureOutput(() => printCommandHelp(cmd));
       expect(output).toContain('Run diagnostic checks');
     });
 
     test('prints USAGE section', () => {
       const cmd = findCommand('doctor');
       if (!cmd) throw new Error('doctor command not found');
-      const output = captureOutput(() => printCommandHelp(cmd));
+      const { output } = captureOutput(() => printCommandHelp(cmd));
       expect(output).toContain('USAGE:');
       expect(output).toContain('doctor [options]');
     });
@@ -107,7 +107,7 @@ describe('help output', () => {
     test('prints OPTIONS section', () => {
       const cmd = findCommand('doctor');
       if (!cmd) throw new Error('doctor command not found');
-      const output = captureOutput(() => printCommandHelp(cmd));
+      const { output } = captureOutput(() => printCommandHelp(cmd));
       expect(output).toContain('OPTIONS:');
       expect(output).toContain('--json');
       expect(output).toContain('--skip-update-check');
@@ -116,7 +116,7 @@ describe('help output', () => {
     test('prints EXAMPLES section when available', () => {
       const cmd = findCommand('doctor');
       if (!cmd) throw new Error('doctor command not found');
-      const output = captureOutput(() => printCommandHelp(cmd));
+      const { output } = captureOutput(() => printCommandHelp(cmd));
       expect(output).toContain('EXAMPLES:');
       expect(output).toContain('cc-safety-net doctor');
     });
@@ -124,7 +124,7 @@ describe('help output', () => {
     test('explain command shows --cwd option with argument', () => {
       const cmd = findCommand('explain');
       if (!cmd) throw new Error('explain command not found');
-      const output = captureOutput(() => printCommandHelp(cmd));
+      const { output } = captureOutput(() => printCommandHelp(cmd));
       expect(output).toContain('--cwd');
       expect(output).toContain('<path>');
     });
@@ -132,20 +132,14 @@ describe('help output', () => {
 
   describe('showCommandHelp', () => {
     test('returns true and prints help for valid command', () => {
-      let result = false;
-      const output = captureOutput(() => {
-        result = showCommandHelp('doctor');
-      });
+      const { output, result } = captureOutput(() => showCommandHelp('doctor'));
 
       expect(result).toBe(true);
       expect(output).toContain('cc-safety-net doctor');
     });
 
     test('returns true for alias', () => {
-      let result = false;
-      const output = captureOutput(() => {
-        result = showCommandHelp('-cc');
-      });
+      const { output, result } = captureOutput(() => showCommandHelp('-cc'));
 
       expect(result).toBe(true);
       expect(output).toContain('cc-safety-net claude-code');

@@ -102,14 +102,14 @@ describe('--statusline flag', () => {
     },
   ];
 
-  for (const mode of modes) {
+  modes.forEach((mode) => {
     test(`shows ${mode.name}`, async () => {
       await expectStatusline(
         { CLAUDE_SETTINGS_PATH: enabledSettingsPath, ...mode.env },
         mode.output,
       );
     });
-  }
+  });
 });
 
 describe('--statusline enabled/disabled detection', () => {
