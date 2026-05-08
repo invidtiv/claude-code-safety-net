@@ -22,6 +22,36 @@ const PLATFORM_NAMES: Record<string, string> = {
   codex: 'Codex',
 };
 
+interface TableOptions {
+  headers?: string[];
+  rows: string[][];
+  rawRows?: string[][];
+}
+
+function formatAsciiTable(options: TableOptions): string {
+  const rawRows = options.rawRows ?? options.rows;
+  const colWidths = (options.headers ?? rawRows[0] ?? []).map((h, i) => {
+    const maxDataWidth = Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
+    return Math.max(h.length, maxDataWidth);
+  });
+  const pad = (s: string, w: number, raw: string) => s + ' '.repeat(Math.max(0, w - raw.length));
+  const line = (char: string, corners: [string, string, string]) =>
+    corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
+  const formatRow = (cells: string[], rawCells: string[]) =>
+    `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? '')).join(' │ ')} │`;
+
+  const headerLines = options.headers
+    ? [`   ${formatRow(options.headers, options.headers)}`, `   ${line('─', ['├', '┼', '┤'])}`]
+    : [];
+
+  return [
+    `   ${line('─', ['┌', '┬', '┐'])}`,
+    ...headerLines,
+    ...options.rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
+    `   ${line('─', ['└', '┴', '┘'])}`,
+  ].join('\n');
+}
+
 /**
  * Format the hooks section as a table with failure details below.
  */
@@ -120,29 +150,7 @@ function formatHooksTable(hooks: HookStatus[]): string {
   const rows = rowData.map((r) => r.colored);
   const rawRows = rowData.map((r) => r.raw);
 
-  // Calculate column widths (using raw text without ANSI codes for width calc)
-  const colWidths = headers.map((h, i) => {
-    const maxDataWidth = Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-
-  const pad = (s: string, w: number, raw: string) => s + ' '.repeat(Math.max(0, w - raw.length));
-
-  const line = (char: string, corners: [string, string, string]) =>
-    corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-
-  const formatRow = (cells: string[], rawCells: string[]) =>
-    `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? '')).join(' │ ')} │`;
-
-  const tableLines = [
-    `   ${line('─', ['┌', '┬', '┐'])}`,
-    `   ${formatRow(headers, headers)}`,
-    `   ${line('─', ['├', '┼', '┤'])}`,
-    ...rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
-    `   ${line('─', ['└', '┴', '┘'])}`,
-  ];
-
-  return tableLines.join('\n');
+  return formatAsciiTable({ headers, rows, rawRows });
 }
 
 /**
@@ -162,29 +170,7 @@ export function formatRulesTable(rules: EffectiveRule[]): string {
     r.blockArgs.join(', '),
   ]);
 
-  // Calculate column widths
-  const colWidths = headers.map((h, i) => {
-    const maxDataWidth = Math.max(...rows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-
-  const pad = (s: string, w: number) => s.padEnd(w);
-
-  const line = (char: string, corners: [string, string, string]) =>
-    corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-
-  const formatRow = (cells: string[]) =>
-    `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0)).join(' │ ')} │`;
-
-  const tableLines = [
-    `   ${line('─', ['┌', '┬', '┐'])}`,
-    `   ${formatRow(headers)}`,
-    `   ${line('─', ['├', '┼', '┤'])}`,
-    ...rows.map((r) => `   ${formatRow(r)}`),
-    `   ${line('─', ['└', '┴', '┘'])}`,
-  ];
-
-  return tableLines.join('\n');
+  return formatAsciiTable({ headers, rows });
 }
 
 /**
@@ -245,29 +231,7 @@ function formatConfigTable(userConfig: ConfigSourceInfo, projectConfig: ConfigSo
     ['Project', projectStatus.text],
   ];
 
-  // Calculate column widths (using raw text without ANSI codes for width calc)
-  const colWidths = headers.map((h, i) => {
-    const maxDataWidth = Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-
-  const pad = (s: string, w: number, raw: string) => s + ' '.repeat(Math.max(0, w - raw.length));
-
-  const line = (char: string, corners: [string, string, string]) =>
-    corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-
-  const formatRow = (cells: string[], rawCells: string[]) =>
-    `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? '')).join(' │ ')} │`;
-
-  const tableLines = [
-    `   ${line('─', ['┌', '┬', '┐'])}`,
-    `   ${formatRow(headers, headers)}`,
-    `   ${line('─', ['├', '┼', '┤'])}`,
-    ...rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
-    `   ${line('─', ['└', '┴', '┘'])}`,
-  ];
-
-  return tableLines.join('\n');
+  return formatAsciiTable({ headers, rows, rawRows });
 }
 
 /**
@@ -291,30 +255,8 @@ function formatEnvironmentTable(envVars: EnvVarInfo[]): string {
     return [v.name, statusIcon];
   });
 
-  // Calculate column widths (using raw text without ANSI codes for width calc)
   const rawRows = envVars.map((v) => [v.name, v.isSet ? '✓' : '✗']);
-  const colWidths = headers.map((h, i) => {
-    const maxDataWidth = Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-
-  const pad = (s: string, w: number, raw: string) => s + ' '.repeat(Math.max(0, w - raw.length));
-
-  const line = (char: string, corners: [string, string, string]) =>
-    corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-
-  const formatRow = (cells: string[], rawCells: string[]) =>
-    `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? '')).join(' │ ')} │`;
-
-  const tableLines = [
-    `   ${line('─', ['┌', '┬', '┐'])}`,
-    `   ${formatRow(headers, headers)}`,
-    `   ${line('─', ['├', '┼', '┤'])}`,
-    ...rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
-    `   ${line('─', ['└', '┴', '┘'])}`,
-  ];
-
-  return tableLines.join('\n');
+  return formatAsciiTable({ headers, rows, rawRows });
 }
 
 /**
@@ -350,29 +292,7 @@ function formatActivityTable(entries: Array<{ relativeTime: string; command: str
     return [e.relativeTime, cmd];
   });
 
-  // Calculate column widths
-  const colWidths = headers.map((h, i) => {
-    const maxDataWidth = Math.max(...rows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-
-  const pad = (s: string, w: number) => s.padEnd(w);
-
-  const line = (char: string, corners: [string, string, string]) =>
-    corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-
-  const formatRow = (cells: string[]) =>
-    `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0)).join(' │ ')} │`;
-
-  const tableLines = [
-    `   ${line('─', ['┌', '┬', '┐'])}`,
-    `   ${formatRow(headers)}`,
-    `   ${line('─', ['├', '┼', '┤'])}`,
-    ...rows.map((r) => `   ${formatRow(r)}`),
-    `   ${line('─', ['└', '┴', '┘'])}`,
-  ];
-
-  return tableLines.join('\n');
+  return formatAsciiTable({ headers, rows });
 }
 
 /**
@@ -470,26 +390,7 @@ function formatUpdateTable(
   const rows = rowData.map((r) => [r.label, r.value]);
   const rawRows = rowData.map((r) => [r.label, r.rawValue]);
 
-  // Calculate column widths (using raw text without ANSI codes for width calc)
-  const colWidths = [0, 1].map((i) => {
-    return Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
-  });
-
-  const pad = (s: string, w: number, raw: string) => s + ' '.repeat(Math.max(0, w - raw.length));
-
-  const line = (char: string, corners: [string, string, string]) =>
-    corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-
-  const formatRow = (cells: string[], rawCells: string[]) =>
-    `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? '')).join(' │ ')} │`;
-
-  const tableLines = [
-    `   ${line('─', ['┌', '┬', '┐'])}`,
-    ...rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
-    `   ${line('─', ['└', '┴', '┘'])}`,
-  ];
-
-  return tableLines.join('\n');
+  return formatAsciiTable({ rows, rawRows });
 }
 
 /**
@@ -533,29 +434,7 @@ function formatSystemInfoTable(system: SystemInfo): string {
   const rows = rowData.map((r) => [r.label, formatValue(r.value)]);
   const rawRows = rowData.map((r) => [r.label, rawValue(r.value)]);
 
-  // Calculate column widths (using raw text without ANSI codes for width calc)
-  const colWidths = headers.map((h, i) => {
-    const maxDataWidth = Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-
-  const pad = (s: string, w: number, raw: string) => s + ' '.repeat(Math.max(0, w - raw.length));
-
-  const line = (char: string, corners: [string, string, string]) =>
-    corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-
-  const formatRow = (cells: string[], rawCells: string[]) =>
-    `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? '')).join(' │ ')} │`;
-
-  const tableLines = [
-    `   ${line('─', ['┌', '┬', '┐'])}`,
-    `   ${formatRow(headers, headers)}`,
-    `   ${line('─', ['├', '┼', '┤'])}`,
-    ...rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
-    `   ${line('─', ['└', '┴', '┘'])}`,
-  ];
-
-  return tableLines.join('\n');
+  return formatAsciiTable({ headers, rows, rawRows });
 }
 
 /**
