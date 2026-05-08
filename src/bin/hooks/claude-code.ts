@@ -1,6 +1,5 @@
-import { analyzeCommand, loadConfig } from '@/core/analyze';
-import { redactSecrets, writeAuditLog } from '@/core/audit';
-import { envTruthy } from '@/core/env';
+import { handleBlockedHookCommand, readHookInput } from '@/bin/hooks/common';
+import { redactSecrets } from '@/core/audit';
 import { formatBlockedMessage } from '@/core/format';
 import type { HookInput, HookOutput } from '@/types';
 
@@ -24,25 +23,8 @@ function outputDeny(reason: string, command?: string, segment?: string): void {
 }
 
 export async function runClaudeCodeHook(): Promise<void> {
-  const chunks: Buffer[] = [];
-
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk as Buffer);
-  }
-
-  const inputText = Buffer.concat(chunks).toString('utf-8').trim();
-
-  if (!inputText) {
-    return;
-  }
-
-  let input: HookInput;
-  try {
-    input = JSON.parse(inputText) as HookInput;
-  } catch {
-    if (envTruthy('SAFETY_NET_STRICT')) {
-      outputDeny('Failed to parse hook input JSON (strict mode)');
-    }
+  const input = await readHookInput<HookInput>(outputDeny);
+  if (!input) {
     return;
   }
 
@@ -55,29 +37,5 @@ export async function runClaudeCodeHook(): Promise<void> {
     return;
   }
 
-  const cwd = input.cwd ?? process.cwd();
-  const strict = envTruthy('SAFETY_NET_STRICT');
-  const paranoidAll = envTruthy('SAFETY_NET_PARANOID');
-  const paranoidRm = paranoidAll || envTruthy('SAFETY_NET_PARANOID_RM');
-  const paranoidInterpreters = paranoidAll || envTruthy('SAFETY_NET_PARANOID_INTERPRETERS');
-  const worktreeMode = envTruthy('SAFETY_NET_WORKTREE');
-
-  const config = loadConfig(cwd);
-
-  const result = analyzeCommand(command, {
-    cwd,
-    config,
-    strict,
-    paranoidRm,
-    paranoidInterpreters,
-    worktreeMode,
-  });
-
-  if (result) {
-    const sessionId = input.session_id;
-    if (sessionId) {
-      writeAuditLog(sessionId, command, result.segment, result.reason, cwd);
-    }
-    outputDeny(result.reason, command, result.segment);
-  }
+  handleBlockedHookCommand(command, input.cwd ?? process.cwd(), input.session_id, outputDeny);
 }
