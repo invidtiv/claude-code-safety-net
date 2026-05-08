@@ -132,30 +132,20 @@ describe('help output', () => {
 
   describe('showCommandHelp', () => {
     test('returns true and prints help for valid command', () => {
-      let output = '';
-      const originalLog = console.log;
-      console.log = (...args: unknown[]) => {
-        output += `${args.map(String).join(' ')}\n`;
-      };
-
-      const result = showCommandHelp('doctor');
-
-      console.log = originalLog;
+      let result = false;
+      const output = captureOutput(() => {
+        result = showCommandHelp('doctor');
+      });
 
       expect(result).toBe(true);
       expect(output).toContain('cc-safety-net doctor');
     });
 
     test('returns true for alias', () => {
-      let output = '';
-      const originalLog = console.log;
-      console.log = (...args: unknown[]) => {
-        output += `${args.map(String).join(' ')}\n`;
-      };
-
-      const result = showCommandHelp('-cc');
-
-      console.log = originalLog;
+      let result = false;
+      const output = captureOutput(() => {
+        result = showCommandHelp('-cc');
+      });
 
       expect(result).toBe(true);
       expect(output).toContain('cc-safety-net claude-code');

@@ -107,6 +107,17 @@ describe('writeAuditLog', () => {
     return join(testDir, '.cc-safety-net', 'logs', `${sessionId}.jsonl`);
   }
 
+  function expectAuditLogStayedInLogsDir(escapedPath: string): void {
+    expect(existsSync(escapedPath)).toBe(false);
+    const logsDir = join(testDir, '.cc-safety-net', 'logs');
+    if (!existsSync(logsDir)) return;
+    const files = readdirSync(logsDir).filter((f) => f.endsWith('.jsonl'));
+    expect(files.length).toBe(1);
+    for (const file of files) {
+      expect(join(logsDir, file).startsWith(logsDir)).toBe(true);
+    }
+  }
+
   function readLogEntries(sessionId: string): AuditLogEntry[] {
     const logFile = getLogFile(sessionId);
     if (!existsSync(logFile)) {
@@ -214,20 +225,7 @@ describe('writeAuditLog', () => {
       homeDir: testDir,
     });
 
-    // Verify no file was created outside the logs dir
-    expect(existsSync(join(testDir, 'outside.jsonl'))).toBe(false);
-
-    // Verify log was created in the correct location
-    const logsDir = join(testDir, '.cc-safety-net', 'logs');
-    if (existsSync(logsDir)) {
-      const files = readdirSync(logsDir).filter((f) => f.endsWith('.jsonl'));
-      expect(files.length).toBe(1);
-      // The file should be inside logs dir
-      for (const file of files) {
-        const fullPath = join(logsDir, file);
-        expect(fullPath.startsWith(logsDir)).toBe(true);
-      }
-    }
+    expectAuditLogStayedInLogsDir(join(testDir, 'outside.jsonl'));
   });
 
   test('session id absolute path does not escape logs dir', () => {
@@ -236,19 +234,7 @@ describe('writeAuditLog', () => {
       homeDir: testDir,
     });
 
-    // Verify no file was created at the escaped location
-    expect(existsSync(join(testDir, 'escaped.jsonl'))).toBe(false);
-
-    // Verify log was created in the correct location
-    const logsDir = join(testDir, '.cc-safety-net', 'logs');
-    if (existsSync(logsDir)) {
-      const files = readdirSync(logsDir).filter((f) => f.endsWith('.jsonl'));
-      expect(files.length).toBe(1);
-      for (const file of files) {
-        const fullPath = join(logsDir, file);
-        expect(fullPath.startsWith(logsDir)).toBe(true);
-      }
-    }
+    expectAuditLogStayedInLogsDir(join(testDir, 'escaped.jsonl'));
   });
 
   test('cwd null when not provided', () => {
