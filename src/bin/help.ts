@@ -147,8 +147,8 @@ export function printHelp(): void {
 
   // Config files
   lines.push('CONFIG FILES:');
-  lines.push(`${INDENT}~/.cc-safetynet-rules/rule.json       User-scope rule config`);
-  lines.push(`${INDENT}.cc-safetynet-rules/rule.json         Project-scope rule config`);
+  lines.push(`${INDENT}~/.cc-safety-net/rules/rule.json       User-scope rule config`);
+  lines.push(`${INDENT}.cc-safety-net/rules/rule.json         Project-scope rule config`);
   lines.push(`${INDENT}.safety-net.json                      Legacy project config`);
 
   console.log(lines.join('\n'));

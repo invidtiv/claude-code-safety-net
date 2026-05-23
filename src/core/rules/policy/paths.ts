@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import type { RulebookLockEntry, RulesPolicyOptions, SyncRulesConfigOptions } from './types';
@@ -7,9 +6,10 @@ const RULES_CONFIG_FILE = 'rule.json';
 const RULES_LOCK_FILE = 'rule.lock';
 export const RULEBOOK_FILE = 'rulebook.json';
 const LEGACY_RULES_CONFIG_FILE = 'config.json';
-const SAFETY_NET_DIR = '.cc-safetynet-rules';
-const LEGACY_PROJECT_RULES_DIR = '.cc-safety-net/rules';
-export const RULES_DIR = SAFETY_NET_DIR;
+const SAFETY_NET_DIR = '.cc-safety-net';
+const RULES_SUBDIR = 'rules';
+const CACHE_SUBDIR = 'cache';
+export const RULES_DIR = `${SAFETY_NET_DIR}/${RULES_SUBDIR}`;
 const CC_SAFETY_NET_HOME = 'CC_SAFETY_NET_HOME';
 export const GITHUB_RULEBOOK_SOURCE_FORMAT = 'owner/repo#ref/<rulebook-name>';
 export const RULE_SYNC_COMMAND = '`cc-safety-net rule sync`';
@@ -29,9 +29,7 @@ export interface ScopePaths {
 }
 
 export function getProjectRulesDir(cwd?: string): string {
-  const base = cwd ?? process.cwd();
-  const legacyPath = resolve(base, LEGACY_PROJECT_RULES_DIR);
-  return existsSync(legacyPath) ? legacyPath : resolve(base, RULES_DIR);
+  return resolve(cwd ?? process.cwd(), RULES_DIR);
 }
 
 export function getProjectRulesConfigPath(cwd?: string): string {
@@ -45,7 +43,9 @@ export function getProjectRulesLockPath(cwd?: string): string {
 export function getUserRulesDir(options?: RulesPolicyOptions): string {
   return (
     options?.userConfigDir ??
-    (options?.userConfigPath ? dirname(options.userConfigPath) : getUserSafetyNetHome())
+    (options?.userConfigPath
+      ? dirname(options.userConfigPath)
+      : join(getUserSafetyNetHome(), RULES_SUBDIR))
   );
 }
 
@@ -109,8 +109,7 @@ export function getRulebookCachePath(
 ): string {
   const digestHex = entry.digest.startsWith('sha256:') ? entry.digest.slice(7) : entry.digest;
   return join(
-    options?.cacheConfigDir ?? getUserRulesDir(options),
-    'cache',
+    getRulesCacheDir(options),
     'rulebooks',
     `${getRulebookCacheSlug(entry)}--${digestHex.slice(0, 12)}`,
     RULEBOOK_FILE,
@@ -132,4 +131,8 @@ function getRulebookCacheSlug(entry: RulebookLockEntry): string {
 
 export function getRepositoryRulebookPath(name: string): string {
   return `${RULES_DIR}/${name}/${RULEBOOK_FILE}`;
+}
+
+function getRulesCacheDir(options?: RulesPolicyOptions): string {
+  return join(dirname(options?.cacheConfigDir ?? getUserRulesDir(options)), CACHE_SUBDIR);
 }

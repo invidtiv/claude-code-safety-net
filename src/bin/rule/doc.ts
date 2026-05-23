@@ -4,11 +4,11 @@ Agent reference for generating CC Safety Net rulebook configuration.
 
 ## Config Locations
 
-| Scope | Config path | Rulebook path | Priority |
-|-------|-------------|---------------|----------|
-| User | \`~/.cc-safetynet-rules/rule.json\` | \`~/.cc-safetynet-rules/<rulebook-name>/rulebook.json\` | Lower |
-| Project | \`.cc-safetynet-rules/rule.json\` | \`.cc-safetynet-rules/<rulebook-name>/rulebook.json\` | Higher |
-| GitHub source | Listed in a local \`rule.json\` | \`.cc-safetynet-rules/<rulebook-name>/rulebook.json\` in the source repository | Source order |
+| Scope | Config path | Rulebook path | Cache path | Priority |
+|-------|-------------|---------------|------------|----------|
+| User | \`~/.cc-safety-net/rules/rule.json\` | \`~/.cc-safety-net/rules/<rulebook-name>/rulebook.json\` | \`~/.cc-safety-net/cache/rulebooks/\` | Lower |
+| Project | \`.cc-safety-net/rules/rule.json\` | \`.cc-safety-net/rules/<rulebook-name>/rulebook.json\` | \`.cc-safety-net/cache/rulebooks/\` | Higher |
+| GitHub source | Listed in a local \`rule.json\` | \`.cc-safety-net/rules/<rulebook-name>/rulebook.json\` in the source repository | Consumer local cache | Source order |
 
 Use \`cc-safety-net rule init\` to create a starter local config and rulebook. Use \`--global\` for user scope.
 
@@ -36,7 +36,7 @@ Legacy inline \`.safety-net.json\` custom rules are deprecated. Do not create th
 
 ## Rulebook Sources
 
-- Local sources are bare rulebook names such as \`project-rules\`; the rulebook file is \`.cc-safetynet-rules/project-rules/rulebook.json\`.
+- Local sources are bare rulebook names such as \`project-rules\`; the rulebook file is \`.cc-safety-net/rules/project-rules/rulebook.json\`.
 - GitHub sources use \`owner/repo#ref/<rulebook-name>\`.
 - GitHub refs must be one path segment, such as a tag, SHA, or branch name without \`/\`.
 - Rulebook source names must be unique in a config.

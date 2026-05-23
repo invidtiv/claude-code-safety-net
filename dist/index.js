@@ -3927,33 +3927,31 @@ function getSetOptionChanges(tokens, commandIndex) {
 }
 
 // src/core/config.ts
-import { existsSync as existsSync9, readFileSync as readFileSync8 } from "node:fs";
+import { existsSync as existsSync8, readFileSync as readFileSync8 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { join as join6, resolve as resolve6 } from "node:path";
 
 // src/core/rules/policy/config-file.ts
-import { existsSync as existsSync4, mkdirSync, readFileSync as readFileSync3, renameSync, writeFileSync } from "node:fs";
+import { existsSync as existsSync3, mkdirSync, readFileSync as readFileSync3, renameSync, writeFileSync } from "node:fs";
 import { dirname as dirname5 } from "node:path";
 
 // src/core/rules/policy/paths.ts
-import { existsSync as existsSync3 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
 import { dirname as dirname4, join as join3, resolve as resolve4 } from "node:path";
 var RULES_CONFIG_FILE = "rule.json";
 var RULES_LOCK_FILE = "rule.lock";
 var RULEBOOK_FILE = "rulebook.json";
 var LEGACY_RULES_CONFIG_FILE = "config.json";
-var SAFETY_NET_DIR = ".cc-safetynet-rules";
-var LEGACY_PROJECT_RULES_DIR = ".cc-safety-net/rules";
-var RULES_DIR = SAFETY_NET_DIR;
+var SAFETY_NET_DIR = ".cc-safety-net";
+var RULES_SUBDIR = "rules";
+var CACHE_SUBDIR = "cache";
+var RULES_DIR = `${SAFETY_NET_DIR}/${RULES_SUBDIR}`;
 var CC_SAFETY_NET_HOME = "CC_SAFETY_NET_HOME";
 var GITHUB_RULEBOOK_SOURCE_FORMAT = "owner/repo#ref/<rulebook-name>";
 var RULE_SYNC_COMMAND = "`cc-safety-net rule sync`";
 var RULE_MIGRATE_COMMAND = "`npx cc-safety-net rule migrate`";
 function getProjectRulesDir(cwd) {
-  const base = cwd ?? process.cwd();
-  const legacyPath = resolve4(base, LEGACY_PROJECT_RULES_DIR);
-  return existsSync3(legacyPath) ? legacyPath : resolve4(base, RULES_DIR);
+  return resolve4(cwd ?? process.cwd(), RULES_DIR);
 }
 function getProjectRulesConfigPath(cwd) {
   return join3(getProjectRulesDir(cwd), RULES_CONFIG_FILE);
@@ -3962,7 +3960,7 @@ function getProjectRulesLockPath(cwd) {
   return join3(getProjectRulesDir(cwd), RULES_LOCK_FILE);
 }
 function getUserRulesDir(options) {
-  return options?.userConfigDir ?? (options?.userConfigPath ? dirname4(options.userConfigPath) : getUserSafetyNetHome());
+  return options?.userConfigDir ?? (options?.userConfigPath ? dirname4(options.userConfigPath) : join3(getUserSafetyNetHome(), RULES_SUBDIR));
 }
 function getUserSafetyNetHome() {
   const home = process.env[CC_SAFETY_NET_HOME];
@@ -4007,7 +4005,7 @@ function getRulebookDisplaySource(entry) {
 }
 function getRulebookCachePath(entry, options) {
   const digestHex = entry.digest.startsWith("sha256:") ? entry.digest.slice(7) : entry.digest;
-  return join3(options?.cacheConfigDir ?? getUserRulesDir(options), "cache", "rulebooks", `${getRulebookCacheSlug(entry)}--${digestHex.slice(0, 12)}`, RULEBOOK_FILE);
+  return join3(getRulesCacheDir(options), "rulebooks", `${getRulebookCacheSlug(entry)}--${digestHex.slice(0, 12)}`, RULEBOOK_FILE);
 }
 function getRulebookCacheSlug(entry) {
   const source = entry.kind === "github" && entry.display_ref ? `${entry.owner}/${entry.repo}#${entry.display_ref}/${entry.name}` : entry.spec;
@@ -4015,6 +4013,9 @@ function getRulebookCacheSlug(entry) {
 }
 function getRepositoryRulebookPath(name) {
   return `${RULES_DIR}/${name}/${RULEBOOK_FILE}`;
+}
+function getRulesCacheDir(options) {
+  return join3(dirname4(options?.cacheConfigDir ?? getUserRulesDir(options)), CACHE_SUBDIR);
 }
 
 // src/core/rules/policy/sources.ts
@@ -4233,7 +4234,7 @@ function validateRulesConfig(config) {
   return { errors, sources };
 }
 function readRulesConfig(path) {
-  if (!existsSync4(path)) {
+  if (!existsSync3(path)) {
     return { config: null, errors: [] };
   }
   try {
@@ -4307,7 +4308,7 @@ function writeJsonAtomic(path, value) {
 }
 
 // src/core/rules/policy/scope-policy.ts
-import { existsSync as existsSync7, readFileSync as readFileSync6 } from "node:fs";
+import { existsSync as existsSync6, readFileSync as readFileSync6 } from "node:fs";
 import { dirname as dirname6, isAbsolute as isAbsolute5, join as join5, relative, resolve as resolve5, sep as sep4 } from "node:path";
 
 // src/core/rules/rulebook.ts
@@ -4504,11 +4505,11 @@ function assertValidRulebook(rulebook) {
 }
 
 // src/core/rules/policy/lockfile.ts
-import { existsSync as existsSync5, readFileSync as readFileSync4 } from "node:fs";
+import { existsSync as existsSync4, readFileSync as readFileSync4 } from "node:fs";
 var SHA256_DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 var RULEBOOK_SOURCE_KINDS = new Set(["local-directory", "github"]);
 function readLockfile(path) {
-  if (!existsSync5(path)) {
+  if (!existsSync4(path)) {
     return { lock: null, errors: [] };
   }
   try {
@@ -4617,7 +4618,7 @@ function requiredString(candidate, field) {
 
 // src/core/rules/policy/resolver.ts
 import { createHash } from "node:crypto";
-import { existsSync as existsSync6, readFileSync as readFileSync5 } from "node:fs";
+import { existsSync as existsSync5, readFileSync as readFileSync5 } from "node:fs";
 import { join as join4 } from "node:path";
 async function resolveRulebookSource(spec, configDir, options) {
   if (spec.startsWith("builtin:") || spec.startsWith("github:")) {
@@ -4674,7 +4675,7 @@ async function discoverGitHubRepositoryRulebooks(source) {
 function resolveLocalRulebook(spec, configDir, _options) {
   assertBareRulebookName(spec);
   const path = getLocalRulebookPath(configDir, spec);
-  if (!existsSync6(path)) {
+  if (!existsSync5(path)) {
     throw new Error(`Rulebook source not found: ${spec}`);
   }
   const content = readFileSync5(path, "utf-8");
@@ -4726,7 +4727,7 @@ async function resolveGitHubRulebook(spec) {
 }
 async function readLockedGitHubRulebook(entry, configDir, options) {
   const cachePath = getRulebookCachePath(entry, { ...options, cacheConfigDir: configDir });
-  if (existsSync6(cachePath)) {
+  if (existsSync5(cachePath)) {
     const content = readFileSync5(cachePath, "utf-8");
     if (sha256Digest(content) === entry.digest) {
       return { entry, rulebook: assertRulebookMatchesLockEntry(content, entry), content };
@@ -4884,7 +4885,7 @@ function loadScopePolicy(config, lockPath, configDir, options, source) {
 function validateLockedRulebook(entry, configDir, options) {
   const errors = [];
   const cachePath = getRulebookCachePath(entry, { ...options, cacheConfigDir: configDir });
-  if (!existsSync7(cachePath)) {
+  if (!existsSync6(cachePath)) {
     return [`missing cache entry for ${entry.spec}; run ${RULE_SYNC_COMMAND}`];
   }
   const cacheContent = readFileSync6(cachePath, "utf-8");
@@ -4904,7 +4905,7 @@ function validateLockedRulebook(entry, configDir, options) {
       return errors;
     }
     const localPath = join5(sourcePath, RULEBOOK_FILE);
-    if (!existsSync7(localPath)) {
+    if (!existsSync6(localPath)) {
       errors.push(`missing local source for ${entry.spec}; run ${RULE_SYNC_COMMAND}`);
     } else {
       const localContent = readFileSync6(localPath, "utf-8");
@@ -4932,7 +4933,7 @@ function getLegacyRulesConfigErrors(paths, options) {
   ]));
 }
 function getLegacyRulesConfigError(legacyPath, configPath) {
-  if (existsSync7(configPath) || !existsSync7(legacyPath))
+  if (existsSync6(configPath) || !existsSync6(legacyPath))
     return [];
   try {
     const parsed = JSON.parse(readFileSync6(legacyPath, "utf-8"));
@@ -4994,7 +4995,7 @@ function withTerminalPeriod(message) {
 }
 
 // src/core/rules/policy/sync.ts
-import { existsSync as existsSync8, mkdirSync as mkdirSync2, readFileSync as readFileSync7, rmSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync7, mkdirSync as mkdirSync2, readFileSync as readFileSync7, rmSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { dirname as dirname7 } from "node:path";
 async function syncRulesConfig(options = {}) {
   const internalOptions = options;
@@ -5073,7 +5074,7 @@ async function testRulebookSources(sources, options = {}) {
 async function addRulebookSource(source, options = {}) {
   const scope = getScopePaths(options);
   mkdirSync2(scope.configDir, { recursive: true });
-  const before = existsSync8(scope.configPath) ? readFileSync7(scope.configPath, "utf-8") : null;
+  const before = existsSync7(scope.configPath) ? readFileSync7(scope.configPath, "utf-8") : null;
   const scopeConfig = readScopeRulesConfig(scope.configPath);
   if (!scopeConfig.ok)
     return scopeConfig.result;
@@ -5216,7 +5217,7 @@ function loadConfig(cwd, options) {
   return mergeConfigs(mergeConfigs(userConfig, projectConfig), rulesPolicyConfig);
 }
 function loadSingleConfig(path) {
-  if (!existsSync9(path)) {
+  if (!existsSync8(path)) {
     return null;
   }
   try {
@@ -5352,7 +5353,7 @@ function validateConfigFile(path) {
 function readConfigFileInput(path) {
   const errors = [];
   const ruleNames = new Set;
-  if (!existsSync9(path)) {
+  if (!existsSync8(path)) {
     errors.push(`File not found: ${path}`);
     return { ok: false, result: { errors, ruleNames } };
   }
@@ -5449,7 +5450,7 @@ Use information already provided in the user's prompt. Do not ask for scope, act
    - GitHub: edits or creates a shareable rulebook structure in the current repository.
 4. Determine whether the user wants to add a rule or edit an existing rule from the prompt when possible. Ask only if the prompt does not already make the action clear:
    - For User or Project scope, add or edit rules in the selected local rulebook.
-   - For GitHub scope, add or edit rules in \`.cc-safetynet-rules/<rulebook-name>/rulebook.json\` in the current repository.
+   - For GitHub scope, add or edit rules in \`.cc-safety-net/rules/<rulebook-name>/rulebook.json\` in the current repository.
    - Do not offer to add a GitHub source with \`owner/repo\`; installing rules from a GitHub source is outside this workflow.
    - If GitHub scope is selected and no GitHub rulebook structure exists in the current repository, show the intended path and create it only after confirming the rule with the user.
 5. Inspect the project before suggesting rules. Use manifests, lockfiles, build files, scripts, and infrastructure files for any language or ecosystem, including:
@@ -5471,7 +5472,7 @@ Use information already provided in the user's prompt. Do not ask for scope, act
 9. For local rules, write both files only after user confirmation:
    - Selected-scope \`rule.json\`
    - Selected-scope \`<rulebook-name>/rulebook.json\`
-10. For GitHub rules, ensure the repository layout is \`.cc-safetynet-rules/<rulebook-name>/rulebook.json\`, and ensure the source name, directory name, and rulebook \`name\` match exactly.
+10. For GitHub rules, ensure the repository layout is \`.cc-safety-net/rules/<rulebook-name>/rulebook.json\`, and ensure the source name, directory name, and rulebook \`name\` match exactly.
 11. After edits, run:
    - \`npx -y cc-safety-net rule sync\`
    - \`npx -y cc-safety-net rule verify\`

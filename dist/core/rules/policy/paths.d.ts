@@ -1,6 +1,6 @@
 import type { RulebookLockEntry, RulesPolicyOptions, SyncRulesConfigOptions } from './types';
 export declare const RULEBOOK_FILE = "rulebook.json";
-export declare const RULES_DIR = ".cc-safetynet-rules";
+export declare const RULES_DIR = ".cc-safety-net/rules";
 export declare const GITHUB_RULEBOOK_SOURCE_FORMAT = "owner/repo#ref/<rulebook-name>";
 export declare const RULE_SYNC_COMMAND = "`cc-safety-net rule sync`";
 export declare const RULE_MIGRATE_COMMAND = "`npx cc-safety-net rule migrate`";
