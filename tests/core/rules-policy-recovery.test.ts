@@ -157,7 +157,7 @@ describe('rules policy recovery coverage', () => {
         getRulebookCachePath(githubEntry, { cacheConfigDir: getProjectRulesDir(tempDir) }),
       ).toContain(join(tempDir, '.cc-safety-net', 'cache', 'rulebooks'));
 
-      expect(getRulebookSourceSyntaxError('builtin:old')).toContain('Invalid rulebook source');
+      expect(getRulebookSourceSyntaxError('bad:source')).toContain('Local rulebook sources');
       expect(getRulebookSourceSyntaxError('project-rules')).toBeNull();
       expect(getRulebookSourceSyntaxError('owner/repo#bad@/name')).toContain(
         'refs must be a single path segment',
@@ -349,8 +349,8 @@ describe('rules policy recovery coverage', () => {
     };
 
     try {
-      await expect(resolveRulebookSource('builtin:old', tempDir, {})).rejects.toThrow(
-        'Invalid rulebook source',
+      await expect(resolveRulebookSource('bad:source', tempDir, {})).rejects.toThrow(
+        'Local rulebook sources',
       );
       await expect(discoverGitHubRepositoryRulebooks('/repo')).rejects.toThrow(
         'Invalid GitHub repository source',

@@ -27,9 +27,6 @@ export interface ParsedGitHubSource {
 }
 
 export function getRulebookSourceSyntaxError(source: string): string | null {
-  if (source.startsWith('builtin:') || source.startsWith('github:')) {
-    return `Invalid rulebook source: ${source}`;
-  }
   if (isGitHubRulebookSource(source)) {
     try {
       parseGitHubSource(source);

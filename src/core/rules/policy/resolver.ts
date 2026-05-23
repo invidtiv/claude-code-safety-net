@@ -33,9 +33,6 @@ export async function resolveRulebookSource(
   configDir: string,
   options: RulesPolicyOptions,
 ): Promise<ResolvedRulebook> {
-  if (spec.startsWith('builtin:') || spec.startsWith('github:')) {
-    throw new Error(`Invalid rulebook source: ${spec}`);
-  }
   if (isGitHubRulebookSource(spec)) {
     return resolveGitHubRulebook(spec);
   }

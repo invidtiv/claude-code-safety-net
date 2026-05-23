@@ -657,9 +657,6 @@ var RULES_DIR_RE = RULES_DIR.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 var RULEBOOK_FILE_RE = RULEBOOK_FILE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 var GITHUB_RULEBOOK_PATH_RE = new RegExp(`^${RULES_DIR_RE}/(${NAME_PATTERN.source.slice(1, -1)})/${RULEBOOK_FILE_RE}$`);
 function getRulebookSourceSyntaxError(source) {
-  if (source.startsWith("builtin:") || source.startsWith("github:")) {
-    return `Invalid rulebook source: ${source}`;
-  }
   if (isGitHubRulebookSource(source)) {
     try {
       parseGitHubSource(source);
@@ -2411,9 +2408,6 @@ import { createHash } from "node:crypto";
 import { existsSync as existsSync4, readFileSync as readFileSync4 } from "node:fs";
 import { join as join3 } from "node:path";
 async function resolveRulebookSource(spec, configDir, options) {
-  if (spec.startsWith("builtin:") || spec.startsWith("github:")) {
-    throw new Error(`Invalid rulebook source: ${spec}`);
-  }
   if (isGitHubRulebookSource(spec)) {
     return resolveGitHubRulebook(spec);
   }
