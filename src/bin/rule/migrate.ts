@@ -1,7 +1,12 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { validateConfig } from '@/core/config';
-import { readRulesConfig, type SyncRulesConfigOptions, syncRulesConfig } from '@/core/rules/policy';
+import {
+  getRulebookMigratedFrom,
+  readRulesConfig,
+  type SyncRulesConfigOptions,
+  syncRulesConfig,
+} from '@/core/rules/policy';
 import { writeJsonAtomic } from '@/core/rules/policy/config-file';
 import {
   getLegacyProjectRulesConfigPath,
@@ -186,18 +191,6 @@ function getMigratedRulebookName(
   for (let i = 2; ; i++) {
     const name = `${defaultRulebookName}-${i}`;
     if (!existsSync(join(configDir, name, 'rulebook.json'))) return name;
-  }
-}
-
-function getRulebookMigratedFrom(configDir: string, source: string): string | null {
-  if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(source)) return null;
-  const path = join(configDir, source, 'rulebook.json');
-  if (!existsSync(path)) return null;
-  try {
-    const rulebook = JSON.parse(readFileSync(path, 'utf-8')) as Record<string, unknown>;
-    return typeof rulebook.migrated_from === 'string' ? rulebook.migrated_from : null;
-  } catch {
-    return null;
   }
 }
 

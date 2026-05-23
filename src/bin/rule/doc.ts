@@ -12,7 +12,7 @@ Agent reference for generating CC Safety Net rulebook configuration.
 
 Use \`cc-safety-net rule init\` to create a starter local config and rulebook. Use \`--global\` for user scope.
 
-Legacy inline \`.safety-net.json\` custom rules are deprecated. Do not create them for new rule configuration.
+Legacy inline \`.safety-net.json\` and \`~/.cc-safety-net/config.json\` files are not loaded at runtime. Convert them with \`cc-safety-net rule migrate\`.
 
 ## rule.json Schema
 
