@@ -9,8 +9,8 @@ import { loadConfig } from '@/core/config';
 import { envTruthy } from '@/core/env';
 import type { AnalyzeOptions, Config, ExplainResult, TraceStep } from '@/types';
 
-// Default empty config for tests that don't specify a cwd
-// This prevents loading the project's .safety-net.json
+// Default empty config for tests that don't specify a cwd.
+// This prevents loading the project's rulebook-backed config.
 const DEFAULT_TEST_CONFIG: Config = { version: 1, rules: [] };
 const CLI_ENTRYPOINT = join(process.cwd(), 'src/bin/cc-safety-net.ts');
 
