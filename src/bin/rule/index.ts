@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { RULE_DOC } from '@/bin/rule/doc';
 import { printRuleChangeResult, printRulesTestResult, printSyncResult } from '@/bin/rule/format';
+import { runRulesMigrate } from '@/bin/rule/migrate';
 import { runRulesVerify } from '@/bin/rule/verify';
 import {
   addRulebookSource,
@@ -20,6 +21,7 @@ import {
 interface RuleFlags {
   global: boolean;
   check: boolean;
+  cleanup: boolean;
   help: boolean;
   positionals: string[];
   errors: string[];
@@ -33,6 +35,7 @@ const RULE_SUBCOMMANDS = new Set([
   'sync',
   'list',
   'test',
+  'migrate',
   'doc',
   'verify',
 ]);
@@ -109,6 +112,10 @@ export async function runRuleCommand(args: readonly string[]): Promise<number> {
     return result.ok ? 0 : 1;
   }
 
+  if (subcommand === 'migrate') {
+    return runRulesMigrate({ cleanup: flags.cleanup, cwd: process.cwd() });
+  }
+
   if (subcommand === 'doc') {
     console.log(RULE_DOC);
     return 0;
@@ -125,13 +132,22 @@ function parseRuleFlags(args: readonly string[]): RuleFlags {
   const flags: RuleFlags = {
     global: false,
     check: false,
+    cleanup: false,
     help: false,
     positionals: [],
     errors: [],
   };
 
   for (const arg of args) {
-    if (arg === '-g' || arg === '--global') {
+    if (flags.positionals[0] === 'migrate' && arg.startsWith('-')) {
+      if (arg === '--cleanup') {
+        flags.cleanup = true;
+      } else if (arg === '-h' || arg === '--help') {
+        flags.help = true;
+      } else {
+        flags.errors.push(`Unknown option for rule migrate: ${arg}`);
+      }
+    } else if (arg === '-g' || arg === '--global') {
       flags.global = true;
     } else if (arg === '--check') {
       flags.check = true;
@@ -148,7 +164,13 @@ function parseRuleFlags(args: readonly string[]): RuleFlags {
   if (subcommand && !RULE_SUBCOMMANDS.has(subcommand)) {
     flags.errors.push(`Unknown rule subcommand: ${subcommand}`);
   }
-  if (flags.positionals.length > 2) {
+  if (subcommand === 'migrate') {
+    if (flags.global) flags.errors.push('Unknown option for rule migrate: --global');
+    if (flags.check) flags.errors.push('Unknown option for rule migrate: --check');
+    if (flags.positionals.length > 1) {
+      flags.errors.push(`Unexpected rule migrate argument: ${flags.positionals[1]}`);
+    }
+  } else if (flags.positionals.length > 2) {
     flags.errors.push(`Unexpected rule argument: ${flags.positionals[2]}`);
   }
 
