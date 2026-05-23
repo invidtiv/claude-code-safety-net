@@ -229,7 +229,7 @@ describe('explainCommand edge cases', () => {
   });
 
   test('custom-rules-check shows rulesChecked false when no config', () => {
-    // Pass explicit empty config to avoid picking up real .safety-net.json
+    // Pass explicit empty config to avoid picking up real rulebook-backed config.
     const result = explainCommand('echo hello', { config: { version: 1, rules: [] } });
     const allSteps = getTraceSteps(result);
     const customStep = allSteps.find((s) => s.type === 'custom-rules-check');
@@ -887,13 +887,14 @@ describe('explainCommand interpreter with dangerous code', () => {
 });
 
 describe('getConfigSource validation paths', () => {
-  test('invalid project config with no user config returns project path with configValid: false', () => {
+  test('invalid project rules config returns project path with configValid: false', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'explain-test-'));
     try {
-      writeFileSync(join(tempDir, '.safety-net.json'), 'not valid json');
+      mkdirSync(join(tempDir, '.cc-safety-net', 'rules'), { recursive: true });
+      writeFileSync(join(tempDir, '.cc-safety-net', 'rules', 'rule.json'), 'not valid json');
       const result = explainCommand('echo hello', { cwd: tempDir });
       expect(result.result).toBe('allowed');
-      expect(result.configSource).toBe(join(tempDir, '.safety-net.json'));
+      expect(result.configSource).toBe(join(tempDir, '.cc-safety-net', 'rules', 'rule.json'));
       expect(result.configValid).toBe(false);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });

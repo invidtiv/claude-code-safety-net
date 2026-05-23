@@ -241,7 +241,7 @@ claude-code-safety-net/
 | `analyze/index.ts` | Main entry, command analysis orchestration |
 | `analyze/` | Submodules for specific analysis tasks (find, xargs, parallel, interpreters, etc.) |
 | `audit.ts` | Audit logging to `~/.cc-safety-net/logs/` |
-| `config.ts` | Config loading (`.safety-net.json`, `~/.cc-safety-net/config.json`) |
+| `config.ts` | Runtime config loading from rulebook-backed rule config |
 | `env.ts` | Environment variable utilities (`envTruthy`) |
 | `format.ts` | Output formatting (`formatBlockedMessage`) |
 | `git/` | Git rules, parsing, config, environment, and worktree handling |

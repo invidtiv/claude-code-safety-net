@@ -23,7 +23,10 @@ import type { ExplainOptions, ExplainResult, ExplainTrace, TraceStep } from '@/t
 export function explainCommand(command: string, options?: ExplainOptions): ExplainResult {
   const trace: ExplainTrace = { steps: [], segments: [] };
   const analyzeOpts = buildAnalyzeOptions(options);
-  const { configSource, configValid } = getConfigSource({ cwd: options?.cwd });
+  const { configSource, configValid } = getConfigSource({
+    cwd: options?.cwd,
+    userConfigDir: options?.userConfigDir,
+  });
 
   if (!command || !command.trim()) {
     trace.steps.push({ type: 'error', message: 'No command provided' });

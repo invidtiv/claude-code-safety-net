@@ -492,7 +492,7 @@ Create a starter project rule config and rulebook:
 npx -y cc-safety-net rule init
 ```
 
-This creates `.cc-safetynet-rules/rule.json`:
+This creates `.cc-safety-net/rules/rule.json`:
 
 ```json
 {
@@ -502,7 +502,7 @@ This creates `.cc-safetynet-rules/rule.json`:
 }
 ```
 
-Rule definitions live in `.cc-safetynet-rules/project-rules/rulebook.json`:
+Rule definitions live in `.cc-safety-net/rules/project-rules/rulebook.json`:
 
 ```json
 {
@@ -549,10 +549,12 @@ Now `git add -A`, `git add --all`, and `git add .` will be blocked with your cus
 
 Config files are loaded from two scopes and merged:
 
-1. **User scope**: `~/.cc-safetynet-rules/rule.json` (use `rule init --global`)
-2. **Project scope**: `.cc-safetynet-rules/rule.json` in the current working directory
+1. **User scope**: `~/.cc-safety-net/rules/rule.json` (use `rule init --global`)
+2. **Project scope**: `.cc-safety-net/rules/rule.json` in the current working directory
 
-Local rulebook sources are bare names like `project-rules`. GitHub rulebook sources use `owner/repo#ref/<rulebook-name>` and point to `.cc-safetynet-rules/<rulebook-name>/rulebook.json` in that repository.
+Local rulebook sources are bare names like `project-rules`. GitHub rulebook sources use `owner/repo#ref/<rulebook-name>` and point to `.cc-safety-net/rules/<rulebook-name>/rulebook.json` in that repository.
+
+Legacy inline config files (`.safety-net.json` and `~/.cc-safety-net/config.json`) are no longer loaded at runtime. Convert existing legacy rules with `npx -y cc-safety-net rule migrate`; use `npx -y cc-safety-net rule migrate --cleanup` if you also want to delete verified legacy files after migration.
 
 **Merging behavior**:
 - Rulebooks from both scopes are combined
@@ -624,7 +626,7 @@ Every rule must have at least one blocked fixture. Add allowed fixtures for clos
 
 #### Block global npm installs
 
-`.cc-safetynet-rules/rule.json`:
+`.cc-safety-net/rules/rule.json`:
 
 ```json
 {
@@ -634,7 +636,7 @@ Every rule must have at least one blocked fixture. Add allowed fixtures for clos
 }
 ```
 
-`.cc-safetynet-rules/project-rules/rulebook.json`:
+`.cc-safety-net/rules/project-rules/rulebook.json`:
 
 ```json
 {
@@ -743,6 +745,7 @@ Rulebook-backed custom rules fail closed when configured rulebooks cannot be loa
 |----------|----------|
 | Config file not found | Silent — use built-in rules only |
 | Invalid rule config | Fail closed until fixed |
+| Legacy config without migrated rule config | Fail closed until `rule migrate` creates the new rule config |
 | Missing or stale lock/cache | Fail closed until `rule sync` repairs it |
 | Invalid local rulebook | Fail closed until the rulebook is fixed and synced |
 | Invalid GitHub rulebook | Fail closed until the source is fixed or removed |

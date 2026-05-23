@@ -5,18 +5,16 @@
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import {
-  getProjectConfigPath,
-  getUserConfigPath,
-  loadConfig,
-  validateConfigFile,
-} from '@/core/config';
+import { loadConfig, validateRulesConfigFile } from '@/core/config';
 import { envTruthy } from '@/core/env';
+import { getProjectRulesConfigPath, getUserRulesConfigPath } from '@/core/rules/policy';
 import type { AnalyzeOptions, ExplainOptions } from '@/types';
 
 export interface GetConfigSourceOptions {
   cwd?: string;
-  /** Override user config path for testing */
+  /** Override user rules config directory for testing */
+  userConfigDir?: string;
+  /** Override user rules config path for testing */
   userConfigPath?: string;
 }
 
@@ -28,20 +26,20 @@ export function getConfigSource(options?: GetConfigSourceOptions): {
   configSource: string | null;
   configValid: boolean;
 } {
-  const projectPath = getProjectConfigPath(options?.cwd);
+  const projectPath = getProjectRulesConfigPath(options?.cwd);
   let invalidProjectPath: string | null = null;
 
   if (existsSync(projectPath)) {
-    const validation = validateConfigFile(projectPath);
+    const validation = validateRulesConfigFile(projectPath);
     if (validation.errors.length === 0) {
       return { configSource: projectPath, configValid: true };
     }
     invalidProjectPath = projectPath;
   }
 
-  const userPath = options?.userConfigPath ?? getUserConfigPath();
+  const userPath = options?.userConfigPath ?? getUserRulesConfigPath(options);
   if (existsSync(userPath)) {
-    const validation = validateConfigFile(userPath);
+    const validation = validateRulesConfigFile(userPath);
     return { configSource: userPath, configValid: validation.errors.length === 0 };
   }
 

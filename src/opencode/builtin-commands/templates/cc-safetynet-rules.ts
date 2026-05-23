@@ -53,7 +53,7 @@ Use information already provided in the user's prompt. Do not ask for scope, act
 
 - Custom rules can only add restrictions; they cannot bypass built-in SafetyNet protections.
 - Config files list rulebook sources. Rule definitions live in \`rulebook.json\`, not directly in \`rule.json\`.
-- Do not use legacy inline \`.safety-net.json\` rules for new configuration.
+- Do not use legacy inline \`.safety-net.json\` or \`~/.cc-safety-net/config.json\` rules. Convert existing legacy files with \`npx -y cc-safety-net rule migrate\`.
 - Rule names must be unique within the rulebook.
 - Every rule command must be listed in \`allowed_commands\`, and every rule must have at least one blocked fixture.
 - Blocked fixtures must specify the expected \`rule\`; include allowed fixtures for close-but-safe commands.
