@@ -3,7 +3,7 @@ import type { Command } from './types';
 export const hookCommand: Command = {
   name: 'hook',
   description: 'Run as an agent CLI hook (reads JSON from stdin)',
-  usage: 'hook <platform>',
+  usage: 'hook <coding cli>',
   subcommands: [
     { usage: 'install --opencode', description: 'Install OpenCode hook config' },
     { usage: 'install --kimi-cli', description: 'Install Kimi CLI hook config' },

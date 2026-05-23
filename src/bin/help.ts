@@ -36,7 +36,14 @@ function getSubcommandsColumnWidth(subcommands: readonly { usage: string }[]): n
  */
 function formatCommandSummary(cmd: Command, maxUsageWidth: number): string {
   const usage = `${PROGRAM_NAME} ${cmd.usage}`;
-  return `${INDENT}${usage.padEnd(maxUsageWidth + PROGRAM_NAME.length + 3)}${cmd.description}`;
+  if (cmd.name === 'hook') {
+    return `${INDENT}${usage.padEnd(maxUsageWidth + PROGRAM_NAME.length + 6)}${cmd.description}`;
+  }
+  return `${INDENT}${usage.padEnd(maxUsageWidth + PROGRAM_NAME.length + 4)}${cmd.description}`;
+}
+
+function formatEnvironmentVariable(name: string, description: string): string {
+  return `${INDENT}${name.padEnd(40)}${description}`;
 }
 
 /**
@@ -130,25 +137,35 @@ export function printHelp(): void {
   // Environment variables
   lines.push('ENVIRONMENT VARIABLES:');
   lines.push(
-    `${INDENT}${ENV_FLAGS.strict.name}=1               Fail-closed on unparseable commands`,
-  );
-  lines.push(`${INDENT}${ENV_FLAGS.paranoid.name}=1             Enable all paranoid checks`);
-  lines.push(`${INDENT}${ENV_FLAGS.paranoidRm.name}=1          Block non-temp rm -rf within cwd`);
-  lines.push(`${INDENT}${ENV_FLAGS.paranoidInterpreters.name}=1  Block interpreter one-liners`);
-  lines.push(
-    `${INDENT}${ENV_FLAGS.worktree.name}=1             Allow local git discards in linked worktrees`,
+    formatEnvironmentVariable(`${ENV_FLAGS.strict.name}=1`, 'Fail-closed on unparseable commands'),
   );
   lines.push(
-    `${INDENT}${ENV_FLAGS.debug.name}=1              Log allowed hook commands for debugging`,
+    formatEnvironmentVariable(`${ENV_FLAGS.paranoid.name}=1`, 'Enable all paranoid checks'),
   );
-  lines.push(`${INDENT}CC_SAFETY_NET_HOME             Override rule config home directory`);
-  lines.push(`${INDENT}Legacy SAFETY_NET_* names remain supported as fallbacks`);
-  lines.push('');
-
-  // Config files
-  lines.push('CONFIG FILES:');
-  lines.push(`${INDENT}~/.cc-safety-net/rules/rule.json       User-scope rule config`);
-  lines.push(`${INDENT}.cc-safety-net/rules/rule.json         Project-scope rule config`);
+  lines.push(
+    formatEnvironmentVariable(`${ENV_FLAGS.paranoidRm.name}=1`, 'Block non-temp rm -rf within cwd'),
+  );
+  lines.push(
+    formatEnvironmentVariable(
+      `${ENV_FLAGS.paranoidInterpreters.name}=1`,
+      'Block interpreter one-liners',
+    ),
+  );
+  lines.push(
+    formatEnvironmentVariable(
+      `${ENV_FLAGS.worktree.name}=1`,
+      'Allow local git discards in linked worktrees',
+    ),
+  );
+  lines.push(
+    formatEnvironmentVariable(
+      `${ENV_FLAGS.debug.name}=1`,
+      'Log allowed hook commands for debugging',
+    ),
+  );
+  lines.push(
+    formatEnvironmentVariable('CC_SAFETY_NET_HOME', 'Override rule config home directory'),
+  );
 
   console.log(lines.join('\n'));
 }

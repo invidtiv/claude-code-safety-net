@@ -38,6 +38,39 @@ describe('help output', () => {
   });
 
   describe('printHelp (main help)', () => {
+    test('prints exact main help output', () => {
+      const { output } = captureOutput(() => printHelp());
+
+      expect(output).toBe(`cc-safety-net vdev
+
+Blocks destructive git and filesystem commands before execution.
+
+COMMANDS:
+  cc-safety-net doctor [options]              Run diagnostic checks to verify installation and configuration
+  cc-safety-net explain [options] <command>   Show step-by-step analysis trace of how a command would be analyzed
+  cc-safety-net rule <subcommand>             Manage Safety Net rulebook sources
+  cc-safety-net hook <coding cli>               Run as an agent CLI hook (reads JSON from stdin)
+  cc-safety-net statusline <coding cli>       Print status line with mode indicators for shell integration
+
+GLOBAL OPTIONS:
+  -h, --help       Show help (use with command for command-specific help)
+  -V, --version    Show version
+
+HELP:
+  cc-safety-net help <command>     Show help for a specific command
+  cc-safety-net <command> --help   Show help for a specific command
+
+ENVIRONMENT VARIABLES:
+  CC_SAFETY_NET_STRICT=1                  Fail-closed on unparseable commands
+  CC_SAFETY_NET_PARANOID=1                Enable all paranoid checks
+  CC_SAFETY_NET_PARANOID_RM=1             Block non-temp rm -rf within cwd
+  CC_SAFETY_NET_PARANOID_INTERPRETERS=1   Block interpreter one-liners
+  CC_SAFETY_NET_WORKTREE=1                Allow local git discards in linked worktrees
+  CC_SAFETY_NET_DEBUG=1                   Log allowed hook commands for debugging
+  CC_SAFETY_NET_HOME                      Override rule config home directory
+`);
+    });
+
     test('contains version header', () => {
       const { output } = captureOutput(() => printHelp());
       expect(output).toContain('cc-safety-net v');
@@ -87,11 +120,9 @@ describe('help output', () => {
       expect(output).toContain('CC_SAFETY_NET_HOME');
     });
 
-    test('contains CONFIG FILES section', () => {
+    test('omits config files from main help', () => {
       const { output } = captureOutput(() => printHelp());
-      expect(output).toContain('CONFIG FILES:');
-      expect(output).toContain('~/.cc-safety-net/rules/rule.json');
-      expect(output).toContain('.cc-safety-net/rules/rule.json');
+      expect(output).not.toContain('CONFIG FILES:');
     });
   });
 
