@@ -9723,9 +9723,6 @@ function handleCliFlags() {
   if (args[0] === "--gemini-cli" || args[0] === "-gc") {
     return "gemini-cli";
   }
-  if (args[0] === "--kimi-cli" || args[0] === "-kc") {
-    return "kimi-cli";
-  }
   console.error(`Unknown option: ${args[0]}`);
   console.error("Run 'cc-safety-net --help' for usage.");
   process.exit(1);

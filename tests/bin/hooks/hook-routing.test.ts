@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { claudeCodeBashInput, geminiShellInput, runCli } from './hook-helpers';
+import { claudeCodeBashInput, geminiShellInput, kimiShellInput, runCli } from './hook-helpers';
 
 describe('hook command routing', () => {
   test('top-level Claude Code long flag routes to hook command for compatibility', async () => {
@@ -37,6 +37,26 @@ describe('hook command routing', () => {
     expect(exitCode).toBe(0);
     expect(output.decision).toBe('deny');
     expect(output.reason).toContain('git reset --hard');
+  });
+
+  test('Kimi CLI routes through hook command only', async () => {
+    const { stdout, exitCode } = await runCli(
+      ['hook', '--kimi-cli'],
+      JSON.stringify(kimiShellInput('git status')),
+    );
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe('');
+  });
+
+  test('top-level Kimi CLI flags are not legacy compatibility aliases', async () => {
+    const longFlag = await runCli(['--kimi-cli']);
+    const shortFlag = await runCli(['-kc']);
+
+    expect(longFlag.exitCode).toBe(1);
+    expect(longFlag.stderr).toContain('Unknown option: --kimi-cli');
+    expect(shortFlag.exitCode).toBe(1);
+    expect(shortFlag.stderr).toContain('Unknown option: -kc');
   });
 
   test('does not route nested legacy hook flags outside the hook command', async () => {
