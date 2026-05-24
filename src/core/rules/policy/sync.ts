@@ -188,8 +188,11 @@ export async function removeRulebookSource(
   if (!loaded.config) {
     return { ok: false, errors: [`No config found at ${scope.configPath}`], entries: [] };
   }
-  const lock = readLockfile(scope.lockPath).lock;
-  const matches = getRemoveMatches(loaded.config.rules, lock, match);
+  const lockResult = readLockfile(scope.lockPath);
+  if (lockResult.errors.length > 0) {
+    return { ok: false, errors: lockResult.errors, entries: [] };
+  }
+  const matches = getRemoveMatches(loaded.config.rules, lockResult.lock, match);
   if (!matches.ok) return matches.result;
   const before = readFileSync(scope.configPath, 'utf-8');
   writeJsonAtomic(scope.configPath, {

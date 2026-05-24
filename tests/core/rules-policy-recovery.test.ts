@@ -556,6 +556,17 @@ describe('rules policy recovery coverage', () => {
         'Rulebook source not found',
       );
 
+      writeDefaultRulesConfig(getProjectRulesConfigPath(tempDir), ['owner/repo#main/alpha']);
+      writeFileSync(getProjectRulesLockPath(tempDir), '{not json', 'utf-8');
+      expect(
+        (await removeRulebookSource('alpha', { cwd: tempDir, userConfigDir })).errors[0],
+      ).toContain('malformed lockfile');
+      writeDefaultRulesConfig(getProjectRulesConfigPath(tempDir), ['project-rules']);
+      writeFileSync(
+        getProjectRulesLockPath(tempDir),
+        JSON.stringify({ version: 1, rulebooks: [localEntry] }),
+      );
+
       writeRulebook(
         join(getProjectRulesDir(tempDir), 'project-rules', 'rulebook.json'),
         'actual-name',
