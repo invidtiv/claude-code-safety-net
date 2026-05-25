@@ -43,6 +43,7 @@ interface CommandAnalysisContext {
   originalCwd: string | undefined;
   envAssignments: ReadonlyMap<string, string>;
   allowTmpdirVar: boolean;
+  depth: number;
   options: InternalOptions;
 }
 
@@ -160,6 +161,7 @@ export function analyzeSegment(
     originalCwd,
     envAssignments,
     allowTmpdirVar,
+    depth,
     options,
   };
   const commandAnalyzer = getCommandAnalyzer(commandContext);
@@ -245,7 +247,17 @@ function analyzeRmCommand(context: CommandAnalysisContext): string | null {
 }
 
 function analyzeFindCommand(context: CommandAnalysisContext): string | null {
-  return analyzeFind(context.tokens);
+  return analyzeFind(context.tokens, {
+    cwd: context.cwdForRm,
+    envAssignments: context.envAssignments,
+    analyzeTokens: (tokens, cwd) =>
+      analyzeSegment([...tokens], context.depth + 1, {
+        ...context.options,
+        effectiveCwd: cwd,
+        envAssignments: context.envAssignments,
+      }),
+    analyzeNested: context.options.analyzeNested,
+  });
 }
 
 function analyzeXargsCommand(context: CommandAnalysisContext): string | null {

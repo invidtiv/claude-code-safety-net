@@ -99,7 +99,19 @@ describe('find -exec rm tests', () => {
     assertBlocked('find . -exec busybox rm -rf {} ;', 'rm -rf');
   });
 
+  test('find exec git reset hard blocked', () => {
+    assertBlocked('find . -exec git reset --hard ;', 'git reset --hard');
+  });
+
+  test('find exec shell git reset hard blocked', () => {
+    assertBlocked("find . -exec sh -c 'git reset --hard' ;", 'git reset --hard');
+  });
+
   test('find execdir env rm rf blocked', () => {
     assertBlocked('find /tmp -execdir env rm -rf {} +', 'rm -rf');
+  });
+
+  test('find execdir rm rf relative target blocked even when parent cwd is known', () => {
+    assertBlocked('find . -execdir rm -rf build +', 'rm -rf', '/tmp');
   });
 });

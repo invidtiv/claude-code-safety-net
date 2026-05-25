@@ -1,9 +1,20 @@
 import { hasRecursiveForceFlags } from '@/core/analyze/rm-flags';
 import { getBasename, stripWrappers } from '@/core/shell';
+import type { AnalyzeNestedOverrides } from '@/types';
 
 const REASON_FIND_DELETE = 'find -delete permanently removes files. Use -print first to preview.';
 
-export function analyzeFind(tokens: readonly string[]): string | null {
+export interface AnalyzeFindContext {
+  cwd?: string;
+  envAssignments?: ReadonlyMap<string, string>;
+  analyzeTokens?: (tokens: readonly string[], cwd: string | null | undefined) => string | null;
+  analyzeNested?: (command: string, overrides?: AnalyzeNestedOverrides) => string | null;
+}
+
+export function analyzeFind(
+  tokens: readonly string[],
+  context: AnalyzeFindContext = {},
+): string | null {
   // Check for -delete outside of -exec/-execdir blocks
   if (findHasDelete(tokens.slice(1))) {
     return REASON_FIND_DELETE;
@@ -13,21 +24,29 @@ export function analyzeFind(tokens: readonly string[]): string | null {
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     if (token === '-exec' || token === '-execdir') {
-      const execTokens = tokens.slice(i + 1);
-      const semicolonIdx = execTokens.indexOf(';');
-      const plusIdx = execTokens.indexOf('+');
-      // If no terminator found, shell-quote may have parsed it as an operator
-      // In that case, treat the rest of the tokens as the exec command
-      const endIdx =
-        semicolonIdx !== -1 && plusIdx !== -1
-          ? Math.min(semicolonIdx, plusIdx)
-          : semicolonIdx !== -1
-            ? semicolonIdx
-            : plusIdx !== -1
-              ? plusIdx
-              : execTokens.length; // No terminator - use all remaining tokens
+      let execCommand = getFindExecCommand(tokens, i);
+      if (context.analyzeTokens) {
+        const reason = context.analyzeTokens(
+          execCommand,
+          token === '-execdir' ? null : context.cwd,
+        );
+        if (reason) {
+          return reason;
+        }
+        continue;
+      }
 
-      let execCommand = execTokens.slice(0, endIdx);
+      if (context.analyzeNested) {
+        const reason = context.analyzeNested(execCommand.join(' '), {
+          effectiveCwd: token === '-execdir' ? undefined : context.cwd,
+          envAssignments: context.envAssignments,
+        });
+        if (reason) {
+          return reason;
+        }
+        continue;
+      }
+
       // Strip wrappers (env, sudo, command)
       execCommand = stripWrappers(execCommand);
       if (execCommand.length > 0) {
@@ -45,6 +64,24 @@ export function analyzeFind(tokens: readonly string[]): string | null {
   }
 
   return null;
+}
+
+function getFindExecCommand(tokens: readonly string[], execIndex: number): string[] {
+  const execTokens = tokens.slice(execIndex + 1);
+  const semicolonIdx = execTokens.indexOf(';');
+  const plusIdx = execTokens.indexOf('+');
+  // If no terminator found, shell-quote may have parsed it as an operator.
+  // In that case, treat the rest of the tokens as the exec command.
+  const endIdx =
+    semicolonIdx !== -1 && plusIdx !== -1
+      ? Math.min(semicolonIdx, plusIdx)
+      : semicolonIdx !== -1
+        ? semicolonIdx
+        : plusIdx !== -1
+          ? plusIdx
+          : execTokens.length;
+
+  return execTokens.slice(0, endIdx);
 }
 
 /**
