@@ -6270,6 +6270,9 @@ function analyzeCommandInternal(command2, depth, options2) {
     return { reason: REASON_RECURSION_LIMIT, segment: command2 };
   }
   const segments2 = splitShellCommandsWithInfo(command2);
+  if (depth === 0 && options2.config.failClosedReason && isFailClosedRepairCommand(segments2)) {
+    return null;
+  }
   if (options2.strict && segments2.length === 1 && segments2[0]?.tokens.length === 1 && segments2[0].tokens[0] === command2 && command2.includes(" ")) {
     return { reason: REASON_STRICT_UNPARSEABLE, segment: command2 };
   }
@@ -6320,6 +6323,29 @@ function appendDynamicSubstitutionSentinelForGit(tokens) {
     return tokens;
   }
   return [...tokens, DYNAMIC_SUBSTITUTION_TOKEN];
+}
+function isFailClosedRepairCommand(segments2) {
+  if (segments2.length !== 1 || segments2[0]?.hasDynamicSubstitution) {
+    return false;
+  }
+  const segment = segments2[0];
+  if (!segment) {
+    return false;
+  }
+  const tokens = segment.tokens;
+  if (tokens[0] === "cc-safety-net") {
+    return tokens[1] === "rule" && isRuleSyncArgs(tokens.slice(2));
+  }
+  if (tokens[0] === "npx") {
+    return (tokens[1] === "-y" || tokens[1] === "--yes") && isCcSafetyNetPackage(tokens[2]) && tokens[3] === "rule" && isRuleSyncArgs(tokens.slice(4));
+  }
+  return false;
+}
+function isRuleSyncArgs(args) {
+  return args.length >= 1 && args.length <= 2 && args.filter((arg) => arg === "sync").length === 1 && args.every((arg) => arg === "sync" || arg === "--global" || arg === "-g");
+}
+function isCcSafetyNetPackage(value) {
+  return /^cc-safety-net(?:@[a-zA-Z0-9._-]+)?$/.test(value ?? "");
 }
 
 // src/core/analyze/index.ts
@@ -8262,7 +8288,7 @@ function analyzeHookCommand(command2, cwd) {
   const paranoidAll = envTruthy(ENV_FLAGS.paranoid);
   return analyzeCommand(command2, {
     cwd,
-    config: loadConfig(cwd),
+    config: loadConfig(cwd, { repairLocalRulebooks: true }),
     strict: envTruthy(ENV_FLAGS.strict),
     paranoidRm: paranoidAll || envTruthy(ENV_FLAGS.paranoidRm),
     paranoidInterpreters: paranoidAll || envTruthy(ENV_FLAGS.paranoidInterpreters),

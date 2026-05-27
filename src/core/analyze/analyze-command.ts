@@ -33,6 +33,9 @@ export function analyzeCommandInternal(
   }
 
   const segments = splitShellCommandsWithInfo(command);
+  if (depth === 0 && options.config.failClosedReason && isFailClosedRepairCommand(segments)) {
+    return null;
+  }
 
   // Strict mode: block if command couldn't be parsed (unclosed quotes, etc.)
   // Detected when splitShellCommands returns a single segment containing the raw command
@@ -111,4 +114,46 @@ function appendDynamicSubstitutionSentinelForGit(tokens: string[]): string[] {
     return tokens;
   }
   return [...tokens, DYNAMIC_SUBSTITUTION_TOKEN];
+}
+
+function isFailClosedRepairCommand(
+  segments: ReturnType<typeof splitShellCommandsWithInfo>,
+): boolean {
+  if (segments.length !== 1 || segments[0]?.hasDynamicSubstitution) {
+    return false;
+  }
+
+  const segment = segments[0];
+  if (!segment) {
+    return false;
+  }
+
+  const tokens = segment.tokens;
+  if (tokens[0] === 'cc-safety-net') {
+    return tokens[1] === 'rule' && isRuleSyncArgs(tokens.slice(2));
+  }
+
+  if (tokens[0] === 'npx') {
+    return (
+      (tokens[1] === '-y' || tokens[1] === '--yes') &&
+      isCcSafetyNetPackage(tokens[2]) &&
+      tokens[3] === 'rule' &&
+      isRuleSyncArgs(tokens.slice(4))
+    );
+  }
+
+  return false;
+}
+
+function isRuleSyncArgs(args: string[]): boolean {
+  return (
+    args.length >= 1 &&
+    args.length <= 2 &&
+    args.filter((arg) => arg === 'sync').length === 1 &&
+    args.every((arg) => arg === 'sync' || arg === '--global' || arg === '-g')
+  );
+}
+
+function isCcSafetyNetPackage(value: string | undefined): boolean {
+  return /^cc-safety-net(?:@[a-zA-Z0-9._-]+)?$/.test(value ?? '');
 }
