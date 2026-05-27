@@ -7,6 +7,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -599,6 +600,60 @@ describe('rules policy recovery coverage', () => {
       },
       'outside',
     );
+  });
+
+  test('refuses to delete symlinked local source directory', async () => {
+    const tempDir = makeTempDir('rules-policy-remove-delete-source-symlink-dir');
+    const sourceDir = join(getProjectRulesDir(tempDir), 'project-rules');
+    const targetDir = join(tempDir, 'outside-source');
+
+    try {
+      writeProjectConfigOnly(tempDir);
+      mkdirSync(targetDir);
+      writeRulebook(join(targetDir, 'rulebook.json'));
+      symlinkSync(targetDir, sourceDir, 'dir');
+
+      const result = await removeRulebookSource('project-rules', {
+        cwd: tempDir,
+        deleteSource: true,
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.errors[0]).toContain('not a directory');
+      expect(existsSync(join(targetDir, 'rulebook.json'))).toBe(true);
+      expect(readRulesConfig(getProjectRulesConfigPath(tempDir)).config?.rules).toEqual([
+        'project-rules',
+      ]);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test('refuses to delete symlinked local source rulebook file', async () => {
+    const tempDir = makeTempDir('rules-policy-remove-delete-source-symlink-rulebook');
+    const sourceDir = join(getProjectRulesDir(tempDir), 'project-rules');
+    const targetPath = join(tempDir, 'outside-rulebook.json');
+
+    try {
+      writeProjectConfigOnly(tempDir);
+      mkdirSync(sourceDir);
+      writeRulebook(targetPath);
+      symlinkSync(targetPath, join(sourceDir, 'rulebook.json'));
+
+      const result = await removeRulebookSource('project-rules', {
+        cwd: tempDir,
+        deleteSource: true,
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.errors[0]).toContain('rulebook.json is not a file');
+      expect(existsSync(targetPath)).toBe(true);
+      expect(readRulesConfig(getProjectRulesConfigPath(tempDir)).config?.rules).toEqual([
+        'project-rules',
+      ]);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   test('tests local fixtures and handles GitHub repository inspection errors', async () => {

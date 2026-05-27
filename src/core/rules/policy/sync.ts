@@ -1,11 +1,11 @@
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   rmdirSync,
   rmSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -412,14 +412,14 @@ function getLocalSourceDirDeleteError(configDir: string, dir: string): string[] 
     return [`Refusing to delete local rulebook source outside ${configDir}: ${dir}`];
   }
   if (!existsSync(resolvedDir)) return [`Local rulebook source directory not found: ${dir}`];
-  if (!statSync(resolvedDir).isDirectory()) {
+  if (!lstatSync(resolvedDir).isDirectory()) {
     return [`Local rulebook source is not a directory: ${dir}`];
   }
   const entries = readdirSync(resolvedDir);
   if (!entries.includes('rulebook.json')) {
     return [`Local rulebook source directory is missing rulebook.json: ${dir}`];
   }
-  if (!statSync(join(resolvedDir, 'rulebook.json')).isFile()) {
+  if (!lstatSync(join(resolvedDir, 'rulebook.json')).isFile()) {
     return [`Local rulebook source rulebook.json is not a file: ${dir}`];
   }
   if (entries.length > 1) {
