@@ -121,7 +121,7 @@ describe('runtime config loading', () => {
 
     expect(config.rules).toEqual([]);
     expect(config.failClosedReason).toBe(
-      'legacy rules config location is no longer used; run `npx cc-safety-net rule migrate`.',
+      'legacy rules config location is no longer used; ask the user to run `npx -y cc-safety-net rule migrate`.',
     );
   }
 
@@ -142,7 +142,7 @@ describe('runtime config loading', () => {
 
     expect(config.rules).toEqual([]);
     expect(config.failClosedReason).toBe(
-      'legacy rules config location is no longer used; run `npx cc-safety-net rule migrate`.',
+      'legacy rules config location is no longer used; ask the user to run `npx -y cc-safety-net rule migrate`.',
     );
   });
 

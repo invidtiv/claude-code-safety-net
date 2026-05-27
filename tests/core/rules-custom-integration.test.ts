@@ -190,12 +190,12 @@ describe('custom rules integration', () => {
 
     assertBlocked(
       'git reset --hard',
-      'legacy rules config location is no longer used; run `npx cc-safety-net rule migrate`',
+      'legacy rules config location is no longer used; ask the user to run `npx -y cc-safety-net rule migrate`',
       tempDir,
     );
     assertBlocked(
       'echo hello',
-      'legacy rules config location is no longer used; run `npx cc-safety-net rule migrate`',
+      'legacy rules config location is no longer used; ask the user to run `npx -y cc-safety-net rule migrate`',
       tempDir,
     );
   });
@@ -206,12 +206,12 @@ describe('custom rules integration', () => {
 
     assertBlocked(
       'git reset --hard',
-      'legacy rules config location is no longer used; run `npx cc-safety-net rule migrate`',
+      'legacy rules config location is no longer used; ask the user to run `npx -y cc-safety-net rule migrate`',
       tempDir,
     );
     assertBlocked(
       'git add -A',
-      'legacy rules config location is no longer used; run `npx cc-safety-net rule migrate`',
+      'legacy rules config location is no longer used; ask the user to run `npx -y cc-safety-net rule migrate`',
       tempDir,
     );
   });

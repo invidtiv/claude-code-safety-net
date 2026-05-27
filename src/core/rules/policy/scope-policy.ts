@@ -288,7 +288,9 @@ function getLegacyRulesConfigError(
 ): string[] {
   if (!existsSync(legacyPath)) return [];
   if (hasMigrationEvidence(configPath, migratedFrom)) return [];
-  return [`legacy rules config location is no longer used; run ${RULE_MIGRATE_COMMAND}`];
+  return [
+    `legacy rules config location is no longer used; ask the user to run ${RULE_MIGRATE_COMMAND}`,
+  ];
 }
 
 function hasMigrationEvidence(configPath: string, migratedFrom: string): boolean {

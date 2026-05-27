@@ -13,7 +13,7 @@ export const RULES_DIR = `${SAFETY_NET_DIR}/${RULES_SUBDIR}`;
 const CC_SAFETY_NET_HOME = 'CC_SAFETY_NET_HOME';
 export const GITHUB_RULEBOOK_SOURCE_FORMAT = 'owner/repo#ref/<rulebook-name>';
 export const RULE_SYNC_COMMAND = '`cc-safety-net rule sync`';
-export const RULE_MIGRATE_COMMAND = '`npx cc-safety-net rule migrate`';
+export const RULE_MIGRATE_COMMAND = '`npx -y cc-safety-net rule migrate`';
 
 export interface PolicyPaths {
   userConfigPath: string;

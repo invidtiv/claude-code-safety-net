@@ -639,7 +639,7 @@ var RULES_DIR = `${SAFETY_NET_DIR}/${RULES_SUBDIR}`;
 var CC_SAFETY_NET_HOME = "CC_SAFETY_NET_HOME";
 var GITHUB_RULEBOOK_SOURCE_FORMAT = "owner/repo#ref/<rulebook-name>";
 var RULE_SYNC_COMMAND = "`cc-safety-net rule sync`";
-var RULE_MIGRATE_COMMAND = "`npx cc-safety-net rule migrate`";
+var RULE_MIGRATE_COMMAND = "`npx -y cc-safety-net rule migrate`";
 function getProjectRulesDir(cwd) {
   return resolve(cwd ?? process.cwd(), RULES_DIR);
 }
@@ -2728,7 +2728,9 @@ function getLegacyRulesConfigError(legacyPath, configPath, migratedFrom) {
     return [];
   if (hasMigrationEvidence(configPath, migratedFrom))
     return [];
-  return [`legacy rules config location is no longer used; run ${RULE_MIGRATE_COMMAND}`];
+  return [
+    `legacy rules config location is no longer used; ask the user to run ${RULE_MIGRATE_COMMAND}`
+  ];
 }
 function hasMigrationEvidence(configPath, migratedFrom) {
   const config = readRulesConfig(configPath).config;
