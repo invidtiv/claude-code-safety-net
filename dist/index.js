@@ -274,6 +274,98 @@ function dangerousInText(text) {
   return null;
 }
 
+// src/core/analyze/awk.ts
+var AWK_INTERPRETERS = new Set(["awk", "gawk", "nawk", "mawk"]);
+var REASON_AWK_SYSTEM_DYNAMIC = "Detected awk system() call with dynamic command that cannot be safely analyzed.";
+function analyzeAwkSystemCalls(tokens, analyzeNested) {
+  for (const token of tokens.slice(1)) {
+    if (!token.includes("system"))
+      continue;
+    const commands = extractAwkSystemCommands(token);
+    if (!commands)
+      continue;
+    if (commands.dynamic)
+      return REASON_AWK_SYSTEM_DYNAMIC;
+    for (const command of commands.commands) {
+      const reason = analyzeNested(command);
+      if (reason)
+        return reason;
+    }
+  }
+  return null;
+}
+function extractAwkSystemCommands(code) {
+  const commands = [];
+  let sawSystem = false;
+  let searchIndex = 0;
+  while (searchIndex < code.length) {
+    const systemIndex = code.indexOf("system", searchIndex);
+    if (systemIndex === -1)
+      break;
+    searchIndex = systemIndex + "system".length;
+    if (!isAwkIdentifierBoundary(code[systemIndex - 1]) || !isAwkIdentifierBoundary(code[searchIndex])) {
+      continue;
+    }
+    let i = skipAwkWhitespace(code, searchIndex);
+    if (code[i] !== "(")
+      continue;
+    i = skipAwkWhitespace(code, i + 1);
+    const quote = code[i];
+    if (quote !== '"' && quote !== "'") {
+      sawSystem = true;
+      continue;
+    }
+    const parsed = readAwkStringLiteral(code, i, quote);
+    if (!parsed) {
+      sawSystem = true;
+      continue;
+    }
+    i = skipAwkWhitespace(code, parsed.endIndex);
+    sawSystem = true;
+    if (code[i] !== ")") {
+      return { dynamic: true, commands };
+    }
+    commands.push(parsed.value);
+    searchIndex = i + 1;
+  }
+  if (!sawSystem)
+    return null;
+  return commands.length > 0 ? { dynamic: false, commands } : { dynamic: true, commands };
+}
+function isAwkIdentifierBoundary(char) {
+  return !char || !/[A-Za-z0-9_]/.test(char);
+}
+function skipAwkWhitespace(code, index) {
+  let i = index;
+  while (/\s/.test(code[i] ?? "")) {
+    i++;
+  }
+  return i;
+}
+function readAwkStringLiteral(code, startIndex, quote) {
+  let value = "";
+  let escaped = false;
+  for (let i = startIndex + 1;i < code.length; i++) {
+    const char = code[i];
+    if (!char)
+      break;
+    if (escaped) {
+      value += char;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === quote) {
+      return { value, endIndex: i + 1 };
+    }
+    value += char;
+  }
+  return null;
+}
+
 // src/core/analyze/constants.ts
 var DISPLAY_COMMANDS = new Set([
   "echo",
@@ -1144,6 +1236,11 @@ var GIT_CONFIG_AFFECTING_ENV_NAMES = new Set([
   "HOME",
   "XDG_CONFIG_HOME"
 ]);
+var GIT_SSH_ENV_NAMES = new Set([
+  "GIT_SSH_COMMAND",
+  "GIT_SSH",
+  "GIT_SSH_VARIANT"
+]);
 var GIT_CONTEXT_APPEND_ASSIGNMENT_RE = /^([A-Za-z_][A-Za-z0-9_]*)\+=/;
 function isGitContextEnvOverrideName(name) {
   return GIT_CONTEXT_ENV_OVERRIDE_NAMES.has(name);
@@ -1152,7 +1249,7 @@ function isGitConfigEnvName(name) {
   return name === "GIT_CONFIG_COUNT" || name === "GIT_CONFIG_PARAMETERS" || /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(name);
 }
 function isTrackedGitEnvName(name) {
-  return isGitContextEnvOverrideName(name) || GIT_CONFIG_AFFECTING_ENV_NAMES.has(name) || isGitConfigEnvName(name);
+  return isGitContextEnvOverrideName(name) || GIT_CONFIG_AFFECTING_ENV_NAMES.has(name) || GIT_SSH_ENV_NAMES.has(name) || isGitConfigEnvName(name);
 }
 function parseGitContextAppendEnvAssignment(token) {
   const match = token.match(GIT_CONTEXT_APPEND_ASSIGNMENT_RE);
@@ -1162,6 +1259,17 @@ function parseGitContextAppendEnvAssignment(token) {
   }
   const eqIdx = token.indexOf("=");
   return { name, value: token.slice(eqIdx + 1) };
+}
+function hasGitSshEnvAssignment(envAssignments) {
+  if (!envAssignments) {
+    return false;
+  }
+  for (const key of envAssignments.keys()) {
+    if (GIT_SSH_ENV_NAMES.has(key)) {
+      return true;
+    }
+  }
+  return false;
 }
 function hasConfigAffectingEnvAssignment(envAssignments) {
   if (!envAssignments) {
@@ -1826,9 +1934,7 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
   }
   if (target.startsWith("/") || /^[A-Za-z]:[\\/]/.test(target)) {
     try {
-      const normalizedTarget = normalizePathForComparison(target);
-      const normalizedCwd = `${normalizePathForComparison(originalCwd)}${sep2}`;
-      return normalizedTarget.startsWith(normalizedCwd);
+      return isResolvedPathWithinCwd(target, originalCwd);
     } catch {
       return false;
     }
@@ -1836,9 +1942,7 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
   if (target.startsWith("./") || target.startsWith(".\\") || !target.includes("/") && !target.includes("\\")) {
     try {
       const resolved = resolve(resolveCwd, target);
-      const normalizedResolved = normalizePathForComparison(resolved);
-      const normalizedOriginalCwd = normalizePathForComparison(originalCwd);
-      return normalizedResolved.startsWith(`${normalizedOriginalCwd}${sep2}`) || normalizedResolved === normalizedOriginalCwd;
+      return isResolvedPathWithinCwd(resolved, originalCwd);
     } catch {
       return false;
     }
@@ -1848,12 +1952,22 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
   }
   try {
     const resolved = resolve(resolveCwd, target);
-    const normalizedResolved = normalizePathForComparison(resolved);
-    const normalizedCwd = normalizePathForComparison(originalCwd);
-    return normalizedResolved.startsWith(`${normalizedCwd}${sep2}`) || normalizedResolved === normalizedCwd;
+    return isResolvedPathWithinCwd(resolved, originalCwd);
   } catch {
     return false;
   }
+}
+function isResolvedPathWithinCwd(resolvedTarget, cwd) {
+  try {
+    return isNormalizedPathWithin(realpathSync3(resolvedTarget), realpathSync3(cwd));
+  } catch {
+    return isNormalizedPathWithin(resolvedTarget, cwd);
+  }
+}
+function isNormalizedPathWithin(target, cwd) {
+  const normalizedTarget = normalizePathForComparison(target);
+  const normalizedCwd = normalizePathForComparison(cwd);
+  return normalizedTarget.startsWith(`${normalizedCwd}${sep2}`) || normalizedTarget === normalizedCwd;
 }
 
 // src/core/analyze/shell-wrappers.ts
@@ -2838,7 +2952,19 @@ function countCleanForceFlags(tokens) {
 }
 
 // src/core/git/index.ts
+var REASON_GIT_SSH_ENV = "Git SSH environment overrides can execute arbitrary commands during network operations.";
+var GIT_NETWORK_SUBCOMMANDS = new Set([
+  "clone",
+  "fetch",
+  "pull",
+  "push",
+  "ls-remote",
+  "submodule"
+]);
 function analyzeGit(tokens, options2 = {}) {
+  if (hasGitSshEnvAssignment(options2.envAssignments) && isGitNetworkOperation(tokens)) {
+    return REASON_GIT_SSH_ENV;
+  }
   const match = analyzeGitRule(tokens);
   if (!match) {
     return null;
@@ -2847,6 +2973,10 @@ function analyzeGit(tokens, options2 = {}) {
     return null;
   }
   return match.reason;
+}
+function isGitNetworkOperation(tokens) {
+  const { subcommand } = extractGitSubcommandAndRest(tokens);
+  return GIT_NETWORK_SUBCOMMANDS.has(subcommand?.toLowerCase() ?? "");
 }
 function getGitWorktreeRelaxation(tokens, options2 = {}) {
   const match = analyzeGitRule(tokens);
@@ -3445,13 +3575,22 @@ function analyzeSegment(tokens, depth, options2) {
   const cwdForRm = wrapperCwd === null ? undefined : wrapperCwd ?? baseCwdForRm;
   const nestedEffectiveCwd = wrapperCwd === undefined ? options2.effectiveCwd : wrapperCwd;
   const allowTmpdirVar = !isTmpdirOverriddenToNonTemp(envAssignments);
-  if (SHELL_WRAPPERS.has(normalizedHead)) {
+  if (isShellWrapperCommand(head, normalizedHead)) {
     const dashCArg = extractDashCArg(stripped);
     if (dashCArg) {
       return options2.analyzeNested(dashCArg, {
         effectiveCwd: nestedEffectiveCwd,
         envAssignments
       });
+    }
+  }
+  if (AWK_INTERPRETERS.has(normalizedHead)) {
+    const awkReason = analyzeAwkSystemCalls(stripped, (command2) => options2.analyzeNested(command2, {
+      effectiveCwd: nestedEffectiveCwd,
+      envAssignments
+    }));
+    if (awkReason) {
+      return awkReason;
     }
   }
   if (INTERPRETERS.has(normalizedHead)) {
@@ -3517,6 +3656,9 @@ function analyzeSegment(tokens, depth, options2) {
     }
   }
   return null;
+}
+function isShellWrapperCommand(head, normalizedHead) {
+  return SHELL_WRAPPERS.has(normalizedHead) || head === "$SHELL";
 }
 function getCommandAnalyzer(context) {
   if (context.basename.toLowerCase() === "git") {
