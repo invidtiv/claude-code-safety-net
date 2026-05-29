@@ -95,6 +95,16 @@ export interface GitRuleMatch {
   localDiscard: boolean;
 }
 
+export function matchesGitLongOption(token: string, option: string): boolean {
+  const optionName = token.split('=', 1)[0] ?? token;
+  return (
+    optionName.length >= 4 &&
+    option.startsWith(optionName) &&
+    optionName.startsWith('--') &&
+    optionName.slice(2).length >= 2
+  );
+}
+
 export function analyzeGitRule(tokens: readonly string[]): GitRuleMatch | null {
   const { subcommand, rest } = extractGitSubcommandAndRest(tokens);
 
@@ -148,7 +158,7 @@ function analyzeGitCheckout(tokens: readonly string[]): string | null {
     shortOptsWithValue: CHECKOUT_SHORT_OPTS_WITH_VALUE,
   });
 
-  if (beforeDash.includes('--force') || shortOpts.has('-f')) {
+  if (beforeDash.some((token) => matchesGitLongOption(token, '--force')) || shortOpts.has('-f')) {
     return REASON_CHECKOUT_FORCE;
   }
 
@@ -156,10 +166,7 @@ function analyzeGitCheckout(tokens: readonly string[]): string | null {
     if (token === '-b' || token === '-B' || token === '--orphan') {
       return null;
     }
-    if (token === '--pathspec-from-file') {
-      return REASON_CHECKOUT_PATHSPEC_FROM_FILE;
-    }
-    if (token.startsWith('--pathspec-from-file=')) {
+    if (matchesGitLongOption(token, '--pathspec-from-file')) {
       return REASON_CHECKOUT_PATHSPEC_FROM_FILE;
     }
   }
@@ -184,14 +191,14 @@ function analyzeGitCheckout(tokens: readonly string[]): string | null {
 function analyzeGitSwitch(tokens: readonly string[]): string | null {
   const { before } = splitAtDoubleDash(tokens);
 
-  if (before.includes('--discard-changes')) {
+  if (before.some((token) => matchesGitLongOption(token, '--discard-changes'))) {
     return REASON_SWITCH_DISCARD_CHANGES;
   }
 
   const shortOpts = extractShortOpts(before, {
     shortOptsWithValue: SWITCH_SHORT_OPTS_WITH_VALUE,
   });
-  if (before.includes('--force') || shortOpts.has('-f')) {
+  if (before.some((token) => matchesGitLongOption(token, '--force')) || shortOpts.has('-f')) {
     return REASON_SWITCH_FORCE;
   }
 
@@ -271,11 +278,11 @@ function analyzeGitReset(tokens: readonly string[]): GitRuleMatch | null {
   let reason: string | null = null;
 
   for (const token of tokens) {
-    if (token === '--hard') {
+    if (matchesGitLongOption(token, '--hard')) {
       reason = REASON_RESET_HARD;
       break;
     }
-    if (token === '--merge') {
+    if (matchesGitLongOption(token, '--merge')) {
       reason = REASON_RESET_MERGE;
       break;
     }
@@ -302,13 +309,13 @@ function resetHasRef(tokens: readonly string[]): boolean {
 
 function analyzeGitClean(tokens: readonly string[]): string | null {
   for (const token of tokens) {
-    if (token === '-n' || token === '--dry-run') {
+    if (token === '-n' || matchesGitLongOption(token, '--dry-run')) {
       return null;
     }
   }
 
   const shortOpts = extractShortOpts(tokens.filter((t) => t !== '--'));
-  if (tokens.includes('--force') || shortOpts.has('-f')) {
+  if (tokens.some((token) => matchesGitLongOption(token, '--force')) || shortOpts.has('-f')) {
     return REASON_CLEAN;
   }
 
@@ -318,7 +325,8 @@ function analyzeGitClean(tokens: readonly string[]): string | null {
 function analyzeGitPush(tokens: readonly string[]): string | null {
   let hasForceWithLease = false;
   const shortOpts = extractShortOpts(tokens.filter((t) => t !== '--'));
-  const hasForce = tokens.includes('--force') || shortOpts.has('-f');
+  const hasForce =
+    tokens.some((token) => matchesGitLongOption(token, '--force')) || shortOpts.has('-f');
 
   for (const token of tokens) {
     if (token === '--force-with-lease' || token.startsWith('--force-with-lease=')) {
@@ -336,8 +344,14 @@ function analyzeGitPush(tokens: readonly string[]): string | null {
 function analyzeGitBranch(tokens: readonly string[]): string | null {
   const { before } = splitAtDoubleDash(tokens);
   const shortOpts = extractShortOpts(before);
-  const hasDelete = shortOpts.has('-D') || shortOpts.has('-d') || before.includes('--delete');
-  const hasForce = shortOpts.has('-D') || shortOpts.has('-f') || before.includes('--force');
+  const hasDelete =
+    shortOpts.has('-D') ||
+    shortOpts.has('-d') ||
+    before.some((token) => matchesGitLongOption(token, '--delete'));
+  const hasForce =
+    shortOpts.has('-D') ||
+    shortOpts.has('-f') ||
+    before.some((token) => matchesGitLongOption(token, '--force'));
   if (hasDelete && hasForce) {
     return REASON_BRANCH_DELETE;
   }
@@ -346,18 +360,22 @@ function analyzeGitBranch(tokens: readonly string[]): string | null {
 
 function analyzeGitRebase(tokens: readonly string[]): string | null {
   const { before } = splitAtDoubleDash(tokens);
-  return before.includes('--abort') ? REASON_REBASE_ABORT : null;
+  return before.some((token) => matchesGitLongOption(token, '--abort'))
+    ? REASON_REBASE_ABORT
+    : null;
 }
 
 function analyzeGitMerge(tokens: readonly string[]): string | null {
   const { before } = splitAtDoubleDash(tokens);
-  return before.includes('--abort') ? REASON_MERGE_ABORT : null;
+  return before.some((token) => matchesGitLongOption(token, '--abort')) ? REASON_MERGE_ABORT : null;
 }
 
 function analyzeGitTag(tokens: readonly string[]): string | null {
   const { before } = splitAtDoubleDash(tokens);
   const shortOpts = extractShortOpts(before);
-  return shortOpts.has('-d') || before.includes('--delete') ? REASON_TAG_DELETE : null;
+  return shortOpts.has('-d') || before.some((token) => matchesGitLongOption(token, '--delete'))
+    ? REASON_TAG_DELETE
+    : null;
 }
 
 function analyzeGitReflog(tokens: readonly string[]): string | null {
@@ -382,7 +400,7 @@ function analyzeGitWorktree(tokens: readonly string[]): string | null {
   if (!hasRemove) return null;
 
   const shortOpts = extractShortOpts(before);
-  if (before.includes('--force') || shortOpts.has('-f')) {
+  if (before.some((token) => matchesGitLongOption(token, '--force')) || shortOpts.has('-f')) {
     return REASON_WORKTREE_REMOVE_FORCE;
   }
 

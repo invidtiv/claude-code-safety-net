@@ -4,6 +4,7 @@ import { extractGitSubcommandAndRest, splitAtDoubleDash } from './parse';
 import {
   CHECKOUT_SHORT_OPTS_WITH_VALUE,
   type GitRuleMatch,
+  matchesGitLongOption,
   SWITCH_SHORT_OPTS_WITH_VALUE,
 } from './rules';
 import { getGitExecutionContext, hasGitContextEnvOverride, isLinkedWorktree } from './worktree';
@@ -81,7 +82,8 @@ function isForcedBranchReset(subcommand: string | undefined, rest: readonly stri
     const shortOpts = extractShortOpts(before, {
       shortOptsWithValue: CHECKOUT_SHORT_OPTS_WITH_VALUE,
     });
-    const hasForce = before.includes('--force') || shortOpts.has('-f');
+    const hasForce =
+      before.some((token) => matchesGitLongOption(token, '--force')) || shortOpts.has('-f');
     const hasBranchReset =
       shortOpts.has('-B') || before.some((token) => token === '-B' || token.startsWith('-B'));
     return hasForce && hasBranchReset;
@@ -93,7 +95,9 @@ function isForcedBranchReset(subcommand: string | undefined, rest: readonly stri
       shortOptsWithValue: SWITCH_SHORT_OPTS_WITH_VALUE,
     });
     const hasForce =
-      before.includes('--force') || before.includes('--discard-changes') || shortOpts.has('-f');
+      before.some((token) => matchesGitLongOption(token, '--force')) ||
+      before.some((token) => matchesGitLongOption(token, '--discard-changes')) ||
+      shortOpts.has('-f');
     const hasForceCreate =
       before.some(
         (token) => token === '-C' || token.startsWith('-C') || isForceCreateOption(token),

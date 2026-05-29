@@ -70,6 +70,10 @@ describe('git checkout', () => {
     assertBlocked('git checkout --force main', 'git checkout --force');
   });
 
+  test('git checkout abbreviated force blocked', () => {
+    assertBlocked('git checkout --forc main', 'git checkout --force');
+  });
+
   test('git checkout -f blocked', () => {
     assertBlocked('git checkout -f main', 'git checkout --force');
   });
@@ -161,6 +165,13 @@ describe('git checkout', () => {
   test('git checkout --pathspec-from-file blocked', () => {
     assertBlocked(
       'git checkout HEAD --pathspec-from-file=paths.txt',
+      'git checkout --pathspec-from-file',
+    );
+  });
+
+  test('git checkout abbreviated pathspec-from-file blocked', () => {
+    assertBlocked(
+      'git checkout HEAD --pathspec-from-f=paths.txt',
       'git checkout --pathspec-from-file',
     );
   });
@@ -284,6 +295,10 @@ describe('git checkout', () => {
 describe('git switch', () => {
   test('git switch --discard-changes blocked', () => {
     assertBlocked('git switch --discard-changes main', 'git switch --discard-changes');
+  });
+
+  test('git switch abbreviated discard changes blocked', () => {
+    assertBlocked('git switch --discard-ch main', 'git switch --discard-changes');
   });
 
   test('git switch --force blocked', () => {
@@ -1308,6 +1323,11 @@ describe('git linked worktree mode', () => {
           fixture.linkedWorktree,
         );
         assertBlocked(
+          'git checkout --forc -B feature HEAD~1',
+          'git checkout --force',
+          fixture.linkedWorktree,
+        );
+        assertBlocked(
           'git switch -f -C feature HEAD~1',
           'git switch --force',
           fixture.linkedWorktree,
@@ -1589,6 +1609,10 @@ describe('git push', () => {
     assertBlocked('git push -f origin main', 'push --force');
   });
 
+  test('git push abbreviated force blocked conservatively', () => {
+    assertBlocked('git push --forc origin main', 'push --force');
+  });
+
   test('git push --force-with-lease allowed', () => {
     assertAllowed('git push --force-with-lease');
   });
@@ -1627,6 +1651,10 @@ describe('git worktree', () => {
     assertBlocked('git worktree remove -fa /tmp/wt', 'git worktree remove --force');
   });
 
+  test('git worktree remove abbreviated force blocked', () => {
+    assertBlocked('git worktree remove --forc /tmp/wt', 'git worktree remove --force');
+  });
+
   test('git worktree remove without force allowed', () => {
     assertAllowed('git worktree remove /tmp/wt');
   });
@@ -1651,23 +1679,51 @@ describe('git branch', () => {
     assertBlocked('git branch -d -f feature', 'git branch -D');
   });
 
+  test('git branch abbreviated long force delete blocked', () => {
+    assertBlocked('git branch --del --forc feature', 'git branch -D');
+  });
+
   test('git branch -d allowed', () => {
     assertAllowed('git branch -d feature');
   });
 });
 
 describe('git missing destructive subcommands', () => {
+  test('git reset abbreviated hard and merge blocked', () => {
+    assertBlocked('git reset --ha HEAD~1', 'git reset --hard');
+    assertBlocked('git reset --har HEAD~1', 'git reset --hard');
+    assertBlocked('git reset --mer HEAD~1', 'git reset --merge');
+  });
+
+  test('git clean abbreviated force blocked unless dry-run is present', () => {
+    assertBlocked('git clean --forc', 'git clean -f');
+    assertAllowed('git clean --dry-r --forc');
+    assertAllowed('git clean --forc --dry-r');
+  });
+
   test('git rebase abort blocked', () => {
     assertBlocked('git rebase --abort', 'git rebase --abort');
+  });
+
+  test('git rebase abbreviated abort blocked', () => {
+    assertBlocked('git rebase --abor', 'git rebase --abort');
   });
 
   test('git merge abort blocked', () => {
     assertBlocked('git merge --abort', 'git merge --abort');
   });
 
+  test('git merge abbreviated abort blocked', () => {
+    assertBlocked('git merge --abor', 'git merge --abort');
+  });
+
   test('git tag delete blocked', () => {
     assertBlocked('git tag -d v1', 'git tag -d');
     assertBlocked('git tag --delete v1', 'git tag -d');
+  });
+
+  test('git tag abbreviated delete blocked', () => {
+    assertBlocked('git tag --del v1', 'git tag -d');
   });
 
   test('git reflog delete blocked', () => {
