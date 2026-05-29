@@ -867,6 +867,38 @@ describe('edge cases', () => {
         tempDir,
       );
     });
+
+    test('interpreter dd disk write is blocked', () => {
+      assertBlocked(
+        'python -c \'import os; os.system("dd if=/dev/zero of=/dev/sda")\'',
+        'dangerous command',
+        tempDir,
+      );
+    });
+
+    test('interpreter mkfs is blocked', () => {
+      assertBlocked(
+        'python -c \'import os; os.system("mkfs.ext4 /dev/sda1")\'',
+        'dangerous command',
+        tempDir,
+      );
+    });
+
+    test('interpreter shred is blocked', () => {
+      assertBlocked(
+        'python -c \'import os; os.system("shred -u secret.txt")\'',
+        'dangerous command',
+        tempDir,
+      );
+    });
+
+    test('interpreter git stash drop is blocked', () => {
+      assertBlocked(
+        'python -c \'import os; os.system("git stash drop")\'',
+        'dangerous command',
+        tempDir,
+      );
+    });
   });
 
   describe('display-only commands bypass fallback scanning', () => {
@@ -908,6 +940,14 @@ describe('edge cases', () => {
 
     test('awk system rm -rf blocked', () => {
       assertBlocked('awk \'BEGIN { system("rm -rf /") }\'', 'rm -rf');
+    });
+
+    test('awk system rm -rf with hex escapes blocked', () => {
+      assertBlocked('awk \'BEGIN { system("rm\\x20-rf\\x20/") }\'', 'rm -rf');
+    });
+
+    test('awk system rm -rf with octal escapes blocked', () => {
+      assertBlocked('awk \'BEGIN { system("rm\\040-rf\\040/") }\'', 'rm -rf');
     });
 
     test('awk system git reset blocked', () => {

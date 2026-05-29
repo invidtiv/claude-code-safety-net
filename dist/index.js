@@ -358,7 +358,11 @@ function readAwkStringLiteral(code, startIndex, quote) {
     if (!char)
       break;
     if (escaped) {
-      value += char;
+      const decoded = decodeAwkEscape(code, i);
+      if (!decoded)
+        return null;
+      value += decoded.value;
+      i = decoded.endIndex;
       escaped = false;
       continue;
     }
@@ -372,6 +376,37 @@ function readAwkStringLiteral(code, startIndex, quote) {
     value += char;
   }
   return null;
+}
+function decodeAwkEscape(code, index) {
+  const char = code[index];
+  if (!char)
+    return null;
+  if (char === "x") {
+    const hex = code.slice(index + 1, index + 3);
+    if (!/^[0-9A-Fa-f]{2}$/.test(hex))
+      return null;
+    return { value: String.fromCharCode(Number.parseInt(hex, 16)), endIndex: index + 2 };
+  }
+  if (/[0-7]/.test(char)) {
+    const match = /^[0-7]{1,3}/.exec(code.slice(index));
+    if (!match)
+      return null;
+    return {
+      value: String.fromCharCode(Number.parseInt(match[0], 8)),
+      endIndex: index + match[0].length - 1
+    };
+  }
+  const simpleEscapes = {
+    a: "\x07",
+    b: "\b",
+    f: "\f",
+    n: `
+`,
+    r: "\r",
+    t: "\t",
+    v: "\v"
+  };
+  return { value: simpleEscapes[char] ?? char, endIndex: index };
 }
 
 // src/core/analyze/constants.ts
@@ -551,6 +586,10 @@ var DANGEROUS_PATTERNS = [
   /\bgit\s+reset\s+--hard\b/,
   /\bgit\s+checkout\s+--\b/,
   /\bgit\s+clean\s+-f\b/,
+  /\bgit\s+stash\s+(drop|clear)\b/,
+  /\bdd\b[^\n;&|]*\bof=\/dev\/[^\s'"]+/,
+  /\bmkfs(?:\.[A-Za-z0-9_-]+)?\s+\/dev\/[^\s'"]+/,
+  /\bshred\b\s+/,
   /\bfind\b.*\s-delete\b/
 ];
 var PARANOID_INTERPRETERS_SUFFIX = `
@@ -5305,12 +5344,12 @@ function loadScopePolicy(config, lockPath, configDir, options2, source) {
       errors.push(`missing lock entry for ${spec}; run ${RULE_SYNC_COMMAND}`);
       return [];
     }
-    const validationErrors = validateLockedRulebook(entry, configDir, options2);
-    if (validationErrors.length > 0) {
-      errors.push(...validationErrors);
+    const loadedRulebook = loadLockedRulebook(entry, configDir, options2);
+    if (loadedRulebook.errors.length > 0 || !loadedRulebook.rulebook) {
+      errors.push(...loadedRulebook.errors);
       return [];
     }
-    const rulebook = JSON.parse(readFileSync6(getRulebookCachePath(entry, { ...options2, cacheConfigDir: configDir }), "utf-8"));
+    const rulebook = loadedRulebook.rulebook;
     return [
       {
         rules: rulebook.rules.map((rule) => ({ ...rule, name: `${rulebook.name}/${rule.name}` })),
@@ -5334,18 +5373,34 @@ function loadScopePolicy(config, lockPath, configDir, options2, source) {
     canValidateOverrides: errors.length === 0
   };
 }
-function validateLockedRulebook(entry, configDir, options2) {
+function loadLockedRulebook(entry, configDir, options2) {
   const errors = [];
   const cachePath = getRulebookCachePath(entry, { ...options2, cacheConfigDir: configDir });
   if (!existsSync7(cachePath)) {
-    return [`missing cache entry for ${entry.spec}; run ${RULE_SYNC_COMMAND}`];
+    return {
+      rulebook: null,
+      errors: [`missing cache entry for ${entry.spec}; run ${RULE_SYNC_COMMAND}`]
+    };
   }
-  const cacheContent = readFileSync6(cachePath, "utf-8");
+  let cacheContent;
+  try {
+    cacheContent = readFileSync6(cachePath, "utf-8");
+  } catch (error) {
+    return {
+      rulebook: null,
+      errors: [
+        `failed to read cached rulebook for ${entry.spec}: ${error instanceof Error ? error.message : String(error)}`
+      ]
+    };
+  }
   if (sha256Digest(cacheContent) !== entry.digest) {
     errors.push(`cache digest mismatch for ${entry.spec}; run ${RULE_SYNC_COMMAND}`);
   }
+  let rulebook = null;
   try {
-    assertValidRulebook(JSON.parse(cacheContent));
+    const parsed = JSON.parse(cacheContent);
+    assertValidRulebook(parsed);
+    rulebook = parsed;
   } catch (error) {
     errors.push(`invalid cached rulebook for ${entry.spec}: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -5354,19 +5409,23 @@ function validateLockedRulebook(entry, configDir, options2) {
     const sourceRelative = relative(resolve5(configDir), sourcePath);
     if (sourceRelative === ".." || sourceRelative.startsWith(`..${sep4}`) || isAbsolute6(sourceRelative)) {
       errors.push(`lockfile local source path for ${entry.spec} must stay within ${configDir}; run ${RULE_SYNC_COMMAND}`);
-      return errors;
+      return { rulebook: null, errors };
     }
     const localPath = join6(sourcePath, RULEBOOK_FILE);
     if (!existsSync7(localPath)) {
       errors.push(`missing local source for ${entry.spec}; run ${RULE_SYNC_COMMAND}`);
     } else {
-      const localContent = readFileSync6(localPath, "utf-8");
-      if (sha256Digest(localContent) !== entry.digest) {
-        errors.push(getLocalSourceDriftError(entry.spec, localContent));
+      try {
+        const localContent = readFileSync6(localPath, "utf-8");
+        if (sha256Digest(localContent) !== entry.digest) {
+          errors.push(getLocalSourceDriftError(entry.spec, localContent));
+        }
+      } catch (error) {
+        errors.push(`failed to read local source for ${entry.spec}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
   }
-  return errors;
+  return { rulebook: errors.length === 0 ? rulebook : null, errors };
 }
 function rulesPolicyToConfig(policy) {
   if (policy.errors.length > 0) {
@@ -5950,6 +6009,7 @@ function loadBuiltinCommands(disabledCommands) {
   return commands;
 }
 // src/index.ts
+var REASON_SAFETY_NET_FAILED_CLOSED = "Safety Net failed closed because command analysis failed unexpectedly.";
 var CCSafetyNetPlugin = async ({ directory }) => {
   const modes = getSafetyNetEnvModes();
   return {
@@ -5964,14 +6024,23 @@ var CCSafetyNetPlugin = async ({ directory }) => {
     "tool.execute.before": async (input, output) => {
       if (input.tool === "bash") {
         const command2 = output.args.command;
-        const result = analyzeCommand(command2, {
-          cwd: directory,
-          config: loadConfig(directory, { repairLocalRulebooks: true }),
-          strict: modes.strict,
-          paranoidRm: modes.paranoidRm,
-          paranoidInterpreters: modes.paranoidInterpreters,
-          worktreeMode: modes.worktreeMode
-        });
+        let result;
+        try {
+          result = analyzeCommand(command2, {
+            cwd: directory,
+            config: loadConfig(directory, { repairLocalRulebooks: true }),
+            strict: modes.strict,
+            paranoidRm: modes.paranoidRm,
+            paranoidInterpreters: modes.paranoidInterpreters,
+            worktreeMode: modes.worktreeMode
+          });
+        } catch {
+          throw new Error(formatBlockedMessage({
+            reason: REASON_SAFETY_NET_FAILED_CLOSED,
+            command: command2,
+            segment: command2
+          }));
+        }
         if (result) {
           const message = formatBlockedMessage({
             reason: result.reason,

@@ -93,7 +93,10 @@ function readAwkStringLiteral(
     if (!char) break;
 
     if (escaped) {
-      value += char;
+      const decoded = decodeAwkEscape(code, i);
+      if (!decoded) return null;
+      value += decoded.value;
+      i = decoded.endIndex;
       escaped = false;
       continue;
     }
@@ -111,4 +114,35 @@ function readAwkStringLiteral(
   }
 
   return null;
+}
+
+function decodeAwkEscape(code: string, index: number): { value: string; endIndex: number } | null {
+  const char = code[index];
+  if (!char) return null;
+
+  if (char === 'x') {
+    const hex = code.slice(index + 1, index + 3);
+    if (!/^[0-9A-Fa-f]{2}$/.test(hex)) return null;
+    return { value: String.fromCharCode(Number.parseInt(hex, 16)), endIndex: index + 2 };
+  }
+
+  if (/[0-7]/.test(char)) {
+    const match = /^[0-7]{1,3}/.exec(code.slice(index));
+    if (!match) return null;
+    return {
+      value: String.fromCharCode(Number.parseInt(match[0], 8)),
+      endIndex: index + match[0].length - 1,
+    };
+  }
+
+  const simpleEscapes: Record<string, string> = {
+    a: '\x07',
+    b: '\b',
+    f: '\f',
+    n: '\n',
+    r: '\r',
+    t: '\t',
+    v: '\v',
+  };
+  return { value: simpleEscapes[char] ?? char, endIndex: index };
 }

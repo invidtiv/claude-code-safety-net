@@ -140,6 +140,26 @@ describe('analyzeCommand (coverage)', () => {
     expect(commands).toEqual(['echo "ok"']);
   });
 
+  test('awk system parser decodes hex and octal escapes', () => {
+    const commands: string[] = [];
+    const result = analyzeAwkSystemCalls(
+      ['awk', 'BEGIN { system("rm\\x20-rf\\040/") }'],
+      (command) => {
+        commands.push(command);
+        return 'blocked';
+      },
+    );
+
+    expect(result).toBe('blocked');
+    expect(commands).toEqual(['rm -rf /']);
+  });
+
+  test('awk system parser treats trailing escapes as dynamic', () => {
+    expect(analyzeAwkSystemCalls(['awk', `BEGIN { system("echo \\`], () => null)).toBe(
+      REASON_AWK_SYSTEM_DYNAMIC,
+    );
+  });
+
   test('awk system parser blocks unclosed string commands', () => {
     expect(analyzeAwkSystemCalls(['awk', 'BEGIN { system("rm -rf /) }'], () => null)).toBe(
       REASON_AWK_SYSTEM_DYNAMIC,

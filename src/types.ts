@@ -183,6 +183,10 @@ export const DANGEROUS_PATTERNS = [
   /\bgit\s+reset\s+--hard\b/,
   /\bgit\s+checkout\s+--\b/,
   /\bgit\s+clean\s+-f\b/,
+  /\bgit\s+stash\s+(drop|clear)\b/,
+  /\bdd\b[^\n;&|]*\bof=\/dev\/[^\s'"]+/,
+  /\bmkfs(?:\.[A-Za-z0-9_-]+)?\s+\/dev\/[^\s'"]+/,
+  /\bshred\b\s+/,
   /\bfind\b.*\s-delete\b/,
 ];
 
