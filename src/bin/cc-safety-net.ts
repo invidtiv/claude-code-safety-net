@@ -8,25 +8,23 @@ import {
   parseExplainFlags,
 } from '@/bin/explain/index';
 import { printHelp, printVersion, showCommandHelp } from '@/bin/help';
-import { runClaudeCodeHook } from '@/bin/hook/claude-code';
-import { runCopilotCliHook } from '@/bin/hook/copilot-cli';
-import { runGeminiCLIHook } from '@/bin/hook/gemini-cli';
 import { runHookInstallCommand } from '@/bin/hook/install';
-import { runKimiCliHook } from '@/bin/hook/kimi-cli';
+import {
+  findHookIntegrationByFlag,
+  findLegacyTopLevelHookIntegration,
+  type HookIntegration,
+} from '@/bin/hook/integrations';
 import { runRuleCommand } from '@/bin/rule';
 import { printStatusline } from '@/bin/statusline';
 
-type CommandMode =
-  | 'claude-code'
-  | 'copilot-cli'
-  | 'gemini-cli'
-  | 'kimi-cli'
-  | 'hook-install'
-  | 'hook-uninstall'
-  | 'rule'
-  | 'statusline'
-  | 'doctor'
-  | 'explain';
+type ParsedCommand =
+  | { mode: 'hook'; integration: HookIntegration }
+  | { mode: 'hook-install'; args: string[] }
+  | { mode: 'hook-uninstall'; args: string[] }
+  | { mode: 'rule'; args: string[] }
+  | { mode: 'statusline' }
+  | { mode: 'doctor'; args: string[] }
+  | { mode: 'explain'; args: string[] };
 
 /**
  * Check if --help or -h is present in args (but not as a quoted command argument).
@@ -85,9 +83,7 @@ function handleCommandHelp(args: readonly string[]): boolean {
   return false;
 }
 
-function handleCliFlags(): CommandMode | null {
-  const args = process.argv.slice(2);
-
+function parseCliArgs(args: string[]): ParsedCommand | null {
   // Handle "help <command>" pattern first
   if (handleHelpCommand(args)) {
     return null;
@@ -99,27 +95,26 @@ function handleCliFlags(): CommandMode | null {
   }
 
   if (args[0] === 'explain') {
-    return 'explain';
+    return { mode: 'explain', args: args.slice(1) };
   }
 
   if (args[0] === 'rule') {
-    return 'rule';
+    return { mode: 'rule', args: args.slice(1) };
   }
 
   if (args[0] === 'statusline') {
-    if (args.includes('--claude-code') || args.includes('-cc')) return 'statusline';
+    if (args.includes('--claude-code') || args.includes('-cc')) return { mode: 'statusline' };
     showCommandHelp('statusline');
     process.exit(1);
   }
 
   if (args[0] === 'hook') {
-    if (args[1] === 'install') return 'hook-install';
-    if (args[1] === 'uninstall') return 'hook-uninstall';
-    if (args.includes('--claude-code') || args.includes('-cc')) return 'claude-code';
-    if (args.includes('--copilot-cli') || args.includes('-cp')) return 'copilot-cli';
-    if (args.includes('--gemini-cli') || args.includes('-gc')) return 'gemini-cli';
-    if (args.includes('--kimi-cli')) return 'kimi-cli';
-    if (args.includes('-kc')) return 'kimi-cli';
+    if (args[1] === 'install') return { mode: 'hook-install', args: args.slice(2) };
+    if (args[1] === 'uninstall') return { mode: 'hook-uninstall', args: args.slice(2) };
+
+    const integration = findHookIntegrationByFlag(args);
+    if (integration) return { mode: 'hook', integration };
+
     showCommandHelp('hook');
     process.exit(1);
   }
@@ -135,20 +130,11 @@ function handleCliFlags(): CommandMode | null {
   }
 
   if (args.includes('doctor') || args.includes('--doctor')) {
-    return 'doctor';
+    return { mode: 'doctor', args };
   }
 
-  if (args[0] === '--claude-code' || args[0] === '-cc') {
-    return 'claude-code';
-  }
-
-  if (args[0] === '--copilot-cli' || args[0] === '-cp') {
-    return 'copilot-cli';
-  }
-
-  if (args[0] === '--gemini-cli' || args[0] === '-gc') {
-    return 'gemini-cli';
-  }
+  const legacyIntegration = findLegacyTopLevelHookIntegration(args[0]);
+  if (legacyIntegration) return { mode: 'hook', integration: legacyIntegration };
 
   console.error(`Unknown option: ${args[0]}`);
   console.error("Run 'cc-safety-net --help' for usage.");
@@ -156,40 +142,32 @@ function handleCliFlags(): CommandMode | null {
 }
 
 async function main(): Promise<void> {
-  const mode = handleCliFlags();
-  if (mode === 'claude-code') {
-    await runClaudeCodeHook();
-  } else if (mode === 'copilot-cli') {
-    await runCopilotCliHook();
-  } else if (mode === 'gemini-cli') {
-    await runGeminiCLIHook();
-  } else if (mode === 'kimi-cli') {
-    await runKimiCliHook();
-  } else if (mode === 'hook-install') {
-    process.exit(runHookInstallCommand('install', process.argv.slice(4)));
-  } else if (mode === 'hook-uninstall') {
-    process.exit(runHookInstallCommand('uninstall', process.argv.slice(4)));
-  } else if (mode === 'rule') {
-    process.exit(await runRuleCommand(process.argv.slice(3)));
-  } else if (mode === 'statusline') {
+  const command = parseCliArgs(process.argv.slice(2));
+  if (command?.mode === 'hook') {
+    await command.integration.run();
+  } else if (command?.mode === 'hook-install') {
+    process.exit(runHookInstallCommand('install', command.args));
+  } else if (command?.mode === 'hook-uninstall') {
+    process.exit(runHookInstallCommand('uninstall', command.args));
+  } else if (command?.mode === 'rule') {
+    process.exit(await runRuleCommand(command.args));
+  } else if (command?.mode === 'statusline') {
     await printStatusline();
-  } else if (mode === 'doctor') {
-    const flags = parseDoctorFlags(process.argv.slice(2));
+  } else if (command?.mode === 'doctor') {
+    const flags = parseDoctorFlags(command.args);
     const exitCode = await runDoctor({
       json: flags.json,
       skipUpdateCheck: flags.skipUpdateCheck,
     });
     process.exit(exitCode);
-  } else if (mode === 'explain') {
-    const args = process.argv.slice(3);
-
+  } else if (command?.mode === 'explain') {
     // Check for --help in explain args
-    if (hasHelpFlag(args) || args.length === 0) {
+    if (hasHelpFlag(command.args) || command.args.length === 0) {
       showCommandHelp('explain');
       process.exit(0);
     }
 
-    const flags = parseExplainFlags(args);
+    const flags = parseExplainFlags(command.args);
     if (!flags) {
       process.exit(1);
     }

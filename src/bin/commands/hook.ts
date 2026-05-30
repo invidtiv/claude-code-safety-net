@@ -1,4 +1,14 @@
+import { hookIntegrations } from '@/bin/hook/integrations';
 import type { Command } from './types';
+
+const platformOptions = hookIntegrations.map((integration) => ({
+  flags: integration.flags.join(', '),
+  description: integration.description,
+}));
+
+const platformExamples = hookIntegrations.flatMap((integration) =>
+  integration.flags.map((flag) => `cc-safety-net hook ${flag}`),
+);
 
 export const hookCommand: Command = {
   name: 'hook',
@@ -11,36 +21,11 @@ export const hookCommand: Command = {
     { usage: 'uninstall --kimi-cli', description: 'Uninstall Kimi CLI hook config' },
   ],
   options: [
-    {
-      flags: '-cc, --claude-code',
-      description: 'Run as Claude Code PreToolUse hook',
-    },
-    {
-      flags: '-cp, --copilot-cli',
-      description: 'Run as Copilot CLI PreToolUse hook',
-    },
-    {
-      flags: '-gc, --gemini-cli',
-      description: 'Run as Gemini CLI BeforeTool hook',
-    },
-    {
-      flags: '-kc, --kimi-cli',
-      description: 'Run as Kimi CLI PreToolUse hook',
-    },
+    ...platformOptions,
     {
       flags: '-h, --help',
       description: 'Show this help',
     },
   ],
-  examples: [
-    'cc-safety-net hook -cc',
-    'cc-safety-net hook --claude-code',
-    'cc-safety-net hook -cp',
-    'cc-safety-net hook --copilot-cli',
-    'cc-safety-net hook -gc',
-    'cc-safety-net hook --gemini-cli',
-    'cc-safety-net hook -kc',
-    'cc-safety-net hook --kimi-cli',
-    'cc-safety-net hook uninstall --opencode',
-  ],
+  examples: [...platformExamples, 'cc-safety-net hook uninstall --opencode'],
 };
