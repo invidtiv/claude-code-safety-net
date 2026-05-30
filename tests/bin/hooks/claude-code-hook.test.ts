@@ -7,7 +7,7 @@ import {
   expectNoHookOutput,
   getHookDenyReason,
   runClaudeCodeHook,
-  TEST_HOOK_CWD,
+  withHookTestContext,
 } from './hook-helpers';
 
 describe('Claude Code hook', () => {
@@ -33,63 +33,67 @@ describe('Claude Code hook', () => {
     });
 
     test('policy fail-closed denial shows repair command without manual permission footer', async () => {
-      writeProjectRulesConfigWithoutLock();
+      await withHookTestContext(async (context) => {
+        writeProjectRulesConfigWithoutLock(context.cwd);
 
-      const result = await runClaudeCodeHook(claudeCodeBashInput('git status --short --branch'));
-      rmSync(join(TEST_HOOK_CWD, '.cc-safety-net/rules'), { recursive: true, force: true });
+        const result = await context.runClaudeCodeHook(
+          context.claudeCodeBashInput('git status --short --branch'),
+        );
 
-      const parsed = JSON.parse(result.stdout);
-      expect(result.exitCode).toBe(0);
-      expect(parsed.hookSpecificOutput.permissionDecision).toBe('deny');
-      expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain(
-        'BLOCKED by CC SafetyNet',
-      );
-      expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain('missing lockfile');
-      expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain(
-        'run `cc-safety-net rule sync`',
-      );
-      expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain(
-        'Command: git status --short --branch',
-      );
-      expect(parsed.hookSpecificOutput.permissionDecisionReason).not.toContain('ask the user');
+        const parsed = JSON.parse(result.stdout);
+        expect(result.exitCode).toBe(0);
+        expect(parsed.hookSpecificOutput.permissionDecision).toBe('deny');
+        expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain(
+          'BLOCKED by CC SafetyNet',
+        );
+        expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain('missing lockfile');
+        expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain(
+          'run `cc-safety-net rule sync`',
+        );
+        expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain(
+          'Command: git status --short --branch',
+        );
+        expect(parsed.hookSpecificOutput.permissionDecisionReason).not.toContain('ask the user');
+      });
     });
 
     test('policy fail-closed allows exact rule sync repair command', async () => {
-      writeProjectRulesConfigWithoutLock();
+      await withHookTestContext(async (context) => {
+        writeProjectRulesConfigWithoutLock(context.cwd);
 
-      await expectNoHookOutput(
-        runClaudeCodeHook,
-        claudeCodeBashInput('npx -y cc-safety-net rule sync'),
-      );
-      const result = await runClaudeCodeHook(
-        claudeCodeBashInput('npx -y cc-safety-net rule sync && rm -rf /'),
-      );
-      rmSync(join(TEST_HOOK_CWD, '.cc-safety-net/rules'), { recursive: true, force: true });
+        await expectNoHookOutput(
+          context.runClaudeCodeHook,
+          context.claudeCodeBashInput('npx -y cc-safety-net rule sync'),
+        );
+        const result = await context.runClaudeCodeHook(
+          context.claudeCodeBashInput('npx -y cc-safety-net rule sync && rm -rf /'),
+        );
 
-      const parsed = JSON.parse(result.stdout);
-      expect(parsed.hookSpecificOutput.permissionDecision).toBe('deny');
-      expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain('missing lockfile');
+        const parsed = JSON.parse(result.stdout);
+        expect(parsed.hookSpecificOutput.permissionDecision).toBe('deny');
+        expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain('missing lockfile');
+      });
     });
 
     test('legacy config fail-closed asks user to run migration manually', async () => {
-      rmSync(join(TEST_HOOK_CWD, '.cc-safety-net'), { recursive: true, force: true });
-      writeFileSync(
-        join(TEST_HOOK_CWD, '.safety-net.json'),
-        JSON.stringify({ version: 1, rules: [] }),
-        'utf-8',
-      );
+      await withHookTestContext(async (context) => {
+        writeFileSync(
+          join(context.cwd, '.safety-net.json'),
+          JSON.stringify({ version: 1, rules: [] }),
+          'utf-8',
+        );
 
-      const result = await runClaudeCodeHook(claudeCodeBashInput('echo hello'));
-      rmSync(join(TEST_HOOK_CWD, '.safety-net.json'), { force: true });
+        const result = await context.runClaudeCodeHook(context.claudeCodeBashInput('echo hello'));
 
-      const parsed = JSON.parse(result.stdout);
-      expect(parsed.hookSpecificOutput.permissionDecision).toBe('deny');
-      expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain(
-        'ask the user to run `npx -y cc-safety-net rule migrate`',
-      );
-      expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain(
-        'have them run the command manually',
-      );
+        const parsed = JSON.parse(result.stdout);
+        expect(parsed.hookSpecificOutput.permissionDecision).toBe('deny');
+        expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain(
+          'ask the user to run `npx -y cc-safety-net rule migrate`',
+        );
+        expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain(
+          'have them run the command manually',
+        );
+      });
     });
   });
 
@@ -99,38 +103,42 @@ describe('Claude Code hook', () => {
     });
 
     test('debug mode logs allowed command without output', async () => {
-      const homeDir = join(TEST_HOOK_CWD, `debug-home-${Date.now()}`);
-      await expectNoHookOutput(
-        runClaudeCodeHook,
-        {
-          ...claudeCodeBashInput('TOKEN=secret git status'),
-          session_id: 'debug-session',
-        },
-        { CC_SAFETY_NET_DEBUG: '1', HOME: homeDir },
-      );
+      await withHookTestContext(async (context) => {
+        await expectNoHookOutput(
+          context.runClaudeCodeHook,
+          {
+            ...context.claudeCodeBashInput('TOKEN=secret git status'),
+            session_id: 'debug-session',
+          },
+          { CC_SAFETY_NET_DEBUG: '1' },
+        );
 
-      const logFile = join(homeDir, '.cc-safety-net', 'logs', 'debug-session.jsonl');
-      expect(existsSync(logFile)).toBe(true);
-      const entry = JSON.parse(readFileSync(logFile, 'utf-8').trim());
-      expect(entry.decision).toBe('allow');
-      expect(entry.reason).toBe('allowed');
-      expect(entry.command).toContain('<redacted>');
-      expect(entry.command).not.toContain('secret');
+        const logFile = join(context.home, '.cc-safety-net', 'logs', 'debug-session.jsonl');
+        expect(existsSync(logFile)).toBe(true);
+        const entry = JSON.parse(readFileSync(logFile, 'utf-8').trim());
+        expect(entry.decision).toBe('allow');
+        expect(entry.reason).toBe('allowed');
+        expect(entry.command).toContain('<redacted>');
+        expect(entry.command).not.toContain('secret');
+      });
     });
 
     test('repairs missing local rule lock before analysis', async () => {
-      writeProjectRulesConfigWithoutLock();
-      writeStarterRulebook(join(TEST_HOOK_CWD, '.cc-safety-net/rules/project-rules/rulebook.json'));
+      await withHookTestContext(async (context) => {
+        writeProjectRulesConfigWithoutLock(context.cwd);
+        writeStarterRulebook(join(context.cwd, '.cc-safety-net/rules/project-rules/rulebook.json'));
 
-      const result = await runClaudeCodeHook(claudeCodeBashInput('docker system prune'));
+        const result = await context.runClaudeCodeHook(
+          context.claudeCodeBashInput('docker system prune'),
+        );
 
-      const parsed = JSON.parse(result.stdout);
-      expect(existsSync(join(TEST_HOOK_CWD, '.cc-safety-net/rules/rule.lock'))).toBe(true);
-      expect(parsed.hookSpecificOutput.permissionDecision).toBe('deny');
-      expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain(
-        '[project-rules/block-docker-system-prune] Use targeted cleanup instead.',
-      );
-      rmSync(join(TEST_HOOK_CWD, '.cc-safety-net/rules'), { recursive: true, force: true });
+        const parsed = JSON.parse(result.stdout);
+        expect(existsSync(join(context.cwd, '.cc-safety-net/rules/rule.lock'))).toBe(true);
+        expect(parsed.hookSpecificOutput.permissionDecision).toBe('deny');
+        expect(parsed.hookSpecificOutput.permissionDecisionReason).toContain(
+          '[project-rules/block-docker-system-prune] Use targeted cleanup instead.',
+        );
+      });
     });
   });
 
@@ -214,7 +222,7 @@ describe('Claude Code hook', () => {
   });
 });
 
-function writeProjectRulesConfigWithoutLock(): void {
-  rmSync(join(TEST_HOOK_CWD, '.cc-safety-net/rules'), { recursive: true, force: true });
-  writeDefaultRulesConfig(join(TEST_HOOK_CWD, '.cc-safety-net/rules/rule.json'), ['project-rules']);
+function writeProjectRulesConfigWithoutLock(cwd: string): void {
+  rmSync(join(cwd, '.cc-safety-net/rules'), { recursive: true, force: true });
+  writeDefaultRulesConfig(join(cwd, '.cc-safety-net/rules/rule.json'), ['project-rules']);
 }

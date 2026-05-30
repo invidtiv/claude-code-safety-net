@@ -21,47 +21,86 @@ process.on('exit', () => {
   rmSync(TEST_HOOK_CWD, { recursive: true, force: true });
 });
 
-export function copilotBashInput(command: string) {
+export type HookTestContext = {
+  cwd: string;
+  home: string;
+  copilotBashInput: typeof copilotBashInput;
+  copilotRawToolArgsInput: typeof copilotRawToolArgsInput;
+  geminiShellInput: typeof geminiShellInput;
+  claudeCodeBashInput: typeof claudeCodeBashInput;
+  kimiShellInput: typeof kimiShellInput;
+  runCli: typeof runCli;
+  runClaudeCodeHook: typeof runClaudeCodeHook;
+  runGeminiHook: typeof runGeminiHook;
+  runKimiHook: typeof runKimiHook;
+  runCopilotHook: typeof runCopilotHook;
+};
+
+export async function withHookTestContext<T>(fn: (context: HookTestContext) => T | Promise<T>) {
+  const cwd = mkdtempSync(join(tmpdir(), 'safety-net-hook-cwd-'));
+  const home = join(cwd, 'home');
+  try {
+    return await fn({
+      cwd,
+      home,
+      copilotBashInput: (command) => copilotBashInput(command, cwd),
+      copilotRawToolArgsInput: (toolArgs) => copilotRawToolArgsInput(toolArgs, cwd),
+      geminiShellInput: (command) => geminiShellInput(command, cwd),
+      claudeCodeBashInput: (command) => claudeCodeBashInput(command, cwd),
+      kimiShellInput: (command) => kimiShellInput(command, cwd),
+      runCli: (args, input = '', env) => runCli(args, input, { HOME: home, ...(env ?? {}) }, cwd),
+      runClaudeCodeHook: (input, env) =>
+        runClaudeCodeHook(input, { HOME: home, ...(env ?? {}) }, cwd),
+      runGeminiHook: (input, env) => runGeminiHook(input, { HOME: home, ...(env ?? {}) }, cwd),
+      runKimiHook: (input, env) => runKimiHook(input, { HOME: home, ...(env ?? {}) }, cwd),
+      runCopilotHook: (input, env) => runCopilotHook(input, { HOME: home, ...(env ?? {}) }, cwd),
+    });
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+export function copilotBashInput(command: string, cwd = TEST_HOOK_CWD) {
   return {
     timestamp: Date.now(),
-    cwd: TEST_HOOK_CWD,
+    cwd,
     toolName: 'bash',
     toolArgs: JSON.stringify({ command }),
   };
 }
 
-export function copilotRawToolArgsInput(toolArgs: string) {
+export function copilotRawToolArgsInput(toolArgs: string, cwd = TEST_HOOK_CWD) {
   return {
     timestamp: Date.now(),
-    cwd: TEST_HOOK_CWD,
+    cwd,
     toolName: 'bash',
     toolArgs,
   };
 }
 
-export function geminiShellInput(command: string) {
+export function geminiShellInput(command: string, cwd = TEST_HOOK_CWD) {
   return {
     hook_event_name: 'BeforeTool',
-    cwd: TEST_HOOK_CWD,
+    cwd,
     tool_name: 'run_shell_command',
     tool_input: { command },
   };
 }
 
-export function claudeCodeBashInput(command: string) {
+export function claudeCodeBashInput(command: string, cwd = TEST_HOOK_CWD) {
   return {
     hook_event_name: 'PreToolUse',
-    cwd: TEST_HOOK_CWD,
+    cwd,
     tool_name: 'Bash',
     tool_input: { command },
   };
 }
 
-export function kimiShellInput(command: string) {
+export function kimiShellInput(command: string, cwd = TEST_HOOK_CWD) {
   return {
     hook_event_name: 'PreToolUse',
     session_id: 'kimi-test-session',
-    cwd: TEST_HOOK_CWD,
+    cwd,
     tool_name: 'Shell',
     tool_input: { command },
     tool_call_id: 'kimi-test-tool-call',
@@ -78,14 +117,16 @@ export async function runHook(
   flag: string,
   input: string,
   env?: Record<string, string>,
+  cwd = TEST_HOOK_CWD,
 ): Promise<HookResult> {
-  return runCli(['hook', flag], input, env);
+  return runCli(['hook', flag], input, env, cwd);
 }
 
 export async function runCli(
   args: readonly string[],
   input: string = '',
   env?: Record<string, string>,
+  cwd = TEST_HOOK_CWD,
 ): Promise<HookResult> {
   const baseEnv: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -96,7 +137,7 @@ export async function runCli(
 
   const mergedEnv: Record<string, string> = {
     ...baseEnv,
-    HOME: join(TEST_HOOK_CWD, 'home'),
+    HOME: join(cwd, 'home'),
     ...(env ?? {}),
   };
 
@@ -105,7 +146,7 @@ export async function runCli(
     stdout: 'pipe',
     stderr: 'pipe',
     env: mergedEnv,
-    cwd: TEST_HOOK_CWD,
+    cwd,
   });
   proc.stdin.write(input);
   proc.stdin.end();
@@ -150,9 +191,10 @@ export function getHookDenyReason(result: HookResult, format: HookFormat): strin
 export async function runClaudeCodeHook(
   input: object | string,
   env?: Record<string, string>,
+  cwd = TEST_HOOK_CWD,
 ): Promise<HookResult> {
   const inputStr = typeof input === 'string' ? input : JSON.stringify(input);
-  return runHook('--claude-code', inputStr, env);
+  return runHook('--claude-code', inputStr, env, cwd);
 }
 
 /**
@@ -161,9 +203,10 @@ export async function runClaudeCodeHook(
 export async function runGeminiHook(
   input: object | string,
   env?: Record<string, string>,
+  cwd = TEST_HOOK_CWD,
 ): Promise<HookResult> {
   const inputStr = typeof input === 'string' ? input : JSON.stringify(input);
-  return runHook('-gc', inputStr, env);
+  return runHook('-gc', inputStr, env, cwd);
 }
 
 /**
@@ -172,9 +215,10 @@ export async function runGeminiHook(
 export async function runKimiHook(
   input: object | string,
   env?: Record<string, string>,
+  cwd = TEST_HOOK_CWD,
 ): Promise<HookResult> {
   const inputStr = typeof input === 'string' ? input : JSON.stringify(input);
-  return runHook('-kc', inputStr, env);
+  return runHook('-kc', inputStr, env, cwd);
 }
 
 /**
@@ -183,7 +227,8 @@ export async function runKimiHook(
 export async function runCopilotHook(
   input: object | string,
   env?: Record<string, string>,
+  cwd = TEST_HOOK_CWD,
 ): Promise<HookResult> {
   const inputStr = typeof input === 'string' ? input : JSON.stringify(input);
-  return runHook('-cp', inputStr, env);
+  return runHook('-cp', inputStr, env, cwd);
 }
