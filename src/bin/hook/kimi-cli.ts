@@ -1,4 +1,4 @@
-import { handleBlockedHookCommand, readHookInput } from '@/bin/hook/common';
+import { runHookAdapter } from '@/bin/hook/common';
 import { redactSecrets } from '@/core/audit';
 import { formatBlockedMessage } from '@/core/format';
 import type { HookOutput, KimiCliHookInput } from '@/types';
@@ -29,23 +29,11 @@ function outputKimiDeny(
 }
 
 export async function runKimiCliHook(): Promise<void> {
-  const input = await readHookInput<KimiCliHookInput>(outputKimiDeny);
-  if (!input) {
-    return;
-  }
-
-  if (input.hook_event_name !== 'PreToolUse') {
-    return;
-  }
-
-  if (input.tool_name !== 'Shell') {
-    return;
-  }
-
-  const command = input.tool_input?.command;
-  if (!command) {
-    return;
-  }
-
-  handleBlockedHookCommand(command, input.cwd ?? process.cwd(), input.session_id, outputKimiDeny);
+  await runHookAdapter<KimiCliHookInput>({
+    outputDeny: outputKimiDeny,
+    isSupported: (input) => input.hook_event_name === 'PreToolUse' && input.tool_name === 'Shell',
+    getCommand: (input) => input.tool_input?.command,
+    getCwd: (input) => input.cwd,
+    getSessionId: (input) => input.session_id,
+  });
 }

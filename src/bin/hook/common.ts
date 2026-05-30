@@ -5,6 +5,16 @@ import { ENV_FLAGS, envTruthy } from '@/core/env';
 export const REASON_SAFETY_NET_FAILED_CLOSED =
   'Safety Net failed closed because command analysis failed unexpectedly.';
 
+type HookDenyOutput = (reason: string, command?: string, segment?: string) => void;
+
+type HookAdapter<T> = {
+  outputDeny: HookDenyOutput;
+  isSupported: (input: T) => boolean;
+  getCommand: (input: T, outputDeny: HookDenyOutput) => string | undefined;
+  getCwd: (input: T) => string | undefined;
+  getSessionId: (input: T) => string | undefined;
+};
+
 export async function readHookInput<T>(outputDeny: (reason: string) => void): Promise<T | null> {
   const chunks: Buffer[] = [];
 
@@ -71,4 +81,27 @@ export function handleBlockedHookCommand(
     writeAuditLog(sessionId, command, result.segment, result.reason, cwd);
   }
   outputDeny(result.reason, command, result.segment);
+}
+
+export async function runHookAdapter<T>(adapter: HookAdapter<T>): Promise<void> {
+  const input = await readHookInput<T>(adapter.outputDeny);
+  if (!input) {
+    return;
+  }
+
+  if (!adapter.isSupported(input)) {
+    return;
+  }
+
+  const command = adapter.getCommand(input, adapter.outputDeny);
+  if (!command) {
+    return;
+  }
+
+  handleBlockedHookCommand(
+    command,
+    adapter.getCwd(input) ?? process.cwd(),
+    adapter.getSessionId(input),
+    adapter.outputDeny,
+  );
 }

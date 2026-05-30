@@ -1,4 +1,4 @@
-import { handleBlockedHookCommand, readHookInput } from '@/bin/hook/common';
+import { runHookAdapter } from '@/bin/hook/common';
 import { redactSecrets } from '@/core/audit';
 import { formatBlockedMessage } from '@/core/format';
 import type { GeminiHookInput, GeminiHookOutput } from '@/types';
@@ -22,23 +22,12 @@ function outputGeminiDeny(reason: string, command?: string, segment?: string): v
 }
 
 export async function runGeminiCLIHook(): Promise<void> {
-  const input = await readHookInput<GeminiHookInput>(outputGeminiDeny);
-  if (!input) {
-    return;
-  }
-
-  if (input.hook_event_name !== 'BeforeTool') {
-    return;
-  }
-
-  if (input.tool_name !== 'run_shell_command') {
-    return;
-  }
-
-  const command = input.tool_input?.command;
-  if (!command) {
-    return;
-  }
-
-  handleBlockedHookCommand(command, input.cwd ?? process.cwd(), input.session_id, outputGeminiDeny);
+  await runHookAdapter<GeminiHookInput>({
+    outputDeny: outputGeminiDeny,
+    isSupported: (input) =>
+      input.hook_event_name === 'BeforeTool' && input.tool_name === 'run_shell_command',
+    getCommand: (input) => input.tool_input?.command,
+    getCwd: (input) => input.cwd,
+    getSessionId: (input) => input.session_id,
+  });
 }

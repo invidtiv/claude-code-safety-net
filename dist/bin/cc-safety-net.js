@@ -215,38 +215,6 @@ var require_parse = __commonJS((exports, module) => {
   };
 });
 
-// src/bin/commands/claude-code.ts
-var claudeCodeCommand = {
-  name: "claude-code",
-  aliases: ["-cc", "--claude-code"],
-  description: "Run as Claude Code PreToolUse hook (reads JSON from stdin)",
-  usage: "hook -cc, hook --claude-code",
-  hidden: true,
-  options: [
-    {
-      flags: "-h, --help",
-      description: "Show this help"
-    }
-  ],
-  examples: ["cc-safety-net -cc", "cc-safety-net --claude-code"]
-};
-
-// src/bin/commands/copilot-cli.ts
-var copilotCliCommand = {
-  name: "copilot-cli",
-  aliases: ["-cp", "--copilot-cli"],
-  description: "Run as Copilot CLI PreToolUse hook (reads JSON from stdin)",
-  usage: "hook -cp, hook --copilot-cli",
-  hidden: true,
-  options: [
-    {
-      flags: "-h, --help",
-      description: "Show this help"
-    }
-  ],
-  examples: ["cc-safety-net -cp", "cc-safety-net --copilot-cli"]
-};
-
 // src/bin/commands/doctor.ts
 var doctorCommand = {
   name: "doctor",
@@ -302,708 +270,321 @@ var explainCommand = {
   ]
 };
 
-// src/bin/commands/gemini-cli.ts
-var geminiCliCommand = {
-  name: "gemini-cli",
-  aliases: ["-gc", "--gemini-cli"],
-  description: "Run as Gemini CLI BeforeTool hook (reads JSON from stdin)",
-  usage: "hook -gc, hook --gemini-cli",
-  hidden: true,
-  options: [
+// src/core/analyze/dangerous-text.ts
+function dangerousInText(text) {
+  const t = text.toLowerCase();
+  const stripped = t.trimStart();
+  const isEchoOrRg = stripped.startsWith("echo ") || stripped.startsWith("rg ");
+  const patterns = [
     {
-      flags: "-h, --help",
-      description: "Show this help"
-    }
-  ],
-  examples: ["cc-safety-net -gc", "cc-safety-net --gemini-cli"]
-};
-
-// src/bin/commands/hook.ts
-var hookCommand = {
-  name: "hook",
-  description: "Run as an agent CLI hook (reads JSON from stdin)",
-  usage: "hook <coding cli>",
-  subcommands: [
-    { usage: "install --opencode", description: "Install OpenCode hook config" },
-    { usage: "install --kimi-cli", description: "Install Kimi CLI hook config" },
-    { usage: "uninstall --opencode", description: "Uninstall OpenCode hook config" },
-    { usage: "uninstall --kimi-cli", description: "Uninstall Kimi CLI hook config" }
-  ],
-  options: [
-    {
-      flags: "-cc, --claude-code",
-      description: "Run as Claude Code PreToolUse hook"
+      regex: /\brm\s+(-[^\s]*r[^\s]*\s+-[^\s]*f|-[^\s]*f[^\s]*\s+-[^\s]*r|-[^\s]*rf|-[^\s]*fr)\b/,
+      reason: "rm -rf"
     },
     {
-      flags: "-cp, --copilot-cli",
-      description: "Run as Copilot CLI PreToolUse hook"
+      regex: /\bgit\s+reset\s+--ha(?:r(?:d)?)?\b/,
+      reason: "git reset --hard"
     },
     {
-      flags: "-gc, --gemini-cli",
-      description: "Run as Gemini CLI BeforeTool hook"
+      regex: /\bgit\s+reset\s+--me(?:r(?:g(?:e)?)?)?\b/,
+      reason: "git reset --merge"
     },
     {
-      flags: "-kc, --kimi-cli",
-      description: "Run as Kimi CLI PreToolUse hook"
+      regex: /\bgit\s+clean\s+(-[^\s]*f[^\s]*|--fo(?:r(?:c(?:e)?)?)?)\b/,
+      reason: "git clean -f"
     },
     {
-      flags: "-h, --help",
-      description: "Show this help"
-    }
-  ],
-  examples: [
-    "cc-safety-net hook -cc",
-    "cc-safety-net hook --claude-code",
-    "cc-safety-net hook -cp",
-    "cc-safety-net hook --copilot-cli",
-    "cc-safety-net hook -gc",
-    "cc-safety-net hook --gemini-cli",
-    "cc-safety-net hook -kc",
-    "cc-safety-net hook --kimi-cli",
-    "cc-safety-net hook uninstall --opencode"
-  ]
-};
-
-// src/bin/commands/rule.ts
-var ruleCommand = {
-  name: "rule",
-  description: "Manage Safety Net rulebook sources",
-  usage: "rule <subcommand>",
-  subcommands: [
-    { usage: "init", description: "Create starter rule config and rulebook files" },
-    { usage: "add <source>", description: "Add a rulebook source and sync" },
-    { usage: "remove <source>", description: "Remove a rulebook source and sync" },
-    { usage: "update [source]", description: "Refresh rulebook lock/cache state" },
-    { usage: "sync", description: "Sync configured rulebooks" },
-    { usage: "list", description: "List active rulebooks" },
-    { usage: "test [source]", description: "Run rulebook fixtures" },
-    { usage: "migrate [--cleanup]", description: "Migrate legacy inline rules" },
-    { usage: "doc", description: "Print the rulebook authoring guide" },
-    { usage: "verify", description: "Validate rule config files" }
-  ],
-  options: [
-    { flags: "-g, --global", description: "Use user-scope rule config" },
-    { flags: "--check", description: "Check without changing lock/cache state" },
-    { flags: "--cleanup", description: "Delete legacy files after rule migrate verifies them" },
-    { flags: "--delete-source", description: "Delete clean local source directory on remove" },
-    { flags: "-h, --help", description: "Show this help" }
-  ],
-  examples: [
-    "cc-safety-net rule init",
-    "cc-safety-net rule add project-rules",
-    "cc-safety-net rule sync",
-    "cc-safety-net rule migrate --cleanup",
-    "cc-safety-net rule verify"
-  ]
-};
-
-// src/bin/commands/statusline.ts
-var statuslineCommand = {
-  name: "statusline",
-  description: "Print status line with mode indicators for shell integration",
-  usage: "statusline <coding cli>",
-  options: [
-    {
-      flags: "-cc, --claude-code",
-      description: "Print status line for Claude Code"
+      regex: /\bgit\s+checkout\s+[^|;]*(--fo(?:r(?:c(?:e)?)?)?\b|-(?![bBU])[^\s]*f[^\s]*\b)/,
+      reason: "git checkout --force"
     },
     {
-      flags: "-h, --help",
-      description: "Show this help"
+      regex: /\bgit\s+push\s+[^|;]*(-f\b|--fo(?:r(?:c(?:e)?)?)?\b)(?!-with-lease)/,
+      reason: "git push --force (use --force-with-lease instead)"
+    },
+    {
+      regex: /\bgit\s+branch\b(?=[^\n;|&]*(?:-D\b|-[A-Za-z]*D[A-Za-z]*\b|--de(?:l(?:e(?:t(?:e)?)?)?)?\b|-[A-Za-z]*d[A-Za-z]*\b))(?=[^\n;|&]*(?:-D\b|-[A-Za-z]*D[A-Za-z]*\b|--fo(?:r(?:c(?:e)?)?)?\b|-[A-Za-z]*f[A-Za-z]*\b))/,
+      reason: "git branch -D",
+      caseSensitive: true
+    },
+    {
+      regex: /\bgit\s+tag\s+[^|;]*(-[^\s]*d[^\s]*|--de(?:l(?:e(?:t(?:e)?)?)?)?)\b/,
+      reason: "git tag -d"
+    },
+    {
+      regex: /\bgit\s+stash\s+(drop|clear)\b/,
+      reason: "git stash drop/clear"
+    },
+    {
+      regex: /\bgit\s+checkout\s+--\s/,
+      reason: "git checkout --"
+    },
+    {
+      regex: /\bgit\s+restore\b(?!.*--(staged|help))/,
+      reason: "git restore (without --staged)"
+    },
+    {
+      regex: /\bfind\b[^\n;|&]*\s-delete\b/,
+      reason: "find -delete",
+      skipForEchoRg: true
     }
-  ],
-  examples: ["cc-safety-net statusline -cc", "cc-safety-net statusline --claude-code"]
-};
-
-// src/bin/commands/index.ts
-var commands = [
-  doctorCommand,
-  explainCommand,
-  ruleCommand,
-  hookCommand,
-  claudeCodeCommand,
-  copilotCliCommand,
-  geminiCliCommand,
-  statuslineCommand
-];
-function findCommand(nameOrAlias) {
-  const normalized = nameOrAlias.toLowerCase();
-  return commands.find((cmd) => cmd.name.toLowerCase() === normalized || cmd.aliases?.some((alias) => alias.toLowerCase() === normalized));
-}
-function getVisibleCommands() {
-  return commands.filter((cmd) => !cmd.hidden);
-}
-
-// src/bin/doctor/activity.ts
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-function formatRelativeTime(date) {
-  const diff = Date.now() - date.getTime();
-  const minutes = Math.floor(diff / (1000 * 60));
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const days = Math.floor(hours / 24);
-  if (days > 0)
-    return `${days}d ago`;
-  if (hours > 0)
-    return `${hours}h ago`;
-  if (minutes > 0)
-    return `${minutes}m ago`;
-  return "just now";
-}
-function getActivitySummary(days = 7, logsDir = join(homedir(), ".cc-safety-net", "logs")) {
-  if (!existsSync(logsDir)) {
-    return { totalBlocked: 0, sessionCount: 0, recentEntries: [] };
-  }
-  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-  const recentEntries = [];
-  let totalBlocked = 0;
-  let sessionCount = 0;
-  let oldestEntry;
-  let oldestEntryTs;
-  let newestEntry;
-  let newestEntryTs;
-  let files;
-  try {
-    files = readdirSync(logsDir).filter((f) => f.endsWith(".jsonl"));
-  } catch {
-    return { totalBlocked: 0, sessionCount: 0, recentEntries: [] };
-  }
-  for (const file of files) {
-    try {
-      const content = readFileSync(join(logsDir, file), "utf-8");
-      const lines = content.trim().split(`
-`).filter(Boolean);
-      let hasRecentEntry = false;
-      for (const line of lines) {
-        try {
-          const entry = JSON.parse(line);
-          if (entry.decision === "allow") {
-            continue;
-          }
-          const ts = new Date(entry.ts).getTime();
-          if (ts >= cutoff) {
-            totalBlocked++;
-            hasRecentEntry = true;
-            if (oldestEntryTs === undefined || ts <= oldestEntryTs) {
-              oldestEntry = entry.ts;
-              oldestEntryTs = ts;
-            }
-            if (newestEntryTs === undefined || ts > newestEntryTs) {
-              newestEntry = entry.ts;
-              newestEntryTs = ts;
-            }
-            insertRecentEntry(recentEntries, entry, ts);
-          }
-        } catch {}
-      }
-      if (hasRecentEntry) {
-        sessionCount++;
-      }
-    } catch {}
-  }
-  const displayEntries = recentEntries.map((e) => ({
-    timestamp: e.ts,
-    command: e.command,
-    reason: e.reason,
-    relativeTime: formatRelativeTime(new Date(e.ts))
-  }));
-  return {
-    totalBlocked,
-    sessionCount,
-    recentEntries: displayEntries,
-    oldestEntry,
-    newestEntry
-  };
-}
-function insertRecentEntry(entries, entry, ts) {
-  const index = entries.findIndex((existing) => ts > new Date(existing.ts).getTime());
-  if (index === -1) {
-    if (entries.length < 3) {
-      entries.push(entry);
-    }
-    return;
-  }
-  entries.splice(index, 0, entry);
-  if (entries.length > 3) {
-    entries.pop();
-  }
-}
-
-// src/bin/doctor/config.ts
-import { existsSync as existsSync8 } from "node:fs";
-import { dirname as dirname6 } from "node:path";
-
-// src/core/config.ts
-import { existsSync as existsSync7, readFileSync as readFileSync7 } from "node:fs";
-import { resolve as resolve4 } from "node:path";
-
-// src/types.ts
-var MAX_RECURSION_DEPTH = 10;
-var MAX_STRIP_ITERATIONS = 20;
-var NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
-var COMMAND_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
-var MAX_REASON_LENGTH = 256;
-var SHELL_OPERATORS = new Set(["&&", "||", "|&", "|", "&", ";", `
-`]);
-var SHELL_WRAPPERS = new Set(["bash", "sh", "zsh", "ksh", "dash", "fish", "csh", "tcsh"]);
-var INTERPRETERS = new Set(["python", "python3", "python2", "node", "ruby", "perl"]);
-var DANGEROUS_PATTERNS = [
-  /\brm\s+.*-[rR].*-f\b/,
-  /\brm\s+.*-f.*-[rR]\b/,
-  /\brm\s+-rf\b/,
-  /\brm\s+-fr\b/,
-  /\bgit\s+reset\s+--hard\b/,
-  /\bgit\s+checkout\s+--\b/,
-  /\bgit\s+clean\s+-f\b/,
-  /\bgit\s+stash\s+(drop|clear)\b/,
-  /\bdd\b[^\n;&|]*\bof=\/dev\/[^\s'"]+/,
-  /\bmkfs(?:\.[A-Za-z0-9_-]+)?\s+\/dev\/[^\s'"]+/,
-  /\bshred\b\s+/,
-  /\bfind\b.*\s-delete\b/
-];
-var PARANOID_INTERPRETERS_SUFFIX = `
-
-(Paranoid mode: interpreter one-liners are blocked.)`;
-
-// src/core/rules/custom-rule-validation.ts
-function validateCustomRule(rule, index, ruleNames, options = {}) {
-  const errors = [];
-  const prefix = `rules[${index}]`;
-  if (!rule || typeof rule !== "object") {
-    errors.push(`${prefix}: must be an object`);
-    return errors;
-  }
-  const r = rule;
-  const messageStyle = options.messageStyle ?? "legacy";
-  if (typeof r.name !== "string") {
-    errors.push(`${prefix}.name: required string`);
-  } else {
-    if (!NAME_PATTERN.test(r.name)) {
-      errors.push(messageStyle === "rulebook" ? `${prefix}.name: must match rule name pattern` : `${prefix}.name: must match pattern (letters, numbers, hyphens, underscores; max 64 chars)`);
-    }
-    const lowerName = r.name.toLowerCase();
-    if (ruleNames.has(lowerName)) {
-      errors.push(`${prefix}.name: duplicate rule name "${r.name}"`);
-    } else {
-      ruleNames.add(lowerName);
+  ];
+  for (const { regex, reason, skipForEchoRg, caseSensitive } of patterns) {
+    if (skipForEchoRg && isEchoOrRg)
+      continue;
+    const target = caseSensitive ? text : t;
+    if (regex.test(target)) {
+      return reason;
     }
   }
-  if (typeof r.command !== "string") {
-    errors.push(messageStyle === "rulebook" ? `${prefix}.command: required string matching command pattern` : `${prefix}.command: required string`);
-  } else if (!COMMAND_PATTERN.test(r.command)) {
-    errors.push(messageStyle === "rulebook" ? `${prefix}.command: required string matching command pattern` : `${prefix}.command: must match pattern (letters, numbers, hyphens, underscores)`);
-  }
-  if (r.subcommand !== undefined) {
-    if (typeof r.subcommand !== "string") {
-      errors.push(messageStyle === "rulebook" ? `${prefix}.subcommand: must match command pattern` : `${prefix}.subcommand: must be a string if provided`);
-    } else if (!COMMAND_PATTERN.test(r.subcommand)) {
-      errors.push(messageStyle === "rulebook" ? `${prefix}.subcommand: must match command pattern` : `${prefix}.subcommand: must match pattern (letters, numbers, hyphens, underscores)`);
-    }
-  }
-  if (!Array.isArray(r.block_args)) {
-    errors.push(messageStyle === "rulebook" ? `${prefix}.block_args: required non-empty array` : `${prefix}.block_args: required array`);
-  } else {
-    if (r.block_args.length === 0) {
-      errors.push(messageStyle === "rulebook" ? `${prefix}.block_args: required non-empty array` : `${prefix}.block_args: must have at least one element`);
-    }
-    for (let i = 0;i < r.block_args.length; i++) {
-      const arg = r.block_args[i];
-      if (typeof arg !== "string") {
-        errors.push(messageStyle === "rulebook" ? `${prefix}.block_args[${i}]: must be a non-empty string` : `${prefix}.block_args[${i}]: must be a string`);
-      } else if (arg === "") {
-        errors.push(messageStyle === "rulebook" ? `${prefix}.block_args[${i}]: must be a non-empty string` : `${prefix}.block_args[${i}]: must not be empty`);
-      }
-    }
-  }
-  if (typeof r.reason !== "string") {
-    errors.push(messageStyle === "rulebook" ? `${prefix}.reason: required non-empty string up to ${MAX_REASON_LENGTH} characters` : `${prefix}.reason: required string`);
-  } else if (r.reason === "") {
-    errors.push(messageStyle === "rulebook" ? `${prefix}.reason: required non-empty string up to ${MAX_REASON_LENGTH} characters` : `${prefix}.reason: must not be empty`);
-  } else if (r.reason.length > MAX_REASON_LENGTH) {
-    errors.push(messageStyle === "rulebook" ? `${prefix}.reason: required non-empty string up to ${MAX_REASON_LENGTH} characters` : `${prefix}.reason: must be at most ${MAX_REASON_LENGTH} characters`);
-  }
-  return errors;
+  return null;
 }
 
-// src/core/rules/policy/config-file.ts
-import { existsSync as existsSync2, mkdirSync, readFileSync as readFileSync2, renameSync, writeFileSync } from "node:fs";
-import { dirname as dirname2 } from "node:path";
-
-// src/core/rules/policy/paths.ts
-import { homedir as homedir2 } from "node:os";
-import { dirname, join as join2, resolve } from "node:path";
-var RULES_CONFIG_FILE = "rule.json";
-var RULES_LOCK_FILE = "rule.lock";
-var RULEBOOK_FILE = "rulebook.json";
-var LEGACY_RULES_CONFIG_FILE = "config.json";
-var SAFETY_NET_DIR = ".cc-safety-net";
-var RULES_SUBDIR = "rules";
-var CACHE_SUBDIR = "cache";
-var RULES_DIR = `${SAFETY_NET_DIR}/${RULES_SUBDIR}`;
-var CC_SAFETY_NET_HOME = "CC_SAFETY_NET_HOME";
-var GITHUB_RULEBOOK_SOURCE_FORMAT = "owner/repo#ref/<rulebook-name>";
-var RULE_SYNC_COMMAND = "`cc-safety-net rule sync`";
-var RULE_MIGRATE_COMMAND = "`npx -y cc-safety-net rule migrate`";
-function getProjectRulesDir(cwd) {
-  return resolve(cwd ?? process.cwd(), RULES_DIR);
-}
-function getProjectRulesConfigPath(cwd) {
-  return join2(getProjectRulesDir(cwd), RULES_CONFIG_FILE);
-}
-function getUserRulesDir(options) {
-  return options?.userConfigDir ?? (options?.userConfigPath ? dirname(options.userConfigPath) : join2(getUserSafetyNetHome(), RULES_SUBDIR));
-}
-function getUserSafetyNetHome() {
-  const home = process.env[CC_SAFETY_NET_HOME];
-  return home ? resolve(home) : join2(homedir2(), SAFETY_NET_DIR);
-}
-function getUserRulesConfigPath(options) {
-  return join2(getUserRulesDir(options), RULES_CONFIG_FILE);
-}
-function getUserRulesLockPath(options) {
-  return join2(getUserRulesDir(options), RULES_LOCK_FILE);
-}
-function getRulesLockPathForConfigPath(configPath) {
-  return join2(dirname(configPath), RULES_LOCK_FILE);
-}
-function getLegacyUserRulesConfigPath(options = {}) {
-  return join2(dirname(getUserRulesDir(options)), LEGACY_RULES_CONFIG_FILE);
-}
-function getLegacyProjectRulesConfigPath(options = {}) {
-  return resolve(options.cwd ?? process.cwd(), ".safety-net.json");
-}
-function getPolicyPaths(options) {
-  const userConfigPath = options.userConfigPath ?? getUserRulesConfigPath(options);
-  const projectConfigPath = options.projectConfigPath ?? getProjectRulesConfigPath(options.cwd);
-  return {
-    userConfigPath,
-    projectConfigPath,
-    userLockPath: getRulesLockPathForConfigPath(userConfigPath),
-    projectLockPath: getRulesLockPathForConfigPath(projectConfigPath)
-  };
-}
-function getScopePaths(options) {
-  const configPath = options.global ? options.userConfigPath ?? getUserRulesConfigPath(options) : options.projectConfigPath ?? getProjectRulesConfigPath(options.cwd);
-  return {
-    configDir: dirname(configPath),
-    configPath,
-    lockPath: getRulesLockPathForConfigPath(configPath)
-  };
-}
-function getRulebookDisplaySource(entry) {
-  if (entry.kind === "github" && entry.display_ref) {
-    return `${entry.owner}/${entry.repo}#${entry.display_ref}/${entry.name}`;
-  }
-  return entry.spec;
-}
-function getRulebookCachePath(entry, options) {
-  const digestHex = entry.digest.startsWith("sha256:") ? entry.digest.slice(7) : entry.digest;
-  return join2(getRulesCacheDir(options), "rulebooks", `${getRulebookCacheSlug(entry)}--${digestHex.slice(0, 12)}`, RULEBOOK_FILE);
-}
-function getRulebookCacheSlug(entry) {
-  const source = entry.kind === "github" && entry.display_ref ? `${entry.owner}/${entry.repo}#${entry.display_ref}/${entry.name}` : entry.spec;
-  return source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "rulebook";
-}
-function getRepositoryRulebookPath(name) {
-  return `${RULES_DIR}/${name}/${RULEBOOK_FILE}`;
-}
-function getRulesCacheDir(options) {
-  return join2(dirname(options?.cacheConfigDir ?? getUserRulesDir(options)), CACHE_SUBDIR);
-}
-
-// src/core/rules/policy/sources.ts
-var GITHUB_SOURCE_RE = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(.+)$/;
-var GITHUB_REPOSITORY_SOURCE_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9_.-]+$/;
-var GITHUB_REPOSITORY_REF_SOURCE_RE = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#([A-Za-z0-9._-]+)$/;
-var GITHUB_REF_PATTERN = /^[A-Za-z0-9._-]+$/;
-var RULES_DIR_RE = RULES_DIR.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-var RULEBOOK_FILE_RE = RULEBOOK_FILE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-var GITHUB_RULEBOOK_PATH_RE = new RegExp(`^${RULES_DIR_RE}/(${NAME_PATTERN.source.slice(1, -1)})/${RULEBOOK_FILE_RE}$`);
-function getRulebookSourceSyntaxError(source) {
-  if (isGitHubRulebookSource(source)) {
-    try {
-      parseGitHubSource(source);
-      return null;
-    } catch (error) {
-      return error instanceof Error ? error.message : String(error);
+// src/core/analyze/awk.ts
+var AWK_INTERPRETERS = new Set(["awk", "gawk", "nawk", "mawk"]);
+var REASON_AWK_SYSTEM_DYNAMIC = "Detected awk system() call with dynamic command that cannot be safely analyzed.";
+function analyzeAwkSystemCalls(tokens, analyzeNested) {
+  for (const token of tokens.slice(1)) {
+    if (!token.includes("system"))
+      continue;
+    const commands = extractAwkSystemCommands(token);
+    if (!commands)
+      continue;
+    if (commands.dynamic)
+      return REASON_AWK_SYSTEM_DYNAMIC;
+    for (const command of commands.commands) {
+      const reason = analyzeNested(command);
+      if (reason)
+        return reason;
     }
   }
-  return NAME_PATTERN.test(source) ? null : `Local rulebook sources must be bare names matching ${NAME_PATTERN}: ${source}`;
+  return null;
 }
-function parseGitHubSource(spec) {
-  if (spec.startsWith("github:")) {
-    throw new Error(`Invalid rulebook source: ${spec}`);
-  }
-  const match = spec.match(GITHUB_SOURCE_RE);
-  if (!match?.[1] || !match[2] || !match[3]) {
-    throw new Error(`Invalid GitHub rulebook source: ${spec}`);
-  }
-  const [ref, name, ...extraParts] = match[3].split("/");
-  if (!ref || !GITHUB_REF_PATTERN.test(ref)) {
-    throw new Error(`GitHub rulebook refs must be a single path segment: ${spec}`);
-  }
-  if (!name || extraParts.length > 0 || !NAME_PATTERN.test(name)) {
-    throw new Error(`GitHub rulebook sources must be ${GITHUB_RULEBOOK_SOURCE_FORMAT}: ${spec}`);
-  }
-  return {
-    owner: match[1],
-    repo: match[2],
-    ref,
-    path: getRepositoryRulebookPath(name),
-    name
-  };
-}
-function isGitHubRepositorySource(source) {
-  return GITHUB_REPOSITORY_SOURCE_RE.test(source);
-}
-function isGitHubRulebookSource(source) {
-  return GITHUB_SOURCE_RE.test(source);
-}
-function assertBareRulebookName(source) {
-  if (!NAME_PATTERN.test(source)) {
-    throw new Error(`Local rulebook sources must be bare names matching ${NAME_PATTERN}: ${source}`);
-  }
-}
-function getSelectedUpdateSpecs(config, lock, match) {
-  const exactMatches = config.rules.filter((spec) => spec === match);
-  if (exactMatches.length > 0) {
-    return { ok: true, specs: exactMatches };
-  }
-  if (!lock) {
-    return {
-      ok: false,
-      result: {
-        ok: false,
-        errors: [
-          `No lockfile available to match rulebook name ${match}; use the exact source or run ${RULE_SYNC_COMMAND}`
-        ],
-        warnings: [],
-        entries: []
-      }
-    };
-  }
-  const configuredSpecs = new Set(config.rules);
-  const nameMatches = lock.rulebooks.filter((entry) => entry.name === match && configuredSpecs.has(entry.spec)).map((entry) => entry.spec);
-  if (nameMatches.length === 1) {
-    return { ok: true, specs: nameMatches };
-  }
-  return noRulebookMatch(match, nameMatches);
-}
-function getRemoveMatches(rules, lock, match) {
-  const exactMatches = rules.filter((spec) => spec === match);
-  if (exactMatches.length > 0)
-    return { ok: true, specs: exactMatches };
-  const githubRefMatches = getGitHubRepositoryRefMatches(rules, match);
-  if (githubRefMatches.length > 0)
-    return { ok: true, specs: githubRefMatches };
-  const githubRepositoryMatches = getGitHubRepositoryMatches(rules, match);
-  if (!githubRepositoryMatches.ok)
-    return githubRepositoryMatches;
-  if (githubRepositoryMatches.specs.length > 0) {
-    return { ok: true, specs: githubRepositoryMatches.specs };
-  }
-  const nameMatches = lock ? rules.filter((spec) => lock.rulebooks.find((entry) => entry.spec === spec)?.name === match) : [];
-  if (nameMatches.length === 1)
-    return { ok: true, specs: nameMatches };
-  return noRulebookMatch(match, nameMatches);
-}
-function noRulebookMatch(match, nameMatches) {
-  return {
-    ok: false,
-    result: {
-      ok: false,
-      errors: nameMatches.length === 0 ? [`No configured rulebook matches ${match}`] : [`Ambiguous rulebook match ${match}: ${nameMatches.join(", ")}`],
-      warnings: [],
-      entries: []
+function extractAwkSystemCommands(code) {
+  const commands = [];
+  let sawSystem = false;
+  let searchIndex = 0;
+  while (searchIndex < code.length) {
+    const systemIndex = code.indexOf("system", searchIndex);
+    if (systemIndex === -1)
+      break;
+    searchIndex = systemIndex + "system".length;
+    if (!isAwkIdentifierBoundary(code[systemIndex - 1]) || !isAwkIdentifierBoundary(code[searchIndex])) {
+      continue;
     }
-  };
-}
-function getGitHubRepositoryRefMatches(rules, match) {
-  const parsed = match.match(GITHUB_REPOSITORY_REF_SOURCE_RE);
-  if (!parsed?.[1] || !parsed[2] || !parsed[3])
-    return [];
-  return rules.filter((spec) => {
-    const source = getConfiguredGitHubSource(spec);
-    if (!source)
-      return false;
-    return source.owner === parsed[1] && source.repo === parsed[2] && source.ref === parsed[3];
-  });
-}
-function getGitHubRepositoryMatches(rules, match) {
-  if (!isGitHubRepositorySource(match))
-    return { ok: true, specs: [] };
-  const specs = rules.filter((spec) => {
-    const source = getConfiguredGitHubSource(spec);
-    if (!source)
-      return false;
-    return source.owner === match.split("/")[0] && source.repo === match.split("/")[1];
-  });
-  const refs = new Set(specs.map((spec) => getConfiguredGitHubSource(spec)?.ref).filter((ref) => !!ref));
-  if (refs.size < 2)
-    return { ok: true, specs };
-  return {
-    ok: false,
-    result: {
-      ok: false,
-      errors: [
-        `Multiple refs are configured for ${match}. Use an explicit ref:`,
-        `  cc-safety-net rule remove ${match}#<ref>`
-      ],
-      warnings: [],
-      entries: []
+    let i = skipAwkWhitespace(code, searchIndex);
+    if (code[i] !== "(")
+      continue;
+    i = skipAwkWhitespace(code, i + 1);
+    const quote = code[i];
+    if (quote !== '"' && quote !== "'") {
+      sawSystem = true;
+      continue;
     }
-  };
-}
-function getConfiguredGitHubSource(spec) {
-  try {
-    return parseGitHubSource(spec);
-  } catch {
+    const parsed = readAwkStringLiteral(code, i, quote);
+    if (!parsed) {
+      sawSystem = true;
+      continue;
+    }
+    i = skipAwkWhitespace(code, parsed.endIndex);
+    sawSystem = true;
+    if (code[i] !== ")") {
+      return { dynamic: true, commands };
+    }
+    commands.push(parsed.value);
+    searchIndex = i + 1;
+  }
+  if (!sawSystem)
     return null;
-  }
+  return commands.length > 0 ? { dynamic: false, commands } : { dynamic: true, commands };
 }
-
-// src/core/rules/policy/types.ts
-var DEFAULT_CONFIG = { version: 1, rules: [], overrides: {} };
-
-// src/core/rules/policy/config-file.ts
-function validateRulesConfig(config) {
-  const errors = [];
-  const sources = new Set;
-  if (!config || typeof config !== "object") {
-    return { errors: ["Config must be an object"], sources };
-  }
-  const cfg = config;
-  if (cfg.version !== 1) {
-    errors.push("version must be 1");
-  }
-  if (cfg.rules === undefined) {} else if (!Array.isArray(cfg.rules)) {
-    errors.push("rules must be an array of rulebook source strings");
-  } else {
-    for (let i = 0;i < cfg.rules.length; i++) {
-      if (typeof cfg.rules[i] !== "string") {
-        errors.push(`rules[${i}]: must be a rulebook source string`);
-        continue;
-      }
-      if (cfg.rules[i].trim() === "") {
-        errors.push(`rules[${i}]: must be a non-empty rulebook source string`);
-        continue;
-      }
-      if (sources.has(cfg.rules[i])) {
-        errors.push(`rules[${i}]: duplicate rulebook source "${cfg.rules[i]}"`);
-        continue;
-      }
-      const sourceError = getRulebookSourceSyntaxError(cfg.rules[i]);
-      if (sourceError) {
-        errors.push(`rules[${i}]: ${sourceError}`);
-        continue;
-      }
-      sources.add(cfg.rules[i]);
-    }
-  }
-  if (cfg.overrides !== undefined) {
-    if (!cfg.overrides || typeof cfg.overrides !== "object" || Array.isArray(cfg.overrides)) {
-      errors.push("overrides must be an object if provided");
-    } else {
-      for (const [key, value] of Object.entries(cfg.overrides)) {
-        if (!/^[^/]+\/[^/]+$/.test(key)) {
-          errors.push(`overrides.${key}: must use <rulebook-name>/<rule-name>`);
-        }
-        if (value === "off") {
-          continue;
-        }
-        if (!value || typeof value !== "object" || Array.isArray(value)) {
-          errors.push(`overrides.${key}: must be "off" or an object`);
-          continue;
-        }
-        const reason = value.reason;
-        if (typeof reason !== "string" || reason === "") {
-          errors.push(`overrides.${key}.reason: required non-empty string`);
-        } else if (reason.length > MAX_REASON_LENGTH) {
-          errors.push(`overrides.${key}.reason: must be at most ${MAX_REASON_LENGTH} characters`);
-        }
-      }
-    }
-  }
-  return { errors, sources };
+function isAwkIdentifierBoundary(char) {
+  return !char || !/[A-Za-z0-9_]/.test(char);
 }
-function readRulesConfig(path) {
-  if (!existsSync2(path)) {
-    return { config: null, errors: [] };
+function skipAwkWhitespace(code, index) {
+  let i = index;
+  while (/\s/.test(code[i] ?? "")) {
+    i++;
   }
-  try {
-    const content = readFileSync2(path, "utf-8");
-    if (!content.trim()) {
-      return { config: null, errors: ["Config file is empty"] };
+  return i;
+}
+function readAwkStringLiteral(code, startIndex, quote) {
+  let value = "";
+  let escaped = false;
+  for (let i = startIndex + 1;i < code.length; i++) {
+    const char = code[i];
+    if (!char)
+      break;
+    if (escaped) {
+      const decoded = decodeAwkEscape(code, i);
+      if (!decoded)
+        return null;
+      value += decoded.value;
+      i = decoded.endIndex;
+      escaped = false;
+      continue;
     }
-    const parsed = JSON.parse(content);
-    const validation = validateRulesConfig(parsed);
-    if (validation.errors.length > 0) {
-      return { config: null, errors: validation.errors };
+    if (char === "\\") {
+      escaped = true;
+      continue;
     }
-    const cfg = parsed;
+    if (char === quote) {
+      return { value, endIndex: i + 1 };
+    }
+    value += char;
+  }
+  return null;
+}
+function decodeAwkEscape(code, index) {
+  const char = code[index];
+  if (!char)
+    return null;
+  if (char === "x") {
+    const hex = code.slice(index + 1, index + 3);
+    if (!/^[0-9A-Fa-f]{2}$/.test(hex))
+      return null;
+    return { value: String.fromCharCode(Number.parseInt(hex, 16)), endIndex: index + 2 };
+  }
+  if (/[0-7]/.test(char)) {
+    const match = /^[0-7]{1,3}/.exec(code.slice(index));
+    if (!match)
+      return null;
     return {
-      config: {
-        version: 1,
-        rules: cfg.rules ?? [],
-        overrides: cfg.overrides ?? {}
-      },
-      errors: []
-    };
-  } catch (error) {
-    return {
-      config: null,
-      errors: [`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`]
+      value: String.fromCharCode(Number.parseInt(match[0], 8)),
+      endIndex: index + match[0].length - 1
     };
   }
-}
-function readScopeRulesConfig(path) {
-  const loaded = readRulesConfig(path);
-  if (loaded.errors.length > 0) {
-    return { ok: false, result: { ok: false, errors: loaded.errors, warnings: [], entries: [] } };
-  }
-  return { ok: true, config: loaded.config ?? DEFAULT_CONFIG };
-}
-function writeDefaultRulesConfig(path, rules = []) {
-  writeJsonAtomic(path, { version: 1, rules, overrides: {} });
-}
-function writeStarterRulebook(path, name = "project-rules") {
-  writeJsonAtomic(path, {
-    rulebook_version: 1,
-    name,
-    version: "1.0.0",
-    description: name === "project-rules" ? "Project-specific CC Safety Net rules." : "User-specific CC Safety Net rules.",
-    author: name === "project-rules" ? "project" : "user",
-    allowed_commands: ["docker"],
-    rules: [
-      {
-        name: "block-docker-system-prune",
-        command: "docker",
-        subcommand: "system",
-        block_args: ["prune"],
-        reason: "Use targeted cleanup instead."
-      }
-    ],
-    tests: [
-      {
-        command: "docker system prune",
-        expect: "blocked",
-        rule: "block-docker-system-prune"
-      }
-    ]
-  });
-}
-function writeJsonAtomic(path, value) {
-  mkdirSync(dirname2(path), { recursive: true });
-  const tempPath = `${path}.${process.pid}.${Date.now()}.tmp`;
-  writeFileSync(tempPath, `${JSON.stringify(value, null, 2)}
-`, "utf-8");
-  renameSync(tempPath, path);
+  const simpleEscapes = {
+    a: "\x07",
+    b: "\b",
+    f: "\f",
+    n: `
+`,
+    r: "\r",
+    t: "\t",
+    v: "\v"
+  };
+  return { value: simpleEscapes[char] ?? char, endIndex: index };
 }
 
-// src/core/rules/policy/scope-policy.ts
-import { existsSync as existsSync5, readFileSync as readFileSync5 } from "node:fs";
-import { dirname as dirname4, isAbsolute as isAbsolute3, join as join4, relative, resolve as resolve2, sep as sep2 } from "node:path";
+// src/core/analyze/constants.ts
+var DISPLAY_COMMANDS = new Set([
+  "echo",
+  "printf",
+  "cat",
+  "head",
+  "tail",
+  "less",
+  "more",
+  "grep",
+  "rg",
+  "ag",
+  "ack",
+  "sed",
+  "awk",
+  "cut",
+  "tr",
+  "sort",
+  "uniq",
+  "wc",
+  "tee",
+  "man",
+  "help",
+  "info",
+  "type",
+  "which",
+  "whereis",
+  "whatis",
+  "apropos",
+  "file",
+  "stat",
+  "ls",
+  "ll",
+  "dir",
+  "tree",
+  "pwd",
+  "date",
+  "cal",
+  "uptime",
+  "whoami",
+  "id",
+  "groups",
+  "hostname",
+  "uname",
+  "env",
+  "printenv",
+  "set",
+  "export",
+  "alias",
+  "history",
+  "jobs",
+  "fg",
+  "bg",
+  "test",
+  "true",
+  "false",
+  "read",
+  "return",
+  "exit",
+  "break",
+  "continue",
+  "shift",
+  "wait",
+  "trap",
+  "basename",
+  "dirname",
+  "realpath",
+  "readlink",
+  "md5sum",
+  "sha256sum",
+  "base64",
+  "xxd",
+  "od",
+  "hexdump",
+  "strings",
+  "diff",
+  "cmp",
+  "comm",
+  "join",
+  "paste",
+  "column",
+  "fmt",
+  "fold",
+  "nl",
+  "pr",
+  "expand",
+  "unexpand",
+  "rev",
+  "tac",
+  "shuf",
+  "seq",
+  "yes",
+  "sleep",
+  "logger",
+  "write",
+  "wall",
+  "mesg",
+  "notify-send"
+]);
+
+// src/core/analyze/rm-flags.ts
+function hasRecursiveForceFlags(tokens) {
+  let hasRecursive = false;
+  let hasForce = false;
+  for (const token of tokens) {
+    if (token === "--")
+      break;
+    if (token === "-r" || token === "-R" || token === "--recursive") {
+      hasRecursive = true;
+    } else if (token === "-f" || token === "--force") {
+      hasForce = true;
+    } else if (token.startsWith("-") && !token.startsWith("--")) {
+      if (token.includes("r") || token.includes("R"))
+        hasRecursive = true;
+      if (token.includes("f"))
+        hasForce = true;
+    }
+  }
+  return hasRecursive && hasForce;
+}
 
 // src/core/shell/command.ts
 function normalizeCommandToken(token) {
@@ -1042,6 +623,34 @@ function extractShortOpts(tokens, options) {
 // node_modules/shell-quote/index.js
 var $quote = require_quote();
 var $parse = require_parse();
+
+// src/types.ts
+var MAX_RECURSION_DEPTH = 10;
+var MAX_STRIP_ITERATIONS = 20;
+var NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/;
+var COMMAND_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
+var MAX_REASON_LENGTH = 256;
+var SHELL_OPERATORS = new Set(["&&", "||", "|&", "|", "&", ";", `
+`]);
+var SHELL_WRAPPERS = new Set(["bash", "sh", "zsh", "ksh", "dash", "fish", "csh", "tcsh"]);
+var INTERPRETERS = new Set(["python", "python3", "python2", "node", "ruby", "perl"]);
+var DANGEROUS_PATTERNS = [
+  /\brm\s+.*-[rR].*-f\b/,
+  /\brm\s+.*-f.*-[rR]\b/,
+  /\brm\s+-rf\b/,
+  /\brm\s+-fr\b/,
+  /\bgit\s+reset\s+--hard\b/,
+  /\bgit\s+checkout\s+--\b/,
+  /\bgit\s+clean\s+-f\b/,
+  /\bgit\s+stash\s+(drop|clear)\b/,
+  /\bdd\b[^\n;&|]*\bof=\/dev\/[^\s'"]+/,
+  /\bmkfs(?:\.[A-Za-z0-9_-]+)?\s+\/dev\/[^\s'"]+/,
+  /\bshred\b\s+/,
+  /\bfind\b.*\s-delete\b/
+];
+var PARANOID_INTERPRETERS_SUFFIX = `
+
+(Paranoid mode: interpreter one-liners are blocked.)`;
 
 // src/core/shell/shared.ts
 var ENV_PROXY = new Proxy({}, {
@@ -1892,7 +1501,7 @@ function hasConfigAffectingEnvAssignment(envAssignments) {
 
 // src/core/path.ts
 import { lstatSync, realpathSync } from "node:fs";
-import { dirname as dirname3, isAbsolute, parse as parsePath, sep } from "node:path";
+import { dirname, isAbsolute, parse as parsePath, sep } from "node:path";
 function resolveChdirTarget(baseCwd, target) {
   const root = isAbsolute(target) ? getPathRoot(target) : "";
   let current = root || baseCwd;
@@ -1901,7 +1510,7 @@ function resolveChdirTarget(baseCwd, target) {
       continue;
     }
     if (component === "..") {
-      current = dirname3(current);
+      current = dirname(current);
       continue;
     }
     const candidate = appendPathWithoutNormalizing(current, component);
@@ -2199,2032 +1808,6 @@ function stripCommand(tokens) {
   }
   return tokens.slice(i);
 }
-// src/core/rules/custom.ts
-function checkCustomRules(tokens, rules) {
-  if (tokens.length === 0 || rules.length === 0) {
-    return null;
-  }
-  const command2 = getBasename(tokens[0] ?? "");
-  const subcommand = extractSubcommand(tokens);
-  const shortOpts = extractShortOpts(tokens);
-  for (const rule of rules) {
-    if (!matchesCommand(command2, rule.command)) {
-      continue;
-    }
-    if (rule.subcommand && subcommand !== rule.subcommand) {
-      continue;
-    }
-    if (matchesBlockArgs(tokens, rule.block_args, shortOpts)) {
-      return `[${rule.name}] ${rule.reason}`;
-    }
-  }
-  return null;
-}
-function matchesCommand(command2, ruleCommand2) {
-  return command2 === ruleCommand2;
-}
-var OPTIONS_WITH_VALUES = new Set([
-  "-c",
-  "-C",
-  "--git-dir",
-  "--work-tree",
-  "--namespace",
-  "--config-env"
-]);
-function extractSubcommand(tokens) {
-  let skipNext = false;
-  for (let i = 1;i < tokens.length; i++) {
-    const token = tokens[i];
-    if (!token)
-      continue;
-    if (skipNext) {
-      skipNext = false;
-      continue;
-    }
-    if (token === "--") {
-      const nextToken = tokens[i + 1];
-      if (nextToken && !nextToken.startsWith("-")) {
-        return nextToken;
-      }
-      return null;
-    }
-    if (OPTIONS_WITH_VALUES.has(token)) {
-      skipNext = true;
-      continue;
-    }
-    if (token.startsWith("-")) {
-      for (const opt of OPTIONS_WITH_VALUES) {
-        if (token.startsWith(`${opt}=`)) {
-          break;
-        }
-      }
-      continue;
-    }
-    return token;
-  }
-  return null;
-}
-function matchesBlockArgs(tokens, blockArgs, shortOpts) {
-  const blockArgsSet = new Set(blockArgs);
-  for (const token of tokens) {
-    if (blockArgsSet.has(token)) {
-      return true;
-    }
-  }
-  for (const opt of shortOpts) {
-    if (blockArgsSet.has(opt)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// src/core/rules/rulebook.ts
-function validateRulebook(rulebook) {
-  const errors = [];
-  const ruleNames = new Set;
-  if (!rulebook || typeof rulebook !== "object") {
-    return { errors: ["Rulebook must be an object"], ruleNames };
-  }
-  const rb = rulebook;
-  if (rb.rulebook_version !== 1) {
-    errors.push("rulebook_version must be 1");
-  }
-  if (typeof rb.name !== "string" || !NAME_PATTERN.test(rb.name)) {
-    errors.push("name: required string matching rule name pattern");
-  }
-  if (typeof rb.version !== "string" || rb.version === "") {
-    errors.push("version: required non-empty string");
-  }
-  if (!Array.isArray(rb.allowed_commands)) {
-    errors.push("allowed_commands: required array");
-  } else {
-    validateAllowedCommands(rb.allowed_commands, errors);
-  }
-  if (!Array.isArray(rb.rules)) {
-    errors.push("rules: required array");
-  } else {
-    for (let i = 0;i < rb.rules.length; i++) {
-      errors.push(...validateCustomRule(rb.rules[i], i, ruleNames, { messageStyle: "rulebook" }));
-    }
-  }
-  if (!Array.isArray(rb.tests)) {
-    errors.push("tests: required array");
-  } else {
-    validateFixtures(rb.tests, rb.rules, errors);
-  }
-  if (Array.isArray(rb.allowed_commands) && Array.isArray(rb.rules)) {
-    const allowed = new Set(rb.allowed_commands.filter((cmd) => typeof cmd === "string"));
-    for (let i = 0;i < rb.rules.length; i++) {
-      const rule = rb.rules[i];
-      if (typeof rule.command === "string" && !allowed.has(rule.command)) {
-        errors.push(`rules[${i}].command: "${rule.command}" must be listed in allowed_commands`);
-      }
-    }
-  }
-  return { errors, ruleNames };
-}
-function validateAllowedCommands(commands2, errors) {
-  const seen = new Set;
-  for (let i = 0;i < commands2.length; i++) {
-    const command2 = commands2[i];
-    if (typeof command2 !== "string" || !COMMAND_PATTERN.test(command2)) {
-      errors.push(`allowed_commands[${i}]: must match command pattern`);
-      continue;
-    }
-    if (seen.has(command2)) {
-      errors.push(`allowed_commands[${i}]: duplicate command "${command2}"`);
-      continue;
-    }
-    seen.add(command2);
-  }
-}
-function validateFixtures(tests, rules, errors) {
-  const blockedFixtures = new Set;
-  const ruleNames = new Set(Array.isArray(rules) ? rules.map((rule) => rule && typeof rule === "object" ? rule.name : null).filter((name) => typeof name === "string") : []);
-  for (let i = 0;i < tests.length; i++) {
-    const fixture = tests[i];
-    if (!fixture || typeof fixture !== "object") {
-      errors.push(`tests[${i}]: must be an object`);
-      continue;
-    }
-    const f = fixture;
-    if (typeof f.command !== "string" || f.command.trim() === "") {
-      errors.push(`tests[${i}].command: required non-empty string`);
-    }
-    if (f.expect !== "blocked" && f.expect !== "allowed") {
-      errors.push(`tests[${i}].expect: must be "blocked" or "allowed"`);
-    }
-    if (f.rule !== undefined && typeof f.rule !== "string") {
-      errors.push(`tests[${i}].rule: must be a string if provided`);
-    }
-    if (f.expect === "blocked" && typeof f.rule !== "string") {
-      errors.push(`tests[${i}].rule: required string for blocked fixtures`);
-    }
-    if (f.expect === "blocked" && typeof f.rule === "string") {
-      blockedFixtures.add(f.rule);
-    }
-  }
-  for (let i = 0;i < (Array.isArray(rules) ? rules.length : 0); i++) {
-    const rule = rules[i];
-    if (typeof rule.name === "string" && !blockedFixtures.has(rule.name)) {
-      errors.push(`rules[${i}]: missing blocked fixture for rule "${rule.name}"`);
-    }
-  }
-  for (const rule of blockedFixtures) {
-    if (!ruleNames.has(rule)) {
-      errors.push(`tests: blocked fixture references unknown rule "${rule}"`);
-    }
-  }
-}
-function runRulebookFixtures(rulebook) {
-  const failures = rulebook.tests.flatMap((fixture) => {
-    const segments2 = splitShellCommands(fixture.command).map((tokens) => {
-      const result = checkCustomRules(tokens, rulebook.rules);
-      return { tokens, result, matchedRule: result?.match(/^\[([^\]]+)]/)?.[1] ?? null };
-    });
-    const firstSegment = segments2[0] ?? { tokens: [], result: null, matchedRule: null };
-    if (fixture.expect === "allowed") {
-      const blockedSegment = segments2.find((segment) => segment.result);
-      return blockedSegment ? [
-        {
-          command: fixture.command,
-          message: `expected allowed but matched ${blockedSegment.matchedRule ?? "a rule"}`,
-          trace: traceRulebookFixture(blockedSegment.tokens, rulebook.rules)
-        }
-      ] : [];
-    }
-    const firstBlockedSegment = segments2.find((segment) => segment.result);
-    if (!firstBlockedSegment) {
-      return [
-        {
-          command: fixture.command,
-          message: `expected blocked by ${fixture.rule ?? "a rule"} but command was allowed`,
-          trace: traceRulebookFixture(firstSegment.tokens, rulebook.rules)
-        }
-      ];
-    }
-    if (!fixture.rule || firstBlockedSegment.matchedRule === fixture.rule)
-      return [];
-    return [
-      {
-        command: fixture.command,
-        message: `expected blocked by ${fixture.rule} but matched ${firstBlockedSegment.matchedRule}`,
-        trace: traceRulebookFixture(firstBlockedSegment.tokens, rulebook.rules)
-      }
-    ];
-  });
-  return { ok: failures.length === 0, failures };
-}
-function traceRulebookFixture(tokens, rules) {
-  return rules.map((rule) => {
-    const result = checkCustomRules([...tokens], [rule]);
-    return `${result ? "matched" : "skipped"} ${rule.name}`;
-  });
-}
-function assertValidRulebook(rulebook) {
-  const result = validateRulebook(rulebook);
-  if (result.errors.length > 0) {
-    throw new Error(result.errors.join("; "));
-  }
-  const parsed = rulebook;
-  const fixtures = runRulebookFixtures(parsed);
-  if (!fixtures.ok) {
-    throw new Error(fixtures.failures.map((failure) => `${failure.command}: ${failure.message}`).join("; "));
-  }
-  return parsed;
-}
-
-// src/core/rules/policy/lockfile.ts
-import { existsSync as existsSync3, readFileSync as readFileSync3 } from "node:fs";
-var SHA256_DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
-var RULEBOOK_SOURCE_KINDS = new Set(["local-directory", "github"]);
-function readLockfile(path) {
-  if (!existsSync3(path)) {
-    return { lock: null, errors: [] };
-  }
-  try {
-    const parsed = JSON.parse(readFileSync3(path, "utf-8"));
-    if (!parsed || typeof parsed !== "object") {
-      return { lock: null, errors: [`malformed lockfile ${path}: must be an object`] };
-    }
-    const lock = parsed;
-    if (lock.version !== 1 || !Array.isArray(lock.rulebooks)) {
-      return { lock: null, errors: [`malformed lockfile ${path}`] };
-    }
-    const parsedEntries = lock.rulebooks.map((entry, index) => parseLockEntry(entry, `${path}: rulebooks[${index}]`));
-    const entryErrors = parsedEntries.flatMap((entry) => entry.errors);
-    if (entryErrors.length > 0) {
-      return { lock: null, errors: [`malformed lockfile ${path}`, ...entryErrors] };
-    }
-    return {
-      lock: {
-        version: 1,
-        rulebooks: parsedEntries.flatMap((entry) => entry.entry ? [entry.entry] : [])
-      },
-      errors: []
-    };
-  } catch (error) {
-    return {
-      lock: null,
-      errors: [
-        `malformed lockfile ${path}: ${error instanceof Error ? error.message : String(error)}`
-      ]
-    };
-  }
-}
-function parseLockEntry(entry, prefix) {
-  if (!entry || typeof entry !== "object") {
-    return { entry: null, errors: [`${prefix}: must be an object`] };
-  }
-  const candidate = entry;
-  const errors = [
-    ...validateRequiredString(candidate, prefix, "spec"),
-    ...validateRequiredString(candidate, prefix, "name"),
-    ...validateRequiredString(candidate, prefix, "version"),
-    ...validateDigest(candidate, prefix),
-    ...validateKind(candidate, prefix),
-    ...validateKindFields(candidate, prefix)
-  ];
-  if (errors.length > 0)
-    return { entry: null, errors };
-  if (candidate.kind === "local-directory") {
-    return {
-      entry: {
-        spec: requiredString(candidate, "spec"),
-        kind: "local-directory",
-        path: requiredString(candidate, "path"),
-        name: requiredString(candidate, "name"),
-        version: requiredString(candidate, "version"),
-        digest: requiredString(candidate, "digest")
-      },
-      errors: []
-    };
-  }
-  const githubEntry = {
-    spec: requiredString(candidate, "spec"),
-    kind: "github",
-    owner: requiredString(candidate, "owner"),
-    repo: requiredString(candidate, "repo"),
-    ref: requiredString(candidate, "ref"),
-    commit: requiredString(candidate, "commit"),
-    path: requiredString(candidate, "path"),
-    name: requiredString(candidate, "name"),
-    version: requiredString(candidate, "version"),
-    digest: requiredString(candidate, "digest")
-  };
-  return {
-    entry: typeof candidate.display_ref === "string" && candidate.display_ref !== "" ? { ...githubEntry, display_ref: candidate.display_ref } : githubEntry,
-    errors: []
-  };
-}
-function validateRequiredString(candidate, prefix, field) {
-  return typeof candidate[field] === "string" && candidate[field].trim() !== "" ? [] : [`${prefix}.${field}: required string`];
-}
-function validateDigest(candidate, prefix) {
-  return typeof candidate.digest === "string" && SHA256_DIGEST_PATTERN.test(candidate.digest) ? [] : [`${prefix}.digest: required sha256 digest`];
-}
-function validateKind(candidate, prefix) {
-  if (typeof candidate.kind !== "string") {
-    return [`${prefix}.kind: required string`];
-  }
-  return RULEBOOK_SOURCE_KINDS.has(candidate.kind) ? [] : [`${prefix}.kind: unknown kind "${candidate.kind}"`];
-}
-function validateKindFields(candidate, prefix) {
-  if (candidate.kind === "local-directory") {
-    return validateRequiredString(candidate, prefix, "path");
-  }
-  if (candidate.kind === "github") {
-    return ["owner", "repo", "ref", "commit", "path"].flatMap((field) => validateRequiredString(candidate, prefix, field));
-  }
-  return [];
-}
-function requiredString(candidate, field) {
-  const value = candidate[field];
-  if (typeof value !== "string") {
-    throw new Error(`Expected ${field} to be validated before reading`);
-  }
-  return value;
-}
-
-// src/core/rules/policy/resolver.ts
-import { createHash } from "node:crypto";
-import { existsSync as existsSync4, readFileSync as readFileSync4 } from "node:fs";
-import { join as join3 } from "node:path";
-async function resolveRulebookSource(spec, configDir, options2) {
-  if (isGitHubRulebookSource(spec)) {
-    return resolveGitHubRulebook(spec);
-  }
-  return resolveLocalRulebook(spec, configDir, options2);
-}
-async function resolveRulebookSourceForSync(spec, configDir, options2, previousLock) {
-  if (!isGitHubRulebookSource(spec) || options2.refresh) {
-    return resolveRulebookSource(spec, configDir, options2);
-  }
-  const locked = previousLock?.rulebooks.find((entry) => entry.spec === spec);
-  if (!locked || locked.kind !== "github") {
-    return resolveRulebookSource(spec, configDir, options2);
-  }
-  return readLockedGitHubRulebook(locked, configDir, options2);
-}
-async function discoverGitHubRepositoryRulebooks(source) {
-  const [owner, repo] = source.split("/");
-  if (!owner || !repo) {
-    throw new Error(`Invalid GitHub repository source: ${source}`);
-  }
-  const metadataResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
-  if (!metadataResponse.ok) {
-    throw new Error(`Failed to inspect ${source}: GitHub returned ${metadataResponse.status}`);
-  }
-  const metadata = await metadataResponse.json();
-  if (!metadata.default_branch) {
-    throw new Error(`Failed to inspect ${source}: missing default branch`);
-  }
-  const commit = await resolveGitHubCommit(owner, repo, metadata.default_branch, source);
-  const treeResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${commit}?recursive=1`);
-  if (!treeResponse.ok) {
-    throw new Error(`Failed to inspect ${source}: GitHub tree returned ${treeResponse.status}`);
-  }
-  const treeJson = await treeResponse.json();
-  const names = (treeJson.tree ?? []).flatMap((entry) => {
-    if (entry.type !== "blob" || typeof entry.path !== "string")
-      return [];
-    const match = entry.path.match(GITHUB_RULEBOOK_PATH_RE);
-    return match?.[1] ? [match[1]] : [];
-  }).sort();
-  if (names.length === 0) {
-    throw new Error(`No rulebooks found in ${source} under ${RULES_DIR}/`);
-  }
-  return names.map((name) => ({
-    spec: `${owner}/${repo}#${commit}/${name}`,
-    display_ref: metadata.default_branch
-  }));
-}
-function resolveLocalRulebook(spec, configDir, _options) {
-  assertBareRulebookName(spec);
-  const path = getLocalRulebookPath(configDir, spec);
-  if (!existsSync4(path)) {
-    throw new Error(`Rulebook source not found: ${spec}`);
-  }
-  const content = readFileSync4(path, "utf-8");
-  const rulebook = assertValidRulebook(JSON.parse(content));
-  if (rulebook.name !== spec) {
-    throw new Error(`rulebook name "${rulebook.name}" must match local source "${spec}"`);
-  }
-  return {
-    rulebook,
-    content,
-    entry: {
-      spec,
-      kind: "local-directory",
-      path: spec,
-      name: rulebook.name,
-      version: rulebook.version,
-      digest: sha256Digest(content)
-    }
-  };
-}
-async function resolveGitHubRulebook(spec) {
-  const parsed = parseGitHubSource(spec);
-  const commit = await resolveGitHubCommit(parsed.owner, parsed.repo, parsed.ref, spec);
-  const rawResponse = await fetch(`https://raw.githubusercontent.com/${parsed.owner}/${parsed.repo}/${commit}/${parsed.path}`);
-  if (!rawResponse.ok) {
-    throw new Error(`Failed to fetch ${spec}: GitHub raw returned ${rawResponse.status}`);
-  }
-  const content = await rawResponse.text();
-  const rulebook = assertValidRulebook(JSON.parse(content));
-  if (rulebook.name !== parsed.name) {
-    throw new Error(`rulebook name "${rulebook.name}" must match GitHub source "${parsed.name}"`);
-  }
-  return {
-    rulebook,
-    content,
-    entry: {
-      spec,
-      kind: "github",
-      owner: parsed.owner,
-      repo: parsed.repo,
-      ref: parsed.ref,
-      commit,
-      path: parsed.path,
-      name: rulebook.name,
-      version: rulebook.version,
-      digest: sha256Digest(content)
-    }
-  };
-}
-async function readLockedGitHubRulebook(entry, configDir, options2) {
-  const cachePath = getRulebookCachePath(entry, { ...options2, cacheConfigDir: configDir });
-  if (existsSync4(cachePath)) {
-    const content = readFileSync4(cachePath, "utf-8");
-    if (sha256Digest(content) === entry.digest) {
-      return { entry, rulebook: assertRulebookMatchesLockEntry(content, entry), content };
-    }
-  }
-  return fetchLockedGitHubRulebook(entry);
-}
-async function fetchLockedGitHubRulebook(entry) {
-  const rawResponse = await fetch(`https://raw.githubusercontent.com/${entry.owner}/${entry.repo}/${entry.commit}/${entry.path}`);
-  if (!rawResponse.ok) {
-    throw new Error(`Failed to restore ${entry.spec}: GitHub raw returned ${rawResponse.status}`);
-  }
-  const content = await rawResponse.text();
-  if (sha256Digest(content) !== entry.digest) {
-    throw new Error(`locked GitHub digest mismatch for ${entry.spec}; run ${RULE_SYNC_COMMAND}`);
-  }
-  return { entry, rulebook: assertRulebookMatchesLockEntry(content, entry), content };
-}
-function assertRulebookMatchesLockEntry(content, entry) {
-  const rulebook = assertValidRulebook(JSON.parse(content));
-  if (rulebook.name !== entry.name) {
-    throw new Error(`rulebook name "${rulebook.name}" must match lock entry "${entry.name}"`);
-  }
-  return rulebook;
-}
-async function resolveGitHubCommit(owner, repo, ref, source) {
-  const commitResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(ref)}`);
-  if (!commitResponse.ok) {
-    throw new Error(`Failed to resolve ${source}: GitHub returned ${commitResponse.status}`);
-  }
-  const commitJson = await commitResponse.json();
-  if (!commitJson.sha) {
-    throw new Error(`Failed to resolve commit for ${source}`);
-  }
-  return commitJson.sha;
-}
-function getLocalRulebookPath(configDir, name) {
-  return join3(configDir, name, RULEBOOK_FILE);
-}
-function sha256Digest(content) {
-  return `sha256:${createHash("sha256").update(content).digest("hex")}`;
-}
-
-// src/core/rules/policy/scope-policy.ts
-function loadRulesPolicy(options2 = {}) {
-  const paths = getPolicyPaths(options2);
-  const user = readRulesConfig(paths.userConfigPath);
-  const project = readRulesConfig(paths.projectConfigPath);
-  const errors = [
-    ...getLegacyRulesConfigErrors(paths, options2),
-    ...user.errors.map((error) => `${paths.userConfigPath}: ${error}`),
-    ...project.errors.map((error) => `${paths.projectConfigPath}: ${error}`)
-  ];
-  const userPolicy = user.config ? loadScopePolicy(user.config, paths.userLockPath, dirname4(paths.userConfigPath), options2, "user") : emptyScopePolicy();
-  const projectPolicy = project.config ? loadScopePolicy(project.config, paths.projectLockPath, dirname4(paths.projectConfigPath), options2, "project") : emptyScopePolicy();
-  const duplicateNames = getDuplicateRulebookNames([
-    ...user.config ? getConfiguredLockEntries(user.config, paths.userLockPath) : [],
-    ...project.config ? getConfiguredLockEntries(project.config, paths.projectLockPath) : []
-  ]);
-  const overrides = { ...user.config?.overrides ?? {}, ...project.config?.overrides ?? {} };
-  const knownRuleIds = new Set([...userPolicy.knownRuleIds, ...projectPolicy.knownRuleIds]);
-  return {
-    rules: applyOverrides([...userPolicy.rules, ...projectPolicy.rules], overrides),
-    rulebooks: [...userPolicy.rulebooks, ...projectPolicy.rulebooks],
-    errors: [
-      ...errors,
-      ...userPolicy.errors,
-      ...projectPolicy.errors,
-      ...duplicateNames.map((name) => `duplicate active rulebook name "${name}"`),
-      ...userPolicy.canValidateOverrides && projectPolicy.canValidateOverrides ? getUnknownOverrideErrors(overrides, knownRuleIds) : []
-    ],
-    userConfig: user.config ?? undefined,
-    projectConfig: project.config ?? undefined,
-    ...paths
-  };
-}
-function getRulesConfigSourceDisplayMap(configPath) {
-  const config = readRulesConfig(configPath).config;
-  const lock = readLockfile(getRulesLockPathForConfigPath(configPath)).lock;
-  if (!config || !lock)
-    return new Map;
-  const configuredSources = new Set(config.rules);
-  return new Map(lock.rulebooks.filter((entry) => configuredSources.has(entry.spec)).map((entry) => [entry.spec, getRulebookDisplaySource(entry)]));
-}
-function getRulesConfigRuntimeErrorsForConfig(configPath, lockPath, options2) {
-  const loaded = loadScopePolicyForConfig(configPath, lockPath, options2);
-  if (!loaded)
-    return [];
-  return [...loaded.scope.errors, ...getUnknownOverrideErrorsForScope(loaded.config, loaded.scope)];
-}
-function loadScopePolicyForConfig(configPath, lockPath, options2) {
-  const config = readRulesConfig(configPath).config;
-  if (!config) {
-    return null;
-  }
-  return {
-    config,
-    scope: loadScopePolicy(config, lockPath, dirname4(configPath), options2, "project")
-  };
-}
-function getUnknownOverrideErrorsForScope(config, scope) {
-  return scope.canValidateOverrides ? getUnknownOverrideErrors(config.overrides ?? {}, scope.knownRuleIds) : [];
-}
-function loadScopePolicy(config, lockPath, configDir, options2, source) {
-  const lockResult = readLockfile(lockPath);
-  if (lockResult.errors.length > 0) {
-    return { ...emptyScopePolicy(), errors: lockResult.errors, canValidateOverrides: false };
-  }
-  const lock = lockResult.lock;
-  if (!lock && config.rules.length > 0) {
-    return {
-      ...emptyScopePolicy(),
-      errors: [`missing lockfile ${lockPath}; run ${RULE_SYNC_COMMAND}`],
-      canValidateOverrides: false
-    };
-  }
-  const entries = lock?.rulebooks ?? [];
-  const entriesBySpec = new Map(entries.map((entry) => [entry.spec, entry]));
-  const errors = [];
-  const loaded = config.rules.flatMap((spec) => {
-    const entry = entriesBySpec.get(spec);
-    if (!entry) {
-      errors.push(`missing lock entry for ${spec}; run ${RULE_SYNC_COMMAND}`);
-      return [];
-    }
-    const loadedRulebook = loadLockedRulebook(entry, configDir, options2);
-    if (loadedRulebook.errors.length > 0 || !loadedRulebook.rulebook) {
-      errors.push(...loadedRulebook.errors);
-      return [];
-    }
-    const rulebook = loadedRulebook.rulebook;
-    return [
-      {
-        rules: rulebook.rules.map((rule) => ({ ...rule, name: `${rulebook.name}/${rule.name}` })),
-        rulebook: {
-          source,
-          spec: entry.spec,
-          name: rulebook.name,
-          version: rulebook.version,
-          rules: rulebook.rules.map((rule) => `${rulebook.name}/${rule.name}`)
-        }
-      }
-    ];
-  });
-  const rules = loaded.flatMap((item) => item.rules);
-  return {
-    rules,
-    rulebooks: loaded.map((item) => item.rulebook),
-    entries,
-    knownRuleIds: new Set(rules.map((rule) => rule.name)),
-    errors,
-    canValidateOverrides: errors.length === 0
-  };
-}
-function loadLockedRulebook(entry, configDir, options2) {
-  const errors = [];
-  const cachePath = getRulebookCachePath(entry, { ...options2, cacheConfigDir: configDir });
-  if (!existsSync5(cachePath)) {
-    return {
-      rulebook: null,
-      errors: [`missing cache entry for ${entry.spec}; run ${RULE_SYNC_COMMAND}`]
-    };
-  }
-  let cacheContent;
-  try {
-    cacheContent = readFileSync5(cachePath, "utf-8");
-  } catch (error) {
-    return {
-      rulebook: null,
-      errors: [
-        `failed to read cached rulebook for ${entry.spec}: ${error instanceof Error ? error.message : String(error)}`
-      ]
-    };
-  }
-  if (sha256Digest(cacheContent) !== entry.digest) {
-    errors.push(`cache digest mismatch for ${entry.spec}; run ${RULE_SYNC_COMMAND}`);
-  }
-  let rulebook = null;
-  try {
-    const parsed = JSON.parse(cacheContent);
-    assertValidRulebook(parsed);
-    rulebook = parsed;
-  } catch (error) {
-    errors.push(`invalid cached rulebook for ${entry.spec}: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  if (entry.kind === "local-directory") {
-    const sourcePath = resolve2(configDir, entry.path);
-    const sourceRelative = relative(resolve2(configDir), sourcePath);
-    if (sourceRelative === ".." || sourceRelative.startsWith(`..${sep2}`) || isAbsolute3(sourceRelative)) {
-      errors.push(`lockfile local source path for ${entry.spec} must stay within ${configDir}; run ${RULE_SYNC_COMMAND}`);
-      return { rulebook: null, errors };
-    }
-    const localPath = join4(sourcePath, RULEBOOK_FILE);
-    if (!existsSync5(localPath)) {
-      errors.push(`missing local source for ${entry.spec}; run ${RULE_SYNC_COMMAND}`);
-    } else {
-      try {
-        const localContent = readFileSync5(localPath, "utf-8");
-        if (sha256Digest(localContent) !== entry.digest) {
-          errors.push(getLocalSourceDriftError(entry.spec, localContent));
-        }
-      } catch (error) {
-        errors.push(`failed to read local source for ${entry.spec}: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-  }
-  return { rulebook: errors.length === 0 ? rulebook : null, errors };
-}
-function rulesPolicyToConfig(policy) {
-  if (policy.errors.length > 0) {
-    return {
-      version: 1,
-      rules: [],
-      failClosedReason: withTerminalPeriod(policy.errors.join("; "))
-    };
-  }
-  return { version: 1, rules: policy.rules };
-}
-function getLegacyRulesConfigErrors(paths, options2) {
-  return Array.from(new Set([
-    ...getLegacyRulesConfigError(getLegacyUserRulesConfigPath(options2), paths.userConfigPath, "~/.cc-safety-net/config.json"),
-    ...getLegacyRulesConfigError(getLegacyProjectRulesConfigPath(options2), paths.projectConfigPath, ".safety-net.json")
-  ]));
-}
-function getLegacyRulesConfigError(legacyPath, configPath, migratedFrom) {
-  if (!existsSync5(legacyPath))
-    return [];
-  if (hasMigrationEvidence(configPath, migratedFrom))
-    return [];
-  return [
-    `legacy rules config location is no longer used; ask the user to run ${RULE_MIGRATE_COMMAND}`
-  ];
-}
-function hasMigrationEvidence(configPath, migratedFrom) {
-  const config = readRulesConfig(configPath).config;
-  if (!config)
-    return false;
-  return config.rules.some((source) => getRulebookMigratedFrom(dirname4(configPath), source) === migratedFrom);
-}
-function getRulebookMigratedFrom(configDir, source) {
-  if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(source))
-    return null;
-  const path = join4(configDir, source, RULEBOOK_FILE);
-  if (!existsSync5(path))
-    return null;
-  try {
-    const rulebook = JSON.parse(readFileSync5(path, "utf-8"));
-    return typeof rulebook.migrated_from === "string" ? rulebook.migrated_from : null;
-  } catch {
-    return null;
-  }
-}
-function getLocalSourceDriftError(spec, content) {
-  try {
-    assertValidRulebook(JSON.parse(content));
-  } catch (error) {
-    return `invalid local rulebook for ${spec}: ${error instanceof Error ? error.message : String(error)}; fix the rulebook, then run ${RULE_SYNC_COMMAND}`;
-  }
-  return `local source digest mismatch for ${spec}; run ${RULE_SYNC_COMMAND}`;
-}
-function applyOverrides(rules, overrides) {
-  return rules.flatMap((rule) => {
-    const override = overrides[rule.name];
-    if (override === "off") {
-      return [];
-    }
-    if (override && typeof override === "object") {
-      return [{ ...rule, reason: override.reason }];
-    }
-    return [rule];
-  });
-}
-function getUnknownOverrideErrors(overrides, knownRuleIds) {
-  return Object.keys(overrides).filter((key) => !knownRuleIds.has(key)).map((key) => `unknown override key "${key}"`);
-}
-function getDuplicateRulebookNames(entries) {
-  const seen = new Set;
-  const duplicates = new Set;
-  for (const entry of entries) {
-    if (seen.has(entry.name)) {
-      duplicates.add(entry.name);
-      continue;
-    }
-    seen.add(entry.name);
-  }
-  return [...duplicates];
-}
-function getConfiguredLockEntries(config, path) {
-  return (readLockfile(path).lock?.rulebooks ?? []).filter((entry) => config.rules.includes(entry.spec));
-}
-function emptyScopePolicy() {
-  return {
-    rules: [],
-    rulebooks: [],
-    entries: [],
-    knownRuleIds: new Set,
-    errors: [],
-    canValidateOverrides: true
-  };
-}
-function withTerminalPeriod(message) {
-  return /[.!?]$/.test(message) ? message : `${message}.`;
-}
-
-// src/core/rules/policy/sync.ts
-import {
-  existsSync as existsSync6,
-  lstatSync as lstatSync2,
-  mkdirSync as mkdirSync2,
-  readdirSync as readdirSync2,
-  readFileSync as readFileSync6,
-  rmdirSync,
-  rmSync,
-  unlinkSync,
-  writeFileSync as writeFileSync2
-} from "node:fs";
-import { dirname as dirname5, isAbsolute as isAbsolute4, join as join5, relative as relative2, resolve as resolve3, sep as sep3 } from "node:path";
-async function syncRulesConfig(options2 = {}) {
-  const internalOptions = options2;
-  const scope = getScopePaths(options2);
-  const scopeConfig = readScopeRulesConfig(scope.configPath);
-  if (!scopeConfig.ok)
-    return scopeConfig.result;
-  const config = scopeConfig.config;
-  if (options2.check) {
-    return checkRulesConfig(config, scope.configDir, scope.lockPath, options2);
-  }
-  try {
-    const existingLockResult = readLockfile(scope.lockPath);
-    if (options2.only && existingLockResult.errors.length > 0) {
-      return { ok: false, errors: existingLockResult.errors, warnings: [], entries: [] };
-    }
-    const previousLock = existingLockResult.errors.length > 0 ? null : existingLockResult.lock;
-    const selectedSpecs = options2.only ? getSelectedUpdateSpecs(config, previousLock, options2.only) : { ok: true, specs: config.rules };
-    if (!selectedSpecs.ok) {
-      return selectedSpecs.result;
-    }
-    if (options2.only && !previousLock && selectedSpecs.specs.length < config.rules.length) {
-      return {
-        ok: false,
-        errors: [`No lockfile available for partial update; run ${RULE_SYNC_COMMAND}`],
-        warnings: [],
-        entries: []
-      };
-    }
-    const resolved = (await Promise.all(selectedSpecs.specs.map((spec) => resolveRulebookSourceForSync(spec, scope.configDir, options2, previousLock)))).map((item) => preserveDisplayRef(item, previousLock, internalOptions.discoveredDisplayRefs));
-    for (const item of resolved) {
-      writeCache(item.content, item.entry, scope.configDir, options2);
-    }
-    const entries = options2.only ? mergeSelectedLockEntries(config, previousLock, resolved) : resolved.map((item) => item.entry);
-    writeJsonAtomic(scope.lockPath, { version: 1, rulebooks: entries });
-    const ruleCountsBySpec = new Map(resolved.map((item) => [item.entry.spec, item.rulebook.rules.length]));
-    const warnings = pruneUnreferencedRulebookCaches(entries, scope.configDir, options2);
-    return {
-      ok: true,
-      errors: [],
-      warnings,
-      entries: entries.map((entry) => addRuleCount(entry, ruleCountsBySpec))
-    };
-  } catch (error) {
-    return failWithError(error);
-  }
-}
-async function testRulebookSources(sources, options2 = {}) {
-  const scope = getScopePaths(options2);
-  try {
-    const resolved = await Promise.all(sources.map((spec) => resolveRulebookSource(spec, scope.configDir, options2)));
-    const ruleCountsBySpec = new Map(resolved.map((item) => [item.entry.spec, item.rulebook.rules.length]));
-    const testCountsBySpec = new Map(resolved.map((item) => [item.entry.spec, item.rulebook.tests.length]));
-    const fixtureErrors = resolved.flatMap((item) => runRulebookFixtures(item.rulebook).failures.map((failure) => [
-      `${item.entry.spec}: ${failure.command}: ${failure.message}`,
-      ...failure.trace.map((line) => `  ${line}`)
-    ].join(`
-`)));
-    return {
-      ok: fixtureErrors.length === 0,
-      errors: fixtureErrors,
-      warnings: [],
-      entries: resolved.map((item) => ({
-        ...addRuleCount(item.entry, ruleCountsBySpec),
-        testCount: testCountsBySpec.get(item.entry.spec)
-      }))
-    };
-  } catch (error) {
-    return failWithError(error);
-  }
-}
-async function addRulebookSource(source, options2 = {}) {
-  const scope = getScopePaths(options2);
-  mkdirSync2(scope.configDir, { recursive: true });
-  const before = existsSync6(scope.configPath) ? readFileSync6(scope.configPath, "utf-8") : null;
-  const scopeConfig = readScopeRulesConfig(scope.configPath);
-  if (!scopeConfig.ok)
-    return scopeConfig.result;
-  const config = scopeConfig.config;
-  let discoveredSources;
-  try {
-    discoveredSources = isGitHubRepositorySource(source) ? await discoverGitHubRepositoryRulebooks(source) : [{ spec: source }];
-  } catch (error) {
-    return {
-      ok: false,
-      errors: [error instanceof Error ? error.message : String(error)],
-      warnings: [],
-      entries: []
-    };
-  }
-  const sources = discoveredSources.map((item) => item.spec);
-  const nextRules = [...config.rules, ...sources.filter((item) => !config.rules.includes(item))];
-  if (nextRules.length !== config.rules.length) {
-    writeJsonAtomic(scope.configPath, {
-      version: 1,
-      rules: nextRules,
-      overrides: config.overrides ?? {}
-    });
-  }
-  const result = await syncRulesConfig({
-    ...options2,
-    discoveredDisplayRefs: new Map(discoveredSources.filter((item) => !!item.display_ref).map((item) => [item.spec, item.display_ref]))
-  });
-  if (!result.ok) {
-    restoreConfig(scope.configPath, before);
-  }
-  return result;
-}
-async function removeRulebookSource(match, options2 = {}) {
-  const scope = getScopePaths(options2);
-  const loaded = readRulesConfig(scope.configPath);
-  if (loaded.errors.length > 0) {
-    return { ok: false, errors: loaded.errors, warnings: [], entries: [] };
-  }
-  if (!loaded.config) {
-    return {
-      ok: false,
-      errors: [`No config found at ${scope.configPath}`],
-      warnings: [],
-      entries: []
-    };
-  }
-  const lockResult = readLockfile(scope.lockPath);
-  if (lockResult.errors.length > 0) {
-    return { ok: false, errors: lockResult.errors, warnings: [], entries: [] };
-  }
-  const matches = getRemoveMatches(loaded.config.rules, lockResult.lock, match);
-  if (!matches.ok)
-    return matches.result;
-  const sourceDirs = options2.deleteSource ? getLocalSourceDirsForDelete(scope.configDir, matches.specs, lockResult.lock) : { ok: true, dirs: [] };
-  if (!sourceDirs.ok)
-    return sourceDirs.result;
-  const before = readFileSync6(scope.configPath, "utf-8");
-  writeJsonAtomic(scope.configPath, {
-    version: 1,
-    rules: loaded.config.rules.filter((spec) => !matches.specs.includes(spec)),
-    overrides: loaded.config.overrides ?? {}
-  });
-  const result = await syncRulesConfig(options2);
-  if (!result.ok) {
-    restoreConfig(scope.configPath, before);
-    return result;
-  }
-  const deleteResult = deleteLocalSourceDirs(sourceDirs.dirs);
-  if (!deleteResult.ok) {
-    restoreConfig(scope.configPath, before);
-    const rollback = await syncRulesConfig(options2);
-    if (!rollback.ok) {
-      return {
-        ok: false,
-        errors: [...deleteResult.result.errors, ...rollback.errors],
-        warnings: rollback.warnings,
-        entries: rollback.entries
-      };
-    }
-    return deleteResult.result;
-  }
-  return result;
-}
-function repairLocalRulesPolicy(options2 = {}) {
-  repairLocalRulesScope({ ...options2, global: true });
-  repairLocalRulesScope({ ...options2, global: false });
-}
-async function checkRulesConfig(config, configDir, lockPath, options2) {
-  const result = loadScopePolicy(config, lockPath, configDir, options2, "project");
-  return {
-    ok: result.errors.length === 0,
-    errors: result.errors,
-    warnings: [],
-    entries: result.entries
-  };
-}
-function repairLocalRulesScope(options2) {
-  const scope = getScopePaths(options2);
-  const loaded = readRulesConfig(scope.configPath);
-  if (!loaded.config || loaded.errors.length > 0 || loaded.config.rules.length === 0) {
-    return;
-  }
-  if (!loaded.config.rules.every((spec) => /^[a-zA-Z0-9_-]{1,64}$/.test(spec))) {
-    return;
-  }
-  try {
-    const resolved = loaded.config.rules.map((spec) => resolveLocalRulebook(spec, scope.configDir, options2));
-    for (const item of resolved) {
-      writeCache(item.content, item.entry, scope.configDir, options2);
-    }
-    writeJsonAtomic(scope.lockPath, {
-      version: 1,
-      rulebooks: resolved.map((item) => item.entry)
-    });
-  } catch {}
-}
-function preserveDisplayRef(item, previousLock, discoveredDisplayRefs) {
-  const previousEntry = previousLock?.rulebooks.find((entry) => entry.spec === item.entry.spec && entry.kind === "github");
-  const displayRef = discoveredDisplayRefs?.get(item.entry.spec) ?? (previousEntry?.kind === "github" ? previousEntry.display_ref : undefined);
-  if (!displayRef || item.entry.kind !== "github")
-    return item;
-  return { ...item, entry: { ...item.entry, display_ref: displayRef } };
-}
-function mergeSelectedLockEntries(config, previousLock, resolved) {
-  const configuredSpecs = new Set(config.rules);
-  const previousSpecs = new Set(previousLock?.rulebooks.map((entry) => entry.spec) ?? []);
-  const resolvedBySpec = new Map(resolved.map((item) => [item.entry.spec, item.entry]));
-  return [
-    ...(previousLock?.rulebooks.filter((entry) => configuredSpecs.has(entry.spec)) ?? []).map((entry) => resolvedBySpec.get(entry.spec) ?? entry),
-    ...resolved.filter((item) => !previousSpecs.has(item.entry.spec)).map((item) => item.entry)
-  ];
-}
-function addRuleCount(entry, ruleCountsBySpec) {
-  return {
-    ...entry,
-    ruleCount: ruleCountsBySpec.get(entry.spec)
-  };
-}
-function writeCache(content, entry, configDir, options2) {
-  const path = getRulebookCachePath(entry, { ...options2, cacheConfigDir: configDir });
-  mkdirSync2(dirname5(path), { recursive: true });
-  writeFileSync2(path, content, "utf-8");
-}
-function pruneUnreferencedRulebookCaches(entries, configDir, options2) {
-  const cacheRoot = join5(dirname5(configDir), "cache", "rulebooks");
-  if (!existsSync6(cacheRoot))
-    return [];
-  const keep = new Set(entries.map((entry) => dirname5(getRulebookCachePath(entry, { ...options2, cacheConfigDir: configDir }))));
-  return readdirSync2(cacheRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).flatMap((entry) => {
-    const path = join5(cacheRoot, entry.name);
-    if (keep.has(path))
-      return [];
-    try {
-      rmSync(path, { recursive: true, force: true });
-      return [];
-    } catch (error) {
-      return [
-        `Failed to prune rulebook cache entry ${path}: ${error instanceof Error ? error.message : String(error)}`
-      ];
-    }
-  });
-}
-function getLocalSourceDirsForDelete(configDir, specs, lock) {
-  const entriesBySpec = new Map(lock?.rulebooks.map((entry) => [entry.spec, entry]) ?? []);
-  const errors = specs.flatMap((spec) => {
-    const entry = entriesBySpec.get(spec);
-    if (!entry) {
-      return NAME_PATTERN.test(spec) ? [] : ["--delete-source can only delete local rulebook sources"];
-    }
-    return entry.kind === "local-directory" ? [] : ["--delete-source can only delete local rulebook sources"];
-  });
-  const dirs = specs.map((spec) => {
-    const entry = entriesBySpec.get(spec);
-    return join5(configDir, entry?.kind === "local-directory" ? entry.path : spec);
-  });
-  const dirErrors = errors.length > 0 ? [] : dirs.flatMap((dir) => getLocalSourceDirDeleteError(configDir, dir));
-  const allErrors = [...errors, ...dirErrors];
-  return allErrors.length > 0 ? { ok: false, result: { ok: false, errors: allErrors, warnings: [], entries: [] } } : { ok: true, dirs };
-}
-function getLocalSourceDirDeleteError(configDir, dir) {
-  const resolvedConfigDir = resolve3(configDir);
-  const resolvedDir = resolve3(dir);
-  const relativeDir = relative2(resolvedConfigDir, resolvedDir);
-  if (relativeDir === "" || relativeDir === ".." || relativeDir.startsWith(`..${sep3}`) || isAbsolute4(relativeDir)) {
-    return [`Refusing to delete local rulebook source outside ${configDir}: ${dir}`];
-  }
-  if (!existsSync6(resolvedDir))
-    return [`Local rulebook source directory not found: ${dir}`];
-  if (!lstatSync2(resolvedDir).isDirectory()) {
-    return [`Local rulebook source is not a directory: ${dir}`];
-  }
-  const entries = readdirSync2(resolvedDir);
-  if (!entries.includes("rulebook.json")) {
-    return [`Local rulebook source directory is missing rulebook.json: ${dir}`];
-  }
-  if (!lstatSync2(join5(resolvedDir, "rulebook.json")).isFile()) {
-    return [`Local rulebook source rulebook.json is not a file: ${dir}`];
-  }
-  if (entries.length > 1) {
-    return [
-      `Local rulebook source directory contains extra files: ${dir}. delete manually if you really want to remove the directory.`
-    ];
-  }
-  return [];
-}
-function deleteLocalSourceDirs(dirs) {
-  const errors = dirs.flatMap((dir) => {
-    try {
-      unlinkSync(join5(dir, "rulebook.json"));
-      rmdirSync(dir);
-      return [];
-    } catch (error) {
-      return [
-        `Failed to delete local rulebook source ${dir}: ${error instanceof Error ? error.message : String(error)}`
-      ];
-    }
-  });
-  return errors.length > 0 ? { ok: false, result: { ok: false, errors, warnings: [], entries: [] } } : { ok: true };
-}
-function restoreConfig(path, content) {
-  if (content === null) {
-    rmSync(path, { force: true });
-    return;
-  }
-  writeFileSync2(path, content, "utf-8");
-}
-function failWithError(error) {
-  return {
-    ok: false,
-    errors: [error instanceof Error ? error.message : String(error)],
-    warnings: [],
-    entries: []
-  };
-}
-
-// src/core/config.ts
-function loadConfig(cwd, options2) {
-  const safeCwd = typeof cwd === "string" ? cwd : process.cwd();
-  if (options2?.repairLocalRulebooks) {
-    repairLocalRulesPolicy({ cwd: safeCwd, userConfigDir: options2.userConfigDir });
-  }
-  return rulesPolicyToConfig(loadRulesPolicy({ cwd: safeCwd, userConfigDir: options2?.userConfigDir }));
-}
-function validateConfig(config) {
-  const errors = [];
-  const ruleNames = new Set;
-  if (!config || typeof config !== "object") {
-    errors.push("Config must be an object");
-    return { errors, ruleNames };
-  }
-  const cfg = config;
-  if (cfg.version !== 1) {
-    errors.push("version must be 1");
-  }
-  if (cfg.rules !== undefined) {
-    if (!Array.isArray(cfg.rules)) {
-      errors.push("rules must be an array");
-    } else {
-      for (let i = 0;i < cfg.rules.length; i++) {
-        errors.push(...validateCustomRule(cfg.rules[i], i, ruleNames));
-      }
-    }
-  }
-  return { errors, ruleNames };
-}
-function validateConfigFile(path) {
-  return validateParsedConfigFile(path, validateConfig);
-}
-function readConfigFileInput(path) {
-  const errors = [];
-  const ruleNames = new Set;
-  if (!existsSync7(path)) {
-    errors.push(`File not found: ${path}`);
-    return { ok: false, result: { errors, ruleNames } };
-  }
-  try {
-    const content = readFileSync7(path, "utf-8");
-    if (!content.trim()) {
-      errors.push("Config file is empty");
-      return { ok: false, result: { errors, ruleNames } };
-    }
-    return { ok: true, parsed: JSON.parse(content) };
-  } catch (e) {
-    errors.push(`Invalid JSON: ${e instanceof Error ? e.message : String(e)}`);
-    return { ok: false, result: { errors, ruleNames } };
-  }
-}
-function getLegacyProjectConfigPath(cwd) {
-  return resolve4(cwd ?? process.cwd(), ".safety-net.json");
-}
-function validateRulesConfigFile(path) {
-  const loaded = readConfigFileInput(path);
-  if (!loaded.ok)
-    return loaded.result;
-  const result = validateRulesConfig(loaded.parsed);
-  return { errors: result.errors, ruleNames: result.sources };
-}
-function validateParsedConfigFile(path, validate) {
-  const loaded = readConfigFileInput(path);
-  if (!loaded.ok)
-    return loaded.result;
-  return validate(loaded.parsed);
-}
-// src/bin/doctor/config.ts
-function getConfigSourceInfo(path, lockPath, userConfigDir) {
-  if (!existsSync8(path)) {
-    return { path, exists: false, valid: false, ruleCount: 0 };
-  }
-  const validation = validateRulesConfigFile(path);
-  validation.errors.push(...getRulesConfigRuntimeErrorsForConfig(path, lockPath, { userConfigDir }));
-  return {
-    path,
-    exists: true,
-    valid: validation.errors.length === 0,
-    ruleCount: validation.ruleNames.size,
-    ...validation.errors.length > 0 ? { errors: validation.errors } : {}
-  };
-}
-function toEffectiveRule(rule, source) {
-  return {
-    source,
-    name: rule.name,
-    command: rule.command,
-    subcommand: rule.subcommand,
-    blockArgs: rule.block_args,
-    reason: rule.reason
-  };
-}
-function getConfigInfo(cwd, options2) {
-  const userPath = options2?.userConfigPath ?? getUserRulesConfigPath();
-  const projectPath = options2?.projectConfigPath ?? getProjectRulesConfigPath(cwd);
-  const userConfigDir = dirname6(userPath);
-  const policy = loadRulesPolicy({
-    cwd,
-    userConfigPath: userPath,
-    projectConfigPath: projectPath,
-    userConfigDir
-  });
-  const rulebookSources = new Map(policy.rulebooks.flatMap((rulebook) => rulebook.rules.map((rule) => [rule, rulebook.source])));
-  return {
-    userConfig: getConfigSourceInfo(userPath, getUserRulesLockPath({ userConfigPath: userPath }), userConfigDir),
-    projectConfig: getConfigSourceInfo(projectPath, getRulesLockPathForConfigPath(projectPath), userConfigDir),
-    effectiveRules: policy.rules.map((rule) => toEffectiveRule(rule, rulebookSources.get(rule.name) ?? "project")),
-    shadowedRules: []
-  };
-}
-
-// src/core/env.ts
-var ENV_FLAGS = {
-  strict: { name: "CC_SAFETY_NET_STRICT", legacyName: "SAFETY_NET_STRICT" },
-  paranoid: { name: "CC_SAFETY_NET_PARANOID", legacyName: "SAFETY_NET_PARANOID" },
-  paranoidRm: { name: "CC_SAFETY_NET_PARANOID_RM", legacyName: "SAFETY_NET_PARANOID_RM" },
-  paranoidInterpreters: {
-    name: "CC_SAFETY_NET_PARANOID_INTERPRETERS",
-    legacyName: "SAFETY_NET_PARANOID_INTERPRETERS"
-  },
-  worktree: { name: "CC_SAFETY_NET_WORKTREE", legacyName: "SAFETY_NET_WORKTREE" },
-  debug: { name: "CC_SAFETY_NET_DEBUG" }
-};
-function getSafetyNetEnvModes() {
-  const paranoidAll = envTruthy(ENV_FLAGS.paranoid);
-  return {
-    strict: envTruthy(ENV_FLAGS.strict),
-    paranoidAll,
-    paranoidRm: paranoidAll || envTruthy(ENV_FLAGS.paranoidRm),
-    paranoidInterpreters: paranoidAll || envTruthy(ENV_FLAGS.paranoidInterpreters),
-    worktreeMode: envTruthy(ENV_FLAGS.worktree)
-  };
-}
-function envTruthy(flag) {
-  const value = typeof flag === "string" ? process.env[flag] : getEnvFlagValue(flag);
-  return value === "1" || value?.toLowerCase() === "true";
-}
-function getEnvFlagValue(flag) {
-  if (process.env[flag.name] !== undefined) {
-    return process.env[flag.name];
-  }
-  if (flag.legacyName) {
-    return process.env[flag.legacyName];
-  }
-  return;
-}
-function envFlagIsSet(flag) {
-  return process.env[flag.name] !== undefined || !!flag.legacyName && process.env[flag.legacyName] !== undefined;
-}
-
-// src/bin/doctor/environment.ts
-var ENV_VARS = [
-  {
-    flag: ENV_FLAGS.strict,
-    description: "Fail-closed on unparseable commands",
-    defaultBehavior: "permissive"
-  },
-  {
-    flag: ENV_FLAGS.paranoid,
-    description: "Enable all paranoid checks",
-    defaultBehavior: "off"
-  },
-  {
-    flag: ENV_FLAGS.paranoidRm,
-    description: "Block rm -rf even within cwd",
-    defaultBehavior: "off"
-  },
-  {
-    flag: ENV_FLAGS.paranoidInterpreters,
-    description: "Block interpreter one-liners",
-    defaultBehavior: "off"
-  },
-  {
-    flag: ENV_FLAGS.worktree,
-    description: "Allow local git discards in linked worktrees",
-    defaultBehavior: "off"
-  },
-  {
-    flag: ENV_FLAGS.debug,
-    description: "Log allowed hook commands for debugging",
-    defaultBehavior: "off"
-  }
-];
-function getEnvironmentInfo() {
-  return [
-    ...ENV_VARS.map((v) => ({
-      name: v.flag.name,
-      value: getEnvFlagValue(v.flag),
-      isSet: envFlagIsSet(v.flag),
-      legacyName: v.flag.legacyName,
-      legacyValue: v.flag.legacyName ? process.env[v.flag.legacyName] : undefined,
-      legacyIsSet: v.flag.legacyName ? process.env[v.flag.legacyName] !== undefined : undefined,
-      description: v.description,
-      defaultBehavior: v.defaultBehavior
-    })),
-    {
-      name: "CC_SAFETY_NET_HOME",
-      value: process.env.CC_SAFETY_NET_HOME,
-      isSet: process.env.CC_SAFETY_NET_HOME !== undefined,
-      description: "Override user-scope config/cache directory",
-      defaultBehavior: "~/.cc-safety-net"
-    }
-  ];
-}
-
-// src/bin/utils/colors.ts
-function shouldUseColor() {
-  return Boolean(process.stdout.isTTY && !process.env.NO_COLOR);
-}
-var green = (s) => shouldUseColor() ? `\x1B[32m${s}\x1B[0m` : s;
-var yellow = (s) => shouldUseColor() ? `\x1B[33m${s}\x1B[0m` : s;
-var blue = (s) => shouldUseColor() ? `\x1B[34m${s}\x1B[0m` : s;
-var magenta = (s) => shouldUseColor() ? `\x1B[35m${s}\x1B[0m` : s;
-var cyan = (s) => shouldUseColor() ? `\x1B[36m${s}\x1B[0m` : s;
-var red = (s) => shouldUseColor() ? `\x1B[31m${s}\x1B[0m` : s;
-var dim = (s) => shouldUseColor() ? `\x1B[2m${s}\x1B[0m` : s;
-var bold = (s) => shouldUseColor() ? `\x1B[1m${s}\x1B[0m` : s;
-var colors = {
-  green,
-  yellow,
-  blue,
-  magenta,
-  cyan,
-  red,
-  dim,
-  bold
-};
-var ANSI_RESET = "\x1B[0m";
-var DISTINCT_COLORS = [
-  39,
-  82,
-  198,
-  226,
-  208,
-  51,
-  196,
-  46,
-  201,
-  214,
-  93,
-  154,
-  220,
-  27,
-  49,
-  190,
-  200,
-  33,
-  129,
-  227,
-  45,
-  160,
-  63,
-  118,
-  123,
-  202
-];
-function createRandom(seed) {
-  let state = seed;
-  return () => {
-    state = (state * 1664525 + 1013904223) % 4294967296;
-    return state / 4294967296;
-  };
-}
-function getShuffledPalette(seed) {
-  const palette = [...DISTINCT_COLORS];
-  const random = createRandom(seed);
-  for (let i = palette.length - 1;i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    const temp = palette[i];
-    palette[i] = palette[j];
-    palette[j] = temp;
-  }
-  return palette;
-}
-function generateDistinctColor(index, seed = 0) {
-  if (!shouldUseColor())
-    return "";
-  const palette = getShuffledPalette(seed);
-  const colorCode = palette[index % palette.length];
-  return `\x1B[38;5;${colorCode}m`;
-}
-function colorizeToken(token, index, seed = 0) {
-  if (!shouldUseColor())
-    return `"${token}"`;
-  const colorCode = generateDistinctColor(index, seed);
-  return `${colorCode}"${token}"${ANSI_RESET}`;
-}
-
-// src/bin/doctor/format.ts
-var PLATFORM_NAMES = {
-  "claude-code": "Claude Code",
-  opencode: "OpenCode",
-  "gemini-cli": "Gemini CLI",
-  "copilot-cli": "Copilot CLI",
-  codex: "Codex"
-};
-function formatAsciiTable(options2) {
-  const rawRows = options2.rawRows ?? options2.rows;
-  const colWidths = (options2.headers ?? rawRows[0] ?? []).map((h, i) => {
-    const maxDataWidth = Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
-    return Math.max(h.length, maxDataWidth);
-  });
-  const pad = (s, w, raw) => s + " ".repeat(Math.max(0, w - raw.length));
-  const line = (char, corners) => corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
-  const formatRow = (cells, rawCells) => `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? "")).join(" │ ")} │`;
-  const headerLines = options2.headers ? [`   ${formatRow(options2.headers, options2.headers)}`, `   ${line("─", ["├", "┼", "┤"])}`] : [];
-  return [
-    `   ${line("─", ["┌", "┬", "┐"])}`,
-    ...headerLines,
-    ...options2.rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
-    `   ${line("─", ["└", "┴", "┘"])}`
-  ].join(`
-`);
-}
-function formatHooksSection(hooks) {
-  const lines = [];
-  lines.push("Hook Integration");
-  lines.push(formatHooksTable(hooks));
-  const failures = [];
-  const warnings = [];
-  const errors = [];
-  for (const hook of hooks) {
-    const platformName = PLATFORM_NAMES[hook.platform] ?? hook.platform;
-    if (hook.selfTest) {
-      for (const result of hook.selfTest.results) {
-        if (!result.passed) {
-          failures.push({ platform: platformName, result });
-        }
-      }
-    }
-    if (hook.errors && hook.errors.length > 0) {
-      for (const err of hook.errors) {
-        if (hook.status === "configured") {
-          warnings.push({ platform: platformName, message: err });
-        } else {
-          errors.push({ platform: platformName, message: err });
-        }
-      }
-    }
-  }
-  if (failures.length > 0) {
-    lines.push("");
-    lines.push(colors.red("   Failures:"));
-    for (const f of failures) {
-      lines.push(colors.red(`   • ${f.platform}: ${f.result.description}`));
-      lines.push(colors.red(`     expected ${f.result.expected}, got ${f.result.actual}`));
-    }
-  }
-  for (const w of warnings) {
-    lines.push(`   Warning (${w.platform}): ${w.message}`);
-  }
-  for (const e of errors) {
-    lines.push(colors.red(`   Error (${e.platform}): ${e.message}`));
-  }
-  return lines.join(`
-`);
-}
-function formatHooksTable(hooks) {
-  const headers = ["Platform", "Status", "Tests"];
-  const getStatusDisplay = (h) => {
-    switch (h.status) {
-      case "configured":
-        return { text: "Configured", colored: colors.green("Configured") };
-      case "disabled":
-        return { text: "Disabled", colored: colors.yellow("Disabled") };
-      case "n/a":
-        return { text: "N/A", colored: colors.dim("N/A") };
-    }
-  };
-  const rowData = hooks.map((h) => {
-    const platformName = PLATFORM_NAMES[h.platform] ?? h.platform;
-    const statusDisplay = getStatusDisplay(h);
-    let testsText = "-";
-    if (h.status === "configured" && h.selfTest) {
-      const label = h.selfTest.failed > 0 ? "FAIL" : "OK";
-      testsText = `${h.selfTest.passed}/${h.selfTest.total} ${label}`;
-    }
-    return {
-      colored: [platformName, statusDisplay.colored, testsText],
-      raw: [platformName, statusDisplay.text, testsText]
-    };
-  });
-  const rows = rowData.map((r) => r.colored);
-  const rawRows = rowData.map((r) => r.raw);
-  return formatAsciiTable({ headers, rows, rawRows });
-}
-function formatRulesTable(rules) {
-  if (rules.length === 0) {
-    return "   (no custom rules)";
-  }
-  const headers = ["Source", "Name", "Command", "Block Args"];
-  const rows = rules.map((r) => [
-    r.source,
-    r.name,
-    r.subcommand ? `${r.command} ${r.subcommand}` : r.command,
-    r.blockArgs.join(", ")
-  ]);
-  return formatAsciiTable({ headers, rows });
-}
-function formatConfigSection(report) {
-  const lines = [];
-  lines.push("Configuration");
-  lines.push(formatConfigTable(report.userConfig, report.projectConfig));
-  lines.push("");
-  if (report.effectiveRules.length > 0) {
-    lines.push(`   Effective rules (${report.effectiveRules.length} total):`);
-    lines.push(formatRulesTable(report.effectiveRules));
-  } else {
-    lines.push("   Effective rules: (none - using built-in rules only)");
-  }
-  for (const shadow of report.shadowedRules) {
-    lines.push("");
-    lines.push(`   Note: Project rule "${shadow.name}" shadows user rule with same name`);
-  }
-  return lines.join(`
-`);
-}
-function formatConfigTable(userConfig, projectConfig) {
-  const headers = ["Scope", "Status"];
-  const getStatusDisplay = (config) => {
-    if (!config.exists) {
-      return { text: "N/A", colored: colors.dim("N/A") };
-    }
-    if (!config.valid) {
-      const errMsg = config.errors?.[0] ?? "unknown error";
-      const text = `Invalid (${errMsg})`;
-      return { text, colored: colors.red(text) };
-    }
-    return { text: "Configured", colored: colors.green("Configured") };
-  };
-  const userStatus = getStatusDisplay(userConfig);
-  const projectStatus = getStatusDisplay(projectConfig);
-  const rows = [
-    ["User", userStatus.colored],
-    ["Project", projectStatus.colored]
-  ];
-  const rawRows = [
-    ["User", userStatus.text],
-    ["Project", projectStatus.text]
-  ];
-  return formatAsciiTable({ headers, rows, rawRows });
-}
-function formatEnvironmentSection(envVars) {
-  const lines = [];
-  lines.push("Environment");
-  lines.push(formatEnvironmentTable(envVars));
-  return lines.join(`
-`);
-}
-function formatEnvironmentTable(envVars) {
-  const headers = ["Variable", "Status", "Legacy"];
-  const rows = envVars.map((v) => {
-    const statusIcon = v.isSet ? colors.green("✓") : colors.dim("✗");
-    const legacyStatus = v.legacyName && v.legacyIsSet ? `${v.legacyName} ${colors.green("✓")}` : v.legacyName ?? "";
-    return [v.name, statusIcon, legacyStatus];
-  });
-  const rawRows = envVars.map((v) => [
-    v.name,
-    v.isSet ? "✓" : "✗",
-    v.legacyName && v.legacyIsSet ? `${v.legacyName} ✓` : v.legacyName ?? ""
-  ]);
-  return formatAsciiTable({ headers, rows, rawRows });
-}
-function formatActivitySection(activity) {
-  const lines = [];
-  if (activity.totalBlocked === 0) {
-    lines.push("Recent Activity");
-    lines.push("   No blocked commands in the last 7 days");
-    lines.push("   Tip: This is normal for new installations");
-  } else {
-    lines.push(`Recent Activity (${activity.totalBlocked} blocked / ${activity.sessionCount} sessions)`);
-    lines.push(formatActivityTable(activity.recentEntries));
-  }
-  return lines.join(`
-`);
-}
-function formatActivityTable(entries) {
-  const headers = ["Time", "Command"];
-  const rows = entries.map((e) => {
-    const cmd = e.command.length > 40 ? `${e.command.slice(0, 37)}...` : e.command;
-    return [e.relativeTime, cmd];
-  });
-  return formatAsciiTable({ headers, rows });
-}
-function formatUpdateSection(update) {
-  const lines = [];
-  lines.push("Update Check");
-  const rowData = [];
-  if (update.latestVersion === null && !update.error) {
-    rowData.push({
-      label: "Status",
-      value: colors.dim("Skipped"),
-      rawValue: "Skipped"
-    });
-    rowData.push({
-      label: "Installed",
-      value: update.currentVersion,
-      rawValue: update.currentVersion
-    });
-    lines.push(formatUpdateTable(rowData));
-    return lines.join(`
-`);
-  }
-  if (update.error) {
-    rowData.push({
-      label: "Status",
-      value: `${colors.yellow("⚠")} Error`,
-      rawValue: "⚠ Error"
-    });
-    rowData.push({
-      label: "Installed",
-      value: update.currentVersion,
-      rawValue: update.currentVersion
-    });
-    rowData.push({
-      label: "Error",
-      value: colors.dim(update.error),
-      rawValue: update.error
-    });
-    lines.push(formatUpdateTable(rowData));
-    return lines.join(`
-`);
-  }
-  if (update.updateAvailable) {
-    rowData.push({
-      label: "Status",
-      value: `${colors.yellow("⚠")} Update Available`,
-      rawValue: "⚠ Update Available"
-    });
-    rowData.push({
-      label: "Current",
-      value: update.currentVersion,
-      rawValue: update.currentVersion
-    });
-    rowData.push({
-      label: "Latest",
-      value: colors.green(update.latestVersion ?? ""),
-      rawValue: update.latestVersion ?? ""
-    });
-    lines.push(formatUpdateTable(rowData));
-    lines.push("");
-    lines.push("   Run: bunx cc-safety-net@latest doctor");
-    lines.push("   Or:  npx cc-safety-net@latest doctor");
-    return lines.join(`
-`);
-  }
-  rowData.push({
-    label: "Status",
-    value: `${colors.green("✓")} Up to date`,
-    rawValue: "✓ Up to date"
-  });
-  rowData.push({
-    label: "Version",
-    value: update.currentVersion,
-    rawValue: update.currentVersion
-  });
-  lines.push(formatUpdateTable(rowData));
-  return lines.join(`
-`);
-}
-function formatUpdateTable(rowData) {
-  const rows = rowData.map((r) => [r.label, r.value]);
-  const rawRows = rowData.map((r) => [r.label, r.rawValue]);
-  return formatAsciiTable({ rows, rawRows });
-}
-function formatSystemInfoSection(system) {
-  const lines = [];
-  lines.push("System Info");
-  lines.push(formatSystemInfoTable(system));
-  return lines.join(`
-`);
-}
-function formatSystemInfoTable(system) {
-  const headers = ["Component", "Version"];
-  const formatValue = (value) => {
-    if (value === null)
-      return colors.dim("not found");
-    return value;
-  };
-  const rawValue = (value) => {
-    return value ?? "not found";
-  };
-  const rowData = [
-    { label: "cc-safety-net", value: system.version },
-    { label: "Claude Code", value: system.claudeCodeVersion },
-    { label: "OpenCode", value: system.openCodeVersion },
-    { label: "Gemini CLI", value: system.geminiCliVersion },
-    { label: "Copilot CLI", value: system.copilotCliVersion },
-    { label: "Node.js", value: system.nodeVersion },
-    { label: "npm", value: system.npmVersion },
-    { label: "Bun", value: system.bunVersion },
-    { label: "Platform", value: system.platform }
-  ];
-  const rows = rowData.map((r) => [r.label, formatValue(r.value)]);
-  const rawRows = rowData.map((r) => [r.label, rawValue(r.value)]);
-  return formatAsciiTable({ headers, rows, rawRows });
-}
-function formatSummary(report) {
-  const hooksFailed = report.hooks.every((h) => h.status !== "configured");
-  const selfTestFailed = report.hooks.some((h) => h.selfTest && h.selfTest.failed > 0);
-  const configFailed = (report.userConfig.errors?.length ?? 0) > 0 || (report.projectConfig.errors?.length ?? 0) > 0;
-  const failures = [hooksFailed, selfTestFailed, configFailed].filter(Boolean).length;
-  let warnings = 0;
-  if (report.update.updateAvailable)
-    warnings++;
-  if (report.activity.totalBlocked === 0)
-    warnings++;
-  warnings += report.shadowedRules.length;
-  if (failures > 0) {
-    return colors.red(`
-${failures} check(s) failed.`);
-  }
-  if (warnings > 0) {
-    return colors.yellow(`
-All checks passed with ${warnings} warning(s).`);
-  }
-  return colors.green(`
-All checks passed.`);
-}
-
-// src/bin/doctor/hooks.ts
-import { existsSync as existsSync12, readdirSync as readdirSync3, readFileSync as readFileSync10 } from "node:fs";
-import { homedir as homedir4, tmpdir as tmpdir3 } from "node:os";
-import { join as join9 } from "node:path";
-
-// src/core/analyze/dangerous-text.ts
-function dangerousInText(text) {
-  const t = text.toLowerCase();
-  const stripped = t.trimStart();
-  const isEchoOrRg = stripped.startsWith("echo ") || stripped.startsWith("rg ");
-  const patterns = [
-    {
-      regex: /\brm\s+(-[^\s]*r[^\s]*\s+-[^\s]*f|-[^\s]*f[^\s]*\s+-[^\s]*r|-[^\s]*rf|-[^\s]*fr)\b/,
-      reason: "rm -rf"
-    },
-    {
-      regex: /\bgit\s+reset\s+--ha(?:r(?:d)?)?\b/,
-      reason: "git reset --hard"
-    },
-    {
-      regex: /\bgit\s+reset\s+--me(?:r(?:g(?:e)?)?)?\b/,
-      reason: "git reset --merge"
-    },
-    {
-      regex: /\bgit\s+clean\s+(-[^\s]*f[^\s]*|--fo(?:r(?:c(?:e)?)?)?)\b/,
-      reason: "git clean -f"
-    },
-    {
-      regex: /\bgit\s+checkout\s+[^|;]*(--fo(?:r(?:c(?:e)?)?)?\b|-(?![bBU])[^\s]*f[^\s]*\b)/,
-      reason: "git checkout --force"
-    },
-    {
-      regex: /\bgit\s+push\s+[^|;]*(-f\b|--fo(?:r(?:c(?:e)?)?)?\b)(?!-with-lease)/,
-      reason: "git push --force (use --force-with-lease instead)"
-    },
-    {
-      regex: /\bgit\s+branch\b(?=[^\n;|&]*(?:-D\b|-[A-Za-z]*D[A-Za-z]*\b|--de(?:l(?:e(?:t(?:e)?)?)?)?\b|-[A-Za-z]*d[A-Za-z]*\b))(?=[^\n;|&]*(?:-D\b|-[A-Za-z]*D[A-Za-z]*\b|--fo(?:r(?:c(?:e)?)?)?\b|-[A-Za-z]*f[A-Za-z]*\b))/,
-      reason: "git branch -D",
-      caseSensitive: true
-    },
-    {
-      regex: /\bgit\s+tag\s+[^|;]*(-[^\s]*d[^\s]*|--de(?:l(?:e(?:t(?:e)?)?)?)?)\b/,
-      reason: "git tag -d"
-    },
-    {
-      regex: /\bgit\s+stash\s+(drop|clear)\b/,
-      reason: "git stash drop/clear"
-    },
-    {
-      regex: /\bgit\s+checkout\s+--\s/,
-      reason: "git checkout --"
-    },
-    {
-      regex: /\bgit\s+restore\b(?!.*--(staged|help))/,
-      reason: "git restore (without --staged)"
-    },
-    {
-      regex: /\bfind\b[^\n;|&]*\s-delete\b/,
-      reason: "find -delete",
-      skipForEchoRg: true
-    }
-  ];
-  for (const { regex, reason, skipForEchoRg, caseSensitive } of patterns) {
-    if (skipForEchoRg && isEchoOrRg)
-      continue;
-    const target = caseSensitive ? text : t;
-    if (regex.test(target)) {
-      return reason;
-    }
-  }
-  return null;
-}
-
-// src/core/analyze/awk.ts
-var AWK_INTERPRETERS = new Set(["awk", "gawk", "nawk", "mawk"]);
-var REASON_AWK_SYSTEM_DYNAMIC = "Detected awk system() call with dynamic command that cannot be safely analyzed.";
-function analyzeAwkSystemCalls(tokens, analyzeNested) {
-  for (const token of tokens.slice(1)) {
-    if (!token.includes("system"))
-      continue;
-    const commands2 = extractAwkSystemCommands(token);
-    if (!commands2)
-      continue;
-    if (commands2.dynamic)
-      return REASON_AWK_SYSTEM_DYNAMIC;
-    for (const command2 of commands2.commands) {
-      const reason = analyzeNested(command2);
-      if (reason)
-        return reason;
-    }
-  }
-  return null;
-}
-function extractAwkSystemCommands(code) {
-  const commands2 = [];
-  let sawSystem = false;
-  let searchIndex = 0;
-  while (searchIndex < code.length) {
-    const systemIndex = code.indexOf("system", searchIndex);
-    if (systemIndex === -1)
-      break;
-    searchIndex = systemIndex + "system".length;
-    if (!isAwkIdentifierBoundary(code[systemIndex - 1]) || !isAwkIdentifierBoundary(code[searchIndex])) {
-      continue;
-    }
-    let i = skipAwkWhitespace(code, searchIndex);
-    if (code[i] !== "(")
-      continue;
-    i = skipAwkWhitespace(code, i + 1);
-    const quote = code[i];
-    if (quote !== '"' && quote !== "'") {
-      sawSystem = true;
-      continue;
-    }
-    const parsed = readAwkStringLiteral(code, i, quote);
-    if (!parsed) {
-      sawSystem = true;
-      continue;
-    }
-    i = skipAwkWhitespace(code, parsed.endIndex);
-    sawSystem = true;
-    if (code[i] !== ")") {
-      return { dynamic: true, commands: commands2 };
-    }
-    commands2.push(parsed.value);
-    searchIndex = i + 1;
-  }
-  if (!sawSystem)
-    return null;
-  return commands2.length > 0 ? { dynamic: false, commands: commands2 } : { dynamic: true, commands: commands2 };
-}
-function isAwkIdentifierBoundary(char) {
-  return !char || !/[A-Za-z0-9_]/.test(char);
-}
-function skipAwkWhitespace(code, index) {
-  let i = index;
-  while (/\s/.test(code[i] ?? "")) {
-    i++;
-  }
-  return i;
-}
-function readAwkStringLiteral(code, startIndex, quote) {
-  let value = "";
-  let escaped = false;
-  for (let i = startIndex + 1;i < code.length; i++) {
-    const char = code[i];
-    if (!char)
-      break;
-    if (escaped) {
-      const decoded = decodeAwkEscape(code, i);
-      if (!decoded)
-        return null;
-      value += decoded.value;
-      i = decoded.endIndex;
-      escaped = false;
-      continue;
-    }
-    if (char === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (char === quote) {
-      return { value, endIndex: i + 1 };
-    }
-    value += char;
-  }
-  return null;
-}
-function decodeAwkEscape(code, index) {
-  const char = code[index];
-  if (!char)
-    return null;
-  if (char === "x") {
-    const hex = code.slice(index + 1, index + 3);
-    if (!/^[0-9A-Fa-f]{2}$/.test(hex))
-      return null;
-    return { value: String.fromCharCode(Number.parseInt(hex, 16)), endIndex: index + 2 };
-  }
-  if (/[0-7]/.test(char)) {
-    const match = /^[0-7]{1,3}/.exec(code.slice(index));
-    if (!match)
-      return null;
-    return {
-      value: String.fromCharCode(Number.parseInt(match[0], 8)),
-      endIndex: index + match[0].length - 1
-    };
-  }
-  const simpleEscapes = {
-    a: "\x07",
-    b: "\b",
-    f: "\f",
-    n: `
-`,
-    r: "\r",
-    t: "\t",
-    v: "\v"
-  };
-  return { value: simpleEscapes[char] ?? char, endIndex: index };
-}
-
-// src/core/analyze/constants.ts
-var DISPLAY_COMMANDS = new Set([
-  "echo",
-  "printf",
-  "cat",
-  "head",
-  "tail",
-  "less",
-  "more",
-  "grep",
-  "rg",
-  "ag",
-  "ack",
-  "sed",
-  "awk",
-  "cut",
-  "tr",
-  "sort",
-  "uniq",
-  "wc",
-  "tee",
-  "man",
-  "help",
-  "info",
-  "type",
-  "which",
-  "whereis",
-  "whatis",
-  "apropos",
-  "file",
-  "stat",
-  "ls",
-  "ll",
-  "dir",
-  "tree",
-  "pwd",
-  "date",
-  "cal",
-  "uptime",
-  "whoami",
-  "id",
-  "groups",
-  "hostname",
-  "uname",
-  "env",
-  "printenv",
-  "set",
-  "export",
-  "alias",
-  "history",
-  "jobs",
-  "fg",
-  "bg",
-  "test",
-  "true",
-  "false",
-  "read",
-  "return",
-  "exit",
-  "break",
-  "continue",
-  "shift",
-  "wait",
-  "trap",
-  "basename",
-  "dirname",
-  "realpath",
-  "readlink",
-  "md5sum",
-  "sha256sum",
-  "base64",
-  "xxd",
-  "od",
-  "hexdump",
-  "strings",
-  "diff",
-  "cmp",
-  "comm",
-  "join",
-  "paste",
-  "column",
-  "fmt",
-  "fold",
-  "nl",
-  "pr",
-  "expand",
-  "unexpand",
-  "rev",
-  "tac",
-  "shuf",
-  "seq",
-  "yes",
-  "sleep",
-  "logger",
-  "write",
-  "wall",
-  "mesg",
-  "notify-send"
-]);
-
-// src/core/analyze/rm-flags.ts
-function hasRecursiveForceFlags(tokens) {
-  let hasRecursive = false;
-  let hasForce = false;
-  for (const token of tokens) {
-    if (token === "--")
-      break;
-    if (token === "-r" || token === "-R" || token === "--recursive") {
-      hasRecursive = true;
-    } else if (token === "-f" || token === "--force") {
-      hasForce = true;
-    } else if (token.startsWith("-") && !token.startsWith("--")) {
-      if (token.includes("r") || token.includes("R"))
-        hasRecursive = true;
-      if (token.includes("f"))
-        hasForce = true;
-    }
-  }
-  return hasRecursive && hasForce;
-}
-
 // src/core/analyze/find.ts
 var REASON_FIND_DELETE = "find -delete permanently removes files. Use -print first to preview.";
 function analyzeFind(tokens, context = {}) {
@@ -4337,8 +1920,49 @@ function containsDangerousCode(code) {
 
 // src/core/analyze/rm.ts
 import { realpathSync as realpathSync3 } from "node:fs";
-import { homedir as homedir3, tmpdir } from "node:os";
-import { normalize, resolve as resolve5, sep as sep4 } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { normalize, resolve, sep as sep2 } from "node:path";
+
+// src/core/env.ts
+var ENV_FLAGS = {
+  strict: { name: "CC_SAFETY_NET_STRICT", legacyName: "SAFETY_NET_STRICT" },
+  paranoid: { name: "CC_SAFETY_NET_PARANOID", legacyName: "SAFETY_NET_PARANOID" },
+  paranoidRm: { name: "CC_SAFETY_NET_PARANOID_RM", legacyName: "SAFETY_NET_PARANOID_RM" },
+  paranoidInterpreters: {
+    name: "CC_SAFETY_NET_PARANOID_INTERPRETERS",
+    legacyName: "SAFETY_NET_PARANOID_INTERPRETERS"
+  },
+  worktree: { name: "CC_SAFETY_NET_WORKTREE", legacyName: "SAFETY_NET_WORKTREE" },
+  debug: { name: "CC_SAFETY_NET_DEBUG" }
+};
+function getSafetyNetEnvModes() {
+  const paranoidAll = envTruthy(ENV_FLAGS.paranoid);
+  return {
+    strict: envTruthy(ENV_FLAGS.strict),
+    paranoidAll,
+    paranoidRm: paranoidAll || envTruthy(ENV_FLAGS.paranoidRm),
+    paranoidInterpreters: paranoidAll || envTruthy(ENV_FLAGS.paranoidInterpreters),
+    worktreeMode: envTruthy(ENV_FLAGS.worktree)
+  };
+}
+function envTruthy(flag) {
+  const value = typeof flag === "string" ? process.env[flag] : getEnvFlagValue(flag);
+  return value === "1" || value?.toLowerCase() === "true";
+}
+function getEnvFlagValue(flag) {
+  if (process.env[flag.name] !== undefined) {
+    return process.env[flag.name];
+  }
+  if (flag.legacyName) {
+    return process.env[flag.legacyName];
+  }
+  return;
+}
+function envFlagIsSet(flag) {
+  return process.env[flag.name] !== undefined || !!flag.legacyName && process.env[flag.legacyName] !== undefined;
+}
+
+// src/core/analyze/rm.ts
 var IS_WINDOWS = process.platform === "win32";
 function normalizePathForComparison(p) {
   let normalized = normalize(p);
@@ -4481,7 +2105,7 @@ function isTempTarget(path, allowTmpdirVar) {
   const systemTmpdir = tmpdir();
   const normalizedTmpdir = normalizePathForComparison(systemTmpdir);
   const pathToCompare = normalizePathForComparison(normalized);
-  if (pathToCompare.startsWith(`${normalizedTmpdir}${sep4}`) || pathToCompare === normalizedTmpdir) {
+  if (pathToCompare.startsWith(`${normalizedTmpdir}${sep2}`) || pathToCompare === normalizedTmpdir) {
     return true;
   }
   if (allowTmpdirVar) {
@@ -4495,7 +2119,7 @@ function isTempTarget(path, allowTmpdirVar) {
   return false;
 }
 function getHomeDirForRmPolicy() {
-  return process.env.HOME ?? homedir3();
+  return process.env.HOME ?? homedir();
 }
 function isDynamicTarget(target) {
   return target.includes("$") || target.includes("`");
@@ -4512,13 +2136,13 @@ function isCwdSelfTarget(target, cwd) {
     return true;
   }
   try {
-    const resolved = resolve5(cwd, target);
+    const resolved = resolve(cwd, target);
     const realCwd = realpathSync3(cwd);
     const realResolved = realpathSync3(resolved);
     return normalizePathForComparison(realResolved) === normalizePathForComparison(realCwd);
   } catch {
     try {
-      const resolved = resolve5(cwd, target);
+      const resolved = resolve(cwd, target);
       return normalizePathForComparison(resolved) === normalizePathForComparison(cwd);
     } catch {
       return false;
@@ -4542,7 +2166,7 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
   }
   if (target.startsWith("./") || target.startsWith(".\\") || !target.includes("/") && !target.includes("\\")) {
     try {
-      const resolved = resolve5(resolveCwd, target);
+      const resolved = resolve(resolveCwd, target);
       return isResolvedPathWithinCwd(resolved, originalCwd);
     } catch {
       return false;
@@ -4552,7 +2176,7 @@ function isTargetWithinCwd(target, originalCwd, effectiveCwd) {
     return false;
   }
   try {
-    const resolved = resolve5(resolveCwd, target);
+    const resolved = resolve(resolveCwd, target);
     return isResolvedPathWithinCwd(resolved, originalCwd);
   } catch {
     return false;
@@ -4568,7 +2192,7 @@ function isResolvedPathWithinCwd(resolvedTarget, cwd) {
 function isNormalizedPathWithin(target, cwd) {
   const normalizedTarget = normalizePathForComparison(target);
   const normalizedCwd = normalizePathForComparison(cwd);
-  return normalizedTarget.startsWith(`${normalizedCwd}${sep4}`) || normalizedTarget === normalizedCwd;
+  return normalizedTarget.startsWith(`${normalizedCwd}${sep2}`) || normalizedTarget === normalizedCwd;
 }
 
 // src/core/analyze/shell-wrappers.ts
@@ -4592,12 +2216,12 @@ function extractDashCArg(tokens) {
 
 // src/core/git/config.ts
 import { execFileSync } from "node:child_process";
-import { existsSync as existsSync10, readFileSync as readFileSync9 } from "node:fs";
-import { dirname as dirname8, isAbsolute as isAbsolute6, join as join7, resolve as resolve7 } from "node:path";
+import { existsSync as existsSync2, readFileSync as readFileSync2 } from "node:fs";
+import { dirname as dirname3, isAbsolute as isAbsolute4, join as join2, resolve as resolve3 } from "node:path";
 
 // src/core/git/worktree.ts
-import { existsSync as existsSync9, lstatSync as lstatSync3, readFileSync as readFileSync8, realpathSync as realpathSync4, statSync } from "node:fs";
-import { dirname as dirname7, isAbsolute as isAbsolute5, join as join6, resolve as resolve6 } from "node:path";
+import { existsSync, lstatSync as lstatSync2, readFileSync, realpathSync as realpathSync4, statSync } from "node:fs";
+import { dirname as dirname2, isAbsolute as isAbsolute3, join, resolve as resolve2 } from "node:path";
 var GIT_GLOBAL_OPTS_WITH_VALUE = new Set([
   "-c",
   "-C",
@@ -4621,7 +2245,7 @@ function getGitExecutionContext(tokens, cwd) {
   }
   let gitCwd;
   try {
-    gitCwd = realpathSync4(resolve6(cwd));
+    gitCwd = realpathSync4(resolve2(cwd));
   } catch {
     return { gitCwd: null, hasExplicitGitContext: false };
   }
@@ -4688,11 +2312,11 @@ function isLinkedWorktree(cwd) {
     return false;
   }
   try {
-    const stat = lstatSync3(dotGitPath);
+    const stat = lstatSync2(dotGitPath);
     if (stat.isSymbolicLink() || !stat.isFile()) {
       return false;
     }
-    const content = readFileSync8(dotGitPath, "utf-8");
+    const content = readFileSync(dotGitPath, "utf-8");
     const firstLine = content.split(/\r?\n/, 1)[0]?.trim() ?? "";
     if (!firstLine.startsWith("gitdir:")) {
       return false;
@@ -4701,28 +2325,28 @@ function isLinkedWorktree(cwd) {
     if (rawGitDir === "") {
       return false;
     }
-    const gitDir = isAbsolute5(rawGitDir) ? rawGitDir : resolve6(dirname7(dotGitPath), rawGitDir);
-    if (!existsSync9(join6(gitDir, "commondir"))) {
+    const gitDir = isAbsolute3(rawGitDir) ? rawGitDir : resolve2(dirname2(dotGitPath), rawGitDir);
+    if (!existsSync(join(gitDir, "commondir"))) {
       return false;
     }
     if (!worktreeGitdirBacklinkMatches(gitDir, dotGitPath)) {
       return false;
     }
-    return worktreeConfigMatchesRoot(gitDir, dirname7(dotGitPath));
+    return worktreeConfigMatchesRoot(gitDir, dirname2(dotGitPath));
   } catch {
     return false;
   }
 }
 function worktreeGitdirBacklinkMatches(gitDir, dotGitPath) {
-  const backlinkPath = join6(gitDir, "gitdir");
-  if (!existsSync9(backlinkPath)) {
+  const backlinkPath = join(gitDir, "gitdir");
+  if (!existsSync(backlinkPath)) {
     return false;
   }
-  const rawBacklink = readFileSync8(backlinkPath, "utf-8").split(/\r?\n/, 1)[0]?.trim() ?? "";
+  const rawBacklink = readFileSync(backlinkPath, "utf-8").split(/\r?\n/, 1)[0]?.trim() ?? "";
   if (rawBacklink === "") {
     return false;
   }
-  const linkedDotGitPath = isAbsolute5(rawBacklink) ? rawBacklink : resolve6(gitDir, rawBacklink);
+  const linkedDotGitPath = isAbsolute3(rawBacklink) ? rawBacklink : resolve2(gitDir, rawBacklink);
   try {
     return sameFilesystemPath(linkedDotGitPath, dotGitPath);
   } catch {
@@ -4730,15 +2354,15 @@ function worktreeGitdirBacklinkMatches(gitDir, dotGitPath) {
   }
 }
 function worktreeConfigMatchesRoot(gitDir, worktreeRoot) {
-  const configWorktreePath = join6(gitDir, "config.worktree");
-  if (!existsSync9(configWorktreePath)) {
+  const configWorktreePath = join(gitDir, "config.worktree");
+  if (!existsSync(configWorktreePath)) {
     return true;
   }
   const configuredWorktree = readCoreWorktree(configWorktreePath);
   if (configuredWorktree === null) {
     return true;
   }
-  const resolvedConfiguredWorktree = isAbsolute5(configuredWorktree) ? configuredWorktree : resolve6(gitDir, configuredWorktree);
+  const resolvedConfiguredWorktree = isAbsolute3(configuredWorktree) ? configuredWorktree : resolve2(gitDir, configuredWorktree);
   try {
     return sameFilesystemPath(resolvedConfiguredWorktree, worktreeRoot);
   } catch {
@@ -4767,7 +2391,7 @@ function normalizePathForComparison2(path) {
   return process.platform === "win32" ? normalized.toLowerCase() : normalized;
 }
 function readCoreWorktree(configPath) {
-  const content = readFileSync8(configPath, "utf-8");
+  const content = readFileSync(configPath, "utf-8");
   let inCore = false;
   let configuredWorktree = null;
   for (const line of content.split(/\r?\n/)) {
@@ -4857,11 +2481,11 @@ function findDotGit(cwd) {
 function findDotGitInAncestors(cwd) {
   let current = cwd;
   while (true) {
-    const dotGitPath = join6(current, ".git");
-    if (existsSync9(dotGitPath)) {
+    const dotGitPath = join(current, ".git");
+    if (existsSync(dotGitPath)) {
       return dotGitPath;
     }
-    const parent = dirname7(current);
+    const parent = dirname2(current);
     if (parent === current) {
       return null;
     }
@@ -4994,7 +2618,7 @@ function localGitConfigEnablesRecursiveSubmodules(cwd) {
     return null;
   }
   for (const configPath of configPaths) {
-    if (!existsSync10(configPath)) {
+    if (!existsSync2(configPath)) {
       continue;
     }
     const result = gitConfigFileEnablesRecursiveSubmodules(configPath);
@@ -5006,7 +2630,7 @@ function localGitConfigEnablesRecursiveSubmodules(cwd) {
 }
 function getTrustedGitBinary() {
   for (const gitBinary of TRUSTED_GIT_BINARIES) {
-    if (existsSync10(gitBinary)) {
+    if (existsSync2(gitBinary)) {
       return gitBinary;
     }
   }
@@ -5037,11 +2661,11 @@ function getLocalGitConfigPaths(cwd) {
   if (commonDir === null) {
     return null;
   }
-  return [join7(commonDir, "config"), join7(gitDir, "config.worktree")];
+  return [join2(commonDir, "config"), join2(gitDir, "config.worktree")];
 }
 function resolveGitDirFromDotGit(dotGitPath) {
   try {
-    const content = readFileSync9(dotGitPath, "utf-8");
+    const content = readFileSync2(dotGitPath, "utf-8");
     const firstLine = content.split(/\r?\n/, 1)[0]?.trim() ?? "";
     if (!firstLine.startsWith("gitdir:")) {
       return dotGitPath;
@@ -5050,22 +2674,22 @@ function resolveGitDirFromDotGit(dotGitPath) {
     if (rawGitDir === "") {
       return null;
     }
-    return isAbsolute6(rawGitDir) ? rawGitDir : resolve7(dirname8(dotGitPath), rawGitDir);
+    return isAbsolute4(rawGitDir) ? rawGitDir : resolve3(dirname3(dotGitPath), rawGitDir);
   } catch {
     return null;
   }
 }
 function resolveCommonGitDir(gitDir) {
-  const commonDirPath = join7(gitDir, "commondir");
-  if (!existsSync10(commonDirPath)) {
+  const commonDirPath = join2(gitDir, "commondir");
+  if (!existsSync2(commonDirPath)) {
     return gitDir;
   }
   try {
-    const rawCommonDir = readFileSync9(commonDirPath, "utf-8").split(/\r?\n/, 1)[0]?.trim() ?? "";
+    const rawCommonDir = readFileSync2(commonDirPath, "utf-8").split(/\r?\n/, 1)[0]?.trim() ?? "";
     if (rawCommonDir === "") {
       return null;
     }
-    return isAbsolute6(rawCommonDir) ? rawCommonDir : resolve7(gitDir, rawCommonDir);
+    return isAbsolute4(rawCommonDir) ? rawCommonDir : resolve3(gitDir, rawCommonDir);
   } catch {
     return null;
   }
@@ -5073,7 +2697,7 @@ function resolveCommonGitDir(gitDir) {
 function gitConfigFileEnablesRecursiveSubmodules(configPath) {
   let content;
   try {
-    content = readFileSync9(configPath, "utf-8");
+    content = readFileSync2(configPath, "utf-8");
   } catch {
     return true;
   }
@@ -5946,9 +3570,9 @@ function parseParallelCommand(tokens) {
 }
 
 // src/core/analyze/tmpdir.ts
-import { existsSync as existsSync11, lstatSync as lstatSync4, realpathSync as realpathSync5 } from "node:fs";
+import { existsSync as existsSync3, lstatSync as lstatSync3, realpathSync as realpathSync5 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
-import { isAbsolute as isAbsolute7, join as join8, normalize as normalize2, parse as parsePath3, sep as sep5 } from "node:path";
+import { isAbsolute as isAbsolute5, join as join3, normalize as normalize2, parse as parsePath3, sep as sep3 } from "node:path";
 function isTmpdirOverriddenToNonTemp(envAssignments) {
   if (!envAssignments.has("TMPDIR")) {
     return false;
@@ -5976,18 +3600,18 @@ function tryResolveExistingPathComponents(path) {
 }
 function resolveExistingPathComponents(path) {
   const normalized = normalize2(path);
-  if (!isAbsolute7(normalized)) {
+  if (!isAbsolute5(normalized)) {
     return normalized;
   }
   const root = parsePath3(normalized).root;
   const components = normalized.slice(root.length).split(/[\\/]+/).filter(Boolean);
   let current = root;
   for (let i = 0;i < components.length; i++) {
-    const candidate = join8(current, components[i] ?? "");
-    if (!existsSync11(candidate)) {
-      return join8(candidate, ...components.slice(i + 1));
+    const candidate = join3(current, components[i] ?? "");
+    if (!existsSync3(candidate)) {
+      return join3(candidate, ...components.slice(i + 1));
     }
-    current = lstatSync4(candidate).isSymbolicLink() ? realpathSync5(candidate) : candidate;
+    current = lstatSync3(candidate).isSymbolicLink() ? realpathSync5(candidate) : candidate;
   }
   return current;
 }
@@ -5995,7 +3619,7 @@ function isPathOrSubpath(path, basePath) {
   if (path === basePath) {
     return true;
   }
-  const baseWithSlash = basePath.endsWith(sep5) ? basePath : `${basePath}${sep5}`;
+  const baseWithSlash = basePath.endsWith(sep3) ? basePath : `${basePath}${sep3}`;
   return path.startsWith(baseWithSlash);
 }
 
@@ -6104,6 +3728,86 @@ function extractXargsChildCommandWithInfo(tokens) {
     }
   }
   return { childTokens: [], replacementToken };
+}
+
+// src/core/rules/custom.ts
+function checkCustomRules(tokens, rules) {
+  if (tokens.length === 0 || rules.length === 0) {
+    return null;
+  }
+  const command2 = getBasename(tokens[0] ?? "");
+  const subcommand = extractSubcommand(tokens);
+  const shortOpts = extractShortOpts(tokens);
+  for (const rule of rules) {
+    if (!matchesCommand(command2, rule.command)) {
+      continue;
+    }
+    if (rule.subcommand && subcommand !== rule.subcommand) {
+      continue;
+    }
+    if (matchesBlockArgs(tokens, rule.block_args, shortOpts)) {
+      return `[${rule.name}] ${rule.reason}`;
+    }
+  }
+  return null;
+}
+function matchesCommand(command2, ruleCommand) {
+  return command2 === ruleCommand;
+}
+var OPTIONS_WITH_VALUES = new Set([
+  "-c",
+  "-C",
+  "--git-dir",
+  "--work-tree",
+  "--namespace",
+  "--config-env"
+]);
+function extractSubcommand(tokens) {
+  let skipNext = false;
+  for (let i = 1;i < tokens.length; i++) {
+    const token = tokens[i];
+    if (!token)
+      continue;
+    if (skipNext) {
+      skipNext = false;
+      continue;
+    }
+    if (token === "--") {
+      const nextToken = tokens[i + 1];
+      if (nextToken && !nextToken.startsWith("-")) {
+        return nextToken;
+      }
+      return null;
+    }
+    if (OPTIONS_WITH_VALUES.has(token)) {
+      skipNext = true;
+      continue;
+    }
+    if (token.startsWith("-")) {
+      for (const opt of OPTIONS_WITH_VALUES) {
+        if (token.startsWith(`${opt}=`)) {
+          break;
+        }
+      }
+      continue;
+    }
+    return token;
+  }
+  return null;
+}
+function matchesBlockArgs(tokens, blockArgs, shortOpts) {
+  const blockArgsSet = new Set(blockArgs);
+  for (const token of tokens) {
+    if (blockArgsSet.has(token)) {
+      return true;
+    }
+  }
+  for (const opt of shortOpts) {
+    if (blockArgsSet.has(opt)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // src/core/analyze/segment.ts
@@ -6762,13 +4466,2542 @@ function isCcSafetyNetPackage(value) {
   return /^cc-safety-net(?:@[a-zA-Z0-9._-]+)?$/.test(value ?? "");
 }
 
+// src/core/config.ts
+import { existsSync as existsSync9, readFileSync as readFileSync8 } from "node:fs";
+import { resolve as resolve7 } from "node:path";
+
+// src/core/rules/custom-rule-validation.ts
+function validateCustomRule(rule, index, ruleNames, options2 = {}) {
+  const errors = [];
+  const prefix = `rules[${index}]`;
+  if (!rule || typeof rule !== "object") {
+    errors.push(`${prefix}: must be an object`);
+    return errors;
+  }
+  const r = rule;
+  const messageStyle = options2.messageStyle ?? "legacy";
+  if (typeof r.name !== "string") {
+    errors.push(`${prefix}.name: required string`);
+  } else {
+    if (!NAME_PATTERN.test(r.name)) {
+      errors.push(messageStyle === "rulebook" ? `${prefix}.name: must match rule name pattern` : `${prefix}.name: must match pattern (letters, numbers, hyphens, underscores; max 64 chars)`);
+    }
+    const lowerName = r.name.toLowerCase();
+    if (ruleNames.has(lowerName)) {
+      errors.push(`${prefix}.name: duplicate rule name "${r.name}"`);
+    } else {
+      ruleNames.add(lowerName);
+    }
+  }
+  if (typeof r.command !== "string") {
+    errors.push(messageStyle === "rulebook" ? `${prefix}.command: required string matching command pattern` : `${prefix}.command: required string`);
+  } else if (!COMMAND_PATTERN.test(r.command)) {
+    errors.push(messageStyle === "rulebook" ? `${prefix}.command: required string matching command pattern` : `${prefix}.command: must match pattern (letters, numbers, hyphens, underscores)`);
+  }
+  if (r.subcommand !== undefined) {
+    if (typeof r.subcommand !== "string") {
+      errors.push(messageStyle === "rulebook" ? `${prefix}.subcommand: must match command pattern` : `${prefix}.subcommand: must be a string if provided`);
+    } else if (!COMMAND_PATTERN.test(r.subcommand)) {
+      errors.push(messageStyle === "rulebook" ? `${prefix}.subcommand: must match command pattern` : `${prefix}.subcommand: must match pattern (letters, numbers, hyphens, underscores)`);
+    }
+  }
+  if (!Array.isArray(r.block_args)) {
+    errors.push(messageStyle === "rulebook" ? `${prefix}.block_args: required non-empty array` : `${prefix}.block_args: required array`);
+  } else {
+    if (r.block_args.length === 0) {
+      errors.push(messageStyle === "rulebook" ? `${prefix}.block_args: required non-empty array` : `${prefix}.block_args: must have at least one element`);
+    }
+    for (let i = 0;i < r.block_args.length; i++) {
+      const arg = r.block_args[i];
+      if (typeof arg !== "string") {
+        errors.push(messageStyle === "rulebook" ? `${prefix}.block_args[${i}]: must be a non-empty string` : `${prefix}.block_args[${i}]: must be a string`);
+      } else if (arg === "") {
+        errors.push(messageStyle === "rulebook" ? `${prefix}.block_args[${i}]: must be a non-empty string` : `${prefix}.block_args[${i}]: must not be empty`);
+      }
+    }
+  }
+  if (typeof r.reason !== "string") {
+    errors.push(messageStyle === "rulebook" ? `${prefix}.reason: required non-empty string up to ${MAX_REASON_LENGTH} characters` : `${prefix}.reason: required string`);
+  } else if (r.reason === "") {
+    errors.push(messageStyle === "rulebook" ? `${prefix}.reason: required non-empty string up to ${MAX_REASON_LENGTH} characters` : `${prefix}.reason: must not be empty`);
+  } else if (r.reason.length > MAX_REASON_LENGTH) {
+    errors.push(messageStyle === "rulebook" ? `${prefix}.reason: required non-empty string up to ${MAX_REASON_LENGTH} characters` : `${prefix}.reason: must be at most ${MAX_REASON_LENGTH} characters`);
+  }
+  return errors;
+}
+
+// src/core/rules/policy/config-file.ts
+import { existsSync as existsSync4, mkdirSync, readFileSync as readFileSync3, renameSync, writeFileSync } from "node:fs";
+import { dirname as dirname5 } from "node:path";
+
+// src/core/rules/policy/paths.ts
+import { homedir as homedir2 } from "node:os";
+import { dirname as dirname4, join as join4, resolve as resolve4 } from "node:path";
+var RULES_CONFIG_FILE = "rule.json";
+var RULES_LOCK_FILE = "rule.lock";
+var RULEBOOK_FILE = "rulebook.json";
+var LEGACY_RULES_CONFIG_FILE = "config.json";
+var SAFETY_NET_DIR = ".cc-safety-net";
+var RULES_SUBDIR = "rules";
+var CACHE_SUBDIR = "cache";
+var RULES_DIR = `${SAFETY_NET_DIR}/${RULES_SUBDIR}`;
+var CC_SAFETY_NET_HOME = "CC_SAFETY_NET_HOME";
+var GITHUB_RULEBOOK_SOURCE_FORMAT = "owner/repo#ref/<rulebook-name>";
+var RULE_SYNC_COMMAND = "`cc-safety-net rule sync`";
+var RULE_MIGRATE_COMMAND = "`npx -y cc-safety-net rule migrate`";
+function getProjectRulesDir(cwd) {
+  return resolve4(cwd ?? process.cwd(), RULES_DIR);
+}
+function getProjectRulesConfigPath(cwd) {
+  return join4(getProjectRulesDir(cwd), RULES_CONFIG_FILE);
+}
+function getUserRulesDir(options2) {
+  return options2?.userConfigDir ?? (options2?.userConfigPath ? dirname4(options2.userConfigPath) : join4(getUserSafetyNetHome(), RULES_SUBDIR));
+}
+function getUserSafetyNetHome() {
+  const home = process.env[CC_SAFETY_NET_HOME];
+  return home ? resolve4(home) : join4(homedir2(), SAFETY_NET_DIR);
+}
+function getUserRulesConfigPath(options2) {
+  return join4(getUserRulesDir(options2), RULES_CONFIG_FILE);
+}
+function getUserRulesLockPath(options2) {
+  return join4(getUserRulesDir(options2), RULES_LOCK_FILE);
+}
+function getRulesLockPathForConfigPath(configPath) {
+  return join4(dirname4(configPath), RULES_LOCK_FILE);
+}
+function getLegacyUserRulesConfigPath(options2 = {}) {
+  return join4(dirname4(getUserRulesDir(options2)), LEGACY_RULES_CONFIG_FILE);
+}
+function getLegacyProjectRulesConfigPath(options2 = {}) {
+  return resolve4(options2.cwd ?? process.cwd(), ".safety-net.json");
+}
+function getPolicyPaths(options2) {
+  const userConfigPath = options2.userConfigPath ?? getUserRulesConfigPath(options2);
+  const projectConfigPath = options2.projectConfigPath ?? getProjectRulesConfigPath(options2.cwd);
+  return {
+    userConfigPath,
+    projectConfigPath,
+    userLockPath: getRulesLockPathForConfigPath(userConfigPath),
+    projectLockPath: getRulesLockPathForConfigPath(projectConfigPath)
+  };
+}
+function getScopePaths(options2) {
+  const configPath = options2.global ? options2.userConfigPath ?? getUserRulesConfigPath(options2) : options2.projectConfigPath ?? getProjectRulesConfigPath(options2.cwd);
+  return {
+    configDir: dirname4(configPath),
+    configPath,
+    lockPath: getRulesLockPathForConfigPath(configPath)
+  };
+}
+function getRulebookDisplaySource(entry) {
+  if (entry.kind === "github" && entry.display_ref) {
+    return `${entry.owner}/${entry.repo}#${entry.display_ref}/${entry.name}`;
+  }
+  return entry.spec;
+}
+function getRulebookCachePath(entry, options2) {
+  const digestHex = entry.digest.startsWith("sha256:") ? entry.digest.slice(7) : entry.digest;
+  return join4(getRulesCacheDir(options2), "rulebooks", `${getRulebookCacheSlug(entry)}--${digestHex.slice(0, 12)}`, RULEBOOK_FILE);
+}
+function getRulebookCacheSlug(entry) {
+  const source = entry.kind === "github" && entry.display_ref ? `${entry.owner}/${entry.repo}#${entry.display_ref}/${entry.name}` : entry.spec;
+  return source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "rulebook";
+}
+function getRepositoryRulebookPath(name) {
+  return `${RULES_DIR}/${name}/${RULEBOOK_FILE}`;
+}
+function getRulesCacheDir(options2) {
+  return join4(dirname4(options2?.cacheConfigDir ?? getUserRulesDir(options2)), CACHE_SUBDIR);
+}
+
+// src/core/rules/policy/sources.ts
+var GITHUB_SOURCE_RE = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(.+)$/;
+var GITHUB_REPOSITORY_SOURCE_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9_.-]+$/;
+var GITHUB_REPOSITORY_REF_SOURCE_RE = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#([A-Za-z0-9._-]+)$/;
+var GITHUB_REF_PATTERN = /^[A-Za-z0-9._-]+$/;
+var RULES_DIR_RE = RULES_DIR.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+var RULEBOOK_FILE_RE = RULEBOOK_FILE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+var GITHUB_RULEBOOK_PATH_RE = new RegExp(`^${RULES_DIR_RE}/(${NAME_PATTERN.source.slice(1, -1)})/${RULEBOOK_FILE_RE}$`);
+function getRulebookSourceSyntaxError(source) {
+  if (isGitHubRulebookSource(source)) {
+    try {
+      parseGitHubSource(source);
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }
+  return NAME_PATTERN.test(source) ? null : `Local rulebook sources must be bare names matching ${NAME_PATTERN}: ${source}`;
+}
+function parseGitHubSource(spec) {
+  if (spec.startsWith("github:")) {
+    throw new Error(`Invalid rulebook source: ${spec}`);
+  }
+  const match = spec.match(GITHUB_SOURCE_RE);
+  if (!match?.[1] || !match[2] || !match[3]) {
+    throw new Error(`Invalid GitHub rulebook source: ${spec}`);
+  }
+  const [ref, name, ...extraParts] = match[3].split("/");
+  if (!ref || !GITHUB_REF_PATTERN.test(ref)) {
+    throw new Error(`GitHub rulebook refs must be a single path segment: ${spec}`);
+  }
+  if (!name || extraParts.length > 0 || !NAME_PATTERN.test(name)) {
+    throw new Error(`GitHub rulebook sources must be ${GITHUB_RULEBOOK_SOURCE_FORMAT}: ${spec}`);
+  }
+  return {
+    owner: match[1],
+    repo: match[2],
+    ref,
+    path: getRepositoryRulebookPath(name),
+    name
+  };
+}
+function isGitHubRepositorySource(source) {
+  return GITHUB_REPOSITORY_SOURCE_RE.test(source);
+}
+function isGitHubRulebookSource(source) {
+  return GITHUB_SOURCE_RE.test(source);
+}
+function assertBareRulebookName(source) {
+  if (!NAME_PATTERN.test(source)) {
+    throw new Error(`Local rulebook sources must be bare names matching ${NAME_PATTERN}: ${source}`);
+  }
+}
+function getSelectedUpdateSpecs(config, lock, match) {
+  const exactMatches = config.rules.filter((spec) => spec === match);
+  if (exactMatches.length > 0) {
+    return { ok: true, specs: exactMatches };
+  }
+  if (!lock) {
+    return {
+      ok: false,
+      result: {
+        ok: false,
+        errors: [
+          `No lockfile available to match rulebook name ${match}; use the exact source or run ${RULE_SYNC_COMMAND}`
+        ],
+        warnings: [],
+        entries: []
+      }
+    };
+  }
+  const configuredSpecs = new Set(config.rules);
+  const nameMatches = lock.rulebooks.filter((entry) => entry.name === match && configuredSpecs.has(entry.spec)).map((entry) => entry.spec);
+  if (nameMatches.length === 1) {
+    return { ok: true, specs: nameMatches };
+  }
+  return noRulebookMatch(match, nameMatches);
+}
+function getRemoveMatches(rules, lock, match) {
+  const exactMatches = rules.filter((spec) => spec === match);
+  if (exactMatches.length > 0)
+    return { ok: true, specs: exactMatches };
+  const githubRefMatches = getGitHubRepositoryRefMatches(rules, match);
+  if (githubRefMatches.length > 0)
+    return { ok: true, specs: githubRefMatches };
+  const githubRepositoryMatches = getGitHubRepositoryMatches(rules, match);
+  if (!githubRepositoryMatches.ok)
+    return githubRepositoryMatches;
+  if (githubRepositoryMatches.specs.length > 0) {
+    return { ok: true, specs: githubRepositoryMatches.specs };
+  }
+  const nameMatches = lock ? rules.filter((spec) => lock.rulebooks.find((entry) => entry.spec === spec)?.name === match) : [];
+  if (nameMatches.length === 1)
+    return { ok: true, specs: nameMatches };
+  return noRulebookMatch(match, nameMatches);
+}
+function noRulebookMatch(match, nameMatches) {
+  return {
+    ok: false,
+    result: {
+      ok: false,
+      errors: nameMatches.length === 0 ? [`No configured rulebook matches ${match}`] : [`Ambiguous rulebook match ${match}: ${nameMatches.join(", ")}`],
+      warnings: [],
+      entries: []
+    }
+  };
+}
+function getGitHubRepositoryRefMatches(rules, match) {
+  const parsed = match.match(GITHUB_REPOSITORY_REF_SOURCE_RE);
+  if (!parsed?.[1] || !parsed[2] || !parsed[3])
+    return [];
+  return rules.filter((spec) => {
+    const source = getConfiguredGitHubSource(spec);
+    if (!source)
+      return false;
+    return source.owner === parsed[1] && source.repo === parsed[2] && source.ref === parsed[3];
+  });
+}
+function getGitHubRepositoryMatches(rules, match) {
+  if (!isGitHubRepositorySource(match))
+    return { ok: true, specs: [] };
+  const specs = rules.filter((spec) => {
+    const source = getConfiguredGitHubSource(spec);
+    if (!source)
+      return false;
+    return source.owner === match.split("/")[0] && source.repo === match.split("/")[1];
+  });
+  const refs = new Set(specs.map((spec) => getConfiguredGitHubSource(spec)?.ref).filter((ref) => !!ref));
+  if (refs.size < 2)
+    return { ok: true, specs };
+  return {
+    ok: false,
+    result: {
+      ok: false,
+      errors: [
+        `Multiple refs are configured for ${match}. Use an explicit ref:`,
+        `  cc-safety-net rule remove ${match}#<ref>`
+      ],
+      warnings: [],
+      entries: []
+    }
+  };
+}
+function getConfiguredGitHubSource(spec) {
+  try {
+    return parseGitHubSource(spec);
+  } catch {
+    return null;
+  }
+}
+
+// src/core/rules/policy/types.ts
+var DEFAULT_CONFIG = { version: 1, rules: [], overrides: {} };
+
+// src/core/rules/policy/config-file.ts
+function validateRulesConfig(config) {
+  const errors = [];
+  const sources = new Set;
+  if (!config || typeof config !== "object") {
+    return { errors: ["Config must be an object"], sources };
+  }
+  const cfg = config;
+  if (cfg.version !== 1) {
+    errors.push("version must be 1");
+  }
+  if (cfg.rules === undefined) {} else if (!Array.isArray(cfg.rules)) {
+    errors.push("rules must be an array of rulebook source strings");
+  } else {
+    for (let i = 0;i < cfg.rules.length; i++) {
+      if (typeof cfg.rules[i] !== "string") {
+        errors.push(`rules[${i}]: must be a rulebook source string`);
+        continue;
+      }
+      if (cfg.rules[i].trim() === "") {
+        errors.push(`rules[${i}]: must be a non-empty rulebook source string`);
+        continue;
+      }
+      if (sources.has(cfg.rules[i])) {
+        errors.push(`rules[${i}]: duplicate rulebook source "${cfg.rules[i]}"`);
+        continue;
+      }
+      const sourceError = getRulebookSourceSyntaxError(cfg.rules[i]);
+      if (sourceError) {
+        errors.push(`rules[${i}]: ${sourceError}`);
+        continue;
+      }
+      sources.add(cfg.rules[i]);
+    }
+  }
+  if (cfg.overrides !== undefined) {
+    if (!cfg.overrides || typeof cfg.overrides !== "object" || Array.isArray(cfg.overrides)) {
+      errors.push("overrides must be an object if provided");
+    } else {
+      for (const [key, value] of Object.entries(cfg.overrides)) {
+        if (!/^[^/]+\/[^/]+$/.test(key)) {
+          errors.push(`overrides.${key}: must use <rulebook-name>/<rule-name>`);
+        }
+        if (value === "off") {
+          continue;
+        }
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+          errors.push(`overrides.${key}: must be "off" or an object`);
+          continue;
+        }
+        const reason = value.reason;
+        if (typeof reason !== "string" || reason === "") {
+          errors.push(`overrides.${key}.reason: required non-empty string`);
+        } else if (reason.length > MAX_REASON_LENGTH) {
+          errors.push(`overrides.${key}.reason: must be at most ${MAX_REASON_LENGTH} characters`);
+        }
+      }
+    }
+  }
+  return { errors, sources };
+}
+function readRulesConfig(path) {
+  if (!existsSync4(path)) {
+    return { config: null, errors: [] };
+  }
+  try {
+    const content = readFileSync3(path, "utf-8");
+    if (!content.trim()) {
+      return { config: null, errors: ["Config file is empty"] };
+    }
+    const parsed = JSON.parse(content);
+    const validation = validateRulesConfig(parsed);
+    if (validation.errors.length > 0) {
+      return { config: null, errors: validation.errors };
+    }
+    const cfg = parsed;
+    return {
+      config: {
+        version: 1,
+        rules: cfg.rules ?? [],
+        overrides: cfg.overrides ?? {}
+      },
+      errors: []
+    };
+  } catch (error) {
+    return {
+      config: null,
+      errors: [`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`]
+    };
+  }
+}
+function readScopeRulesConfig(path) {
+  const loaded = readRulesConfig(path);
+  if (loaded.errors.length > 0) {
+    return { ok: false, result: { ok: false, errors: loaded.errors, warnings: [], entries: [] } };
+  }
+  return { ok: true, config: loaded.config ?? DEFAULT_CONFIG };
+}
+function writeDefaultRulesConfig(path, rules = []) {
+  writeJsonAtomic(path, { version: 1, rules, overrides: {} });
+}
+function writeStarterRulebook(path, name = "project-rules") {
+  writeJsonAtomic(path, {
+    rulebook_version: 1,
+    name,
+    version: "1.0.0",
+    description: name === "project-rules" ? "Project-specific CC Safety Net rules." : "User-specific CC Safety Net rules.",
+    author: name === "project-rules" ? "project" : "user",
+    allowed_commands: ["docker"],
+    rules: [
+      {
+        name: "block-docker-system-prune",
+        command: "docker",
+        subcommand: "system",
+        block_args: ["prune"],
+        reason: "Use targeted cleanup instead."
+      }
+    ],
+    tests: [
+      {
+        command: "docker system prune",
+        expect: "blocked",
+        rule: "block-docker-system-prune"
+      }
+    ]
+  });
+}
+function writeJsonAtomic(path, value) {
+  mkdirSync(dirname5(path), { recursive: true });
+  const tempPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tempPath, `${JSON.stringify(value, null, 2)}
+`, "utf-8");
+  renameSync(tempPath, path);
+}
+
+// src/core/rules/policy/scope-policy.ts
+import { existsSync as existsSync7, readFileSync as readFileSync6 } from "node:fs";
+import { dirname as dirname6, isAbsolute as isAbsolute6, join as join6, relative, resolve as resolve5, sep as sep4 } from "node:path";
+
+// src/core/rules/rulebook.ts
+function validateRulebook(rulebook) {
+  const errors = [];
+  const ruleNames = new Set;
+  if (!rulebook || typeof rulebook !== "object") {
+    return { errors: ["Rulebook must be an object"], ruleNames };
+  }
+  const rb = rulebook;
+  if (rb.rulebook_version !== 1) {
+    errors.push("rulebook_version must be 1");
+  }
+  if (typeof rb.name !== "string" || !NAME_PATTERN.test(rb.name)) {
+    errors.push("name: required string matching rule name pattern");
+  }
+  if (typeof rb.version !== "string" || rb.version === "") {
+    errors.push("version: required non-empty string");
+  }
+  if (!Array.isArray(rb.allowed_commands)) {
+    errors.push("allowed_commands: required array");
+  } else {
+    validateAllowedCommands(rb.allowed_commands, errors);
+  }
+  if (!Array.isArray(rb.rules)) {
+    errors.push("rules: required array");
+  } else {
+    for (let i = 0;i < rb.rules.length; i++) {
+      errors.push(...validateCustomRule(rb.rules[i], i, ruleNames, { messageStyle: "rulebook" }));
+    }
+  }
+  if (!Array.isArray(rb.tests)) {
+    errors.push("tests: required array");
+  } else {
+    validateFixtures(rb.tests, rb.rules, errors);
+  }
+  if (Array.isArray(rb.allowed_commands) && Array.isArray(rb.rules)) {
+    const allowed = new Set(rb.allowed_commands.filter((cmd) => typeof cmd === "string"));
+    for (let i = 0;i < rb.rules.length; i++) {
+      const rule = rb.rules[i];
+      if (typeof rule.command === "string" && !allowed.has(rule.command)) {
+        errors.push(`rules[${i}].command: "${rule.command}" must be listed in allowed_commands`);
+      }
+    }
+  }
+  return { errors, ruleNames };
+}
+function validateAllowedCommands(commands, errors) {
+  const seen = new Set;
+  for (let i = 0;i < commands.length; i++) {
+    const command2 = commands[i];
+    if (typeof command2 !== "string" || !COMMAND_PATTERN.test(command2)) {
+      errors.push(`allowed_commands[${i}]: must match command pattern`);
+      continue;
+    }
+    if (seen.has(command2)) {
+      errors.push(`allowed_commands[${i}]: duplicate command "${command2}"`);
+      continue;
+    }
+    seen.add(command2);
+  }
+}
+function validateFixtures(tests, rules, errors) {
+  const blockedFixtures = new Set;
+  const ruleNames = new Set(Array.isArray(rules) ? rules.map((rule) => rule && typeof rule === "object" ? rule.name : null).filter((name) => typeof name === "string") : []);
+  for (let i = 0;i < tests.length; i++) {
+    const fixture = tests[i];
+    if (!fixture || typeof fixture !== "object") {
+      errors.push(`tests[${i}]: must be an object`);
+      continue;
+    }
+    const f = fixture;
+    if (typeof f.command !== "string" || f.command.trim() === "") {
+      errors.push(`tests[${i}].command: required non-empty string`);
+    }
+    if (f.expect !== "blocked" && f.expect !== "allowed") {
+      errors.push(`tests[${i}].expect: must be "blocked" or "allowed"`);
+    }
+    if (f.rule !== undefined && typeof f.rule !== "string") {
+      errors.push(`tests[${i}].rule: must be a string if provided`);
+    }
+    if (f.expect === "blocked" && typeof f.rule !== "string") {
+      errors.push(`tests[${i}].rule: required string for blocked fixtures`);
+    }
+    if (f.expect === "blocked" && typeof f.rule === "string") {
+      blockedFixtures.add(f.rule);
+    }
+  }
+  for (let i = 0;i < (Array.isArray(rules) ? rules.length : 0); i++) {
+    const rule = rules[i];
+    if (typeof rule.name === "string" && !blockedFixtures.has(rule.name)) {
+      errors.push(`rules[${i}]: missing blocked fixture for rule "${rule.name}"`);
+    }
+  }
+  for (const rule of blockedFixtures) {
+    if (!ruleNames.has(rule)) {
+      errors.push(`tests: blocked fixture references unknown rule "${rule}"`);
+    }
+  }
+}
+function runRulebookFixtures(rulebook) {
+  const failures = rulebook.tests.flatMap((fixture) => {
+    const segments2 = splitShellCommands(fixture.command).map((tokens) => {
+      const result = checkCustomRules(tokens, rulebook.rules);
+      return { tokens, result, matchedRule: result?.match(/^\[([^\]]+)]/)?.[1] ?? null };
+    });
+    const firstSegment = segments2[0] ?? { tokens: [], result: null, matchedRule: null };
+    if (fixture.expect === "allowed") {
+      const blockedSegment = segments2.find((segment) => segment.result);
+      return blockedSegment ? [
+        {
+          command: fixture.command,
+          message: `expected allowed but matched ${blockedSegment.matchedRule ?? "a rule"}`,
+          trace: traceRulebookFixture(blockedSegment.tokens, rulebook.rules)
+        }
+      ] : [];
+    }
+    const firstBlockedSegment = segments2.find((segment) => segment.result);
+    if (!firstBlockedSegment) {
+      return [
+        {
+          command: fixture.command,
+          message: `expected blocked by ${fixture.rule ?? "a rule"} but command was allowed`,
+          trace: traceRulebookFixture(firstSegment.tokens, rulebook.rules)
+        }
+      ];
+    }
+    if (!fixture.rule || firstBlockedSegment.matchedRule === fixture.rule)
+      return [];
+    return [
+      {
+        command: fixture.command,
+        message: `expected blocked by ${fixture.rule} but matched ${firstBlockedSegment.matchedRule}`,
+        trace: traceRulebookFixture(firstBlockedSegment.tokens, rulebook.rules)
+      }
+    ];
+  });
+  return { ok: failures.length === 0, failures };
+}
+function traceRulebookFixture(tokens, rules) {
+  return rules.map((rule) => {
+    const result = checkCustomRules([...tokens], [rule]);
+    return `${result ? "matched" : "skipped"} ${rule.name}`;
+  });
+}
+function assertValidRulebook(rulebook) {
+  const result = validateRulebook(rulebook);
+  if (result.errors.length > 0) {
+    throw new Error(result.errors.join("; "));
+  }
+  const parsed = rulebook;
+  const fixtures = runRulebookFixtures(parsed);
+  if (!fixtures.ok) {
+    throw new Error(fixtures.failures.map((failure) => `${failure.command}: ${failure.message}`).join("; "));
+  }
+  return parsed;
+}
+
+// src/core/rules/policy/lockfile.ts
+import { existsSync as existsSync5, readFileSync as readFileSync4 } from "node:fs";
+var SHA256_DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
+var RULEBOOK_SOURCE_KINDS = new Set(["local-directory", "github"]);
+function readLockfile(path) {
+  if (!existsSync5(path)) {
+    return { lock: null, errors: [] };
+  }
+  try {
+    const parsed = JSON.parse(readFileSync4(path, "utf-8"));
+    if (!parsed || typeof parsed !== "object") {
+      return { lock: null, errors: [`malformed lockfile ${path}: must be an object`] };
+    }
+    const lock = parsed;
+    if (lock.version !== 1 || !Array.isArray(lock.rulebooks)) {
+      return { lock: null, errors: [`malformed lockfile ${path}`] };
+    }
+    const parsedEntries = lock.rulebooks.map((entry, index) => parseLockEntry(entry, `${path}: rulebooks[${index}]`));
+    const entryErrors = parsedEntries.flatMap((entry) => entry.errors);
+    if (entryErrors.length > 0) {
+      return { lock: null, errors: [`malformed lockfile ${path}`, ...entryErrors] };
+    }
+    return {
+      lock: {
+        version: 1,
+        rulebooks: parsedEntries.flatMap((entry) => entry.entry ? [entry.entry] : [])
+      },
+      errors: []
+    };
+  } catch (error) {
+    return {
+      lock: null,
+      errors: [
+        `malformed lockfile ${path}: ${error instanceof Error ? error.message : String(error)}`
+      ]
+    };
+  }
+}
+function parseLockEntry(entry, prefix) {
+  if (!entry || typeof entry !== "object") {
+    return { entry: null, errors: [`${prefix}: must be an object`] };
+  }
+  const candidate = entry;
+  const errors = [
+    ...validateRequiredString(candidate, prefix, "spec"),
+    ...validateRequiredString(candidate, prefix, "name"),
+    ...validateRequiredString(candidate, prefix, "version"),
+    ...validateDigest(candidate, prefix),
+    ...validateKind(candidate, prefix),
+    ...validateKindFields(candidate, prefix)
+  ];
+  if (errors.length > 0)
+    return { entry: null, errors };
+  if (candidate.kind === "local-directory") {
+    return {
+      entry: {
+        spec: requiredString(candidate, "spec"),
+        kind: "local-directory",
+        path: requiredString(candidate, "path"),
+        name: requiredString(candidate, "name"),
+        version: requiredString(candidate, "version"),
+        digest: requiredString(candidate, "digest")
+      },
+      errors: []
+    };
+  }
+  const githubEntry = {
+    spec: requiredString(candidate, "spec"),
+    kind: "github",
+    owner: requiredString(candidate, "owner"),
+    repo: requiredString(candidate, "repo"),
+    ref: requiredString(candidate, "ref"),
+    commit: requiredString(candidate, "commit"),
+    path: requiredString(candidate, "path"),
+    name: requiredString(candidate, "name"),
+    version: requiredString(candidate, "version"),
+    digest: requiredString(candidate, "digest")
+  };
+  return {
+    entry: typeof candidate.display_ref === "string" && candidate.display_ref !== "" ? { ...githubEntry, display_ref: candidate.display_ref } : githubEntry,
+    errors: []
+  };
+}
+function validateRequiredString(candidate, prefix, field) {
+  return typeof candidate[field] === "string" && candidate[field].trim() !== "" ? [] : [`${prefix}.${field}: required string`];
+}
+function validateDigest(candidate, prefix) {
+  return typeof candidate.digest === "string" && SHA256_DIGEST_PATTERN.test(candidate.digest) ? [] : [`${prefix}.digest: required sha256 digest`];
+}
+function validateKind(candidate, prefix) {
+  if (typeof candidate.kind !== "string") {
+    return [`${prefix}.kind: required string`];
+  }
+  return RULEBOOK_SOURCE_KINDS.has(candidate.kind) ? [] : [`${prefix}.kind: unknown kind "${candidate.kind}"`];
+}
+function validateKindFields(candidate, prefix) {
+  if (candidate.kind === "local-directory") {
+    return validateRequiredString(candidate, prefix, "path");
+  }
+  if (candidate.kind === "github") {
+    return ["owner", "repo", "ref", "commit", "path"].flatMap((field) => validateRequiredString(candidate, prefix, field));
+  }
+  return [];
+}
+function requiredString(candidate, field) {
+  const value = candidate[field];
+  if (typeof value !== "string") {
+    throw new Error(`Expected ${field} to be validated before reading`);
+  }
+  return value;
+}
+
+// src/core/rules/policy/resolver.ts
+import { createHash } from "node:crypto";
+import { existsSync as existsSync6, readFileSync as readFileSync5 } from "node:fs";
+import { join as join5 } from "node:path";
+async function resolveRulebookSource(spec, configDir, options2) {
+  if (isGitHubRulebookSource(spec)) {
+    return resolveGitHubRulebook(spec);
+  }
+  return resolveLocalRulebook(spec, configDir, options2);
+}
+async function resolveRulebookSourceForSync(spec, configDir, options2, previousLock) {
+  if (!isGitHubRulebookSource(spec) || options2.refresh) {
+    return resolveRulebookSource(spec, configDir, options2);
+  }
+  const locked = previousLock?.rulebooks.find((entry) => entry.spec === spec);
+  if (!locked || locked.kind !== "github") {
+    return resolveRulebookSource(spec, configDir, options2);
+  }
+  return readLockedGitHubRulebook(locked, configDir, options2);
+}
+async function discoverGitHubRepositoryRulebooks(source) {
+  const [owner, repo] = source.split("/");
+  if (!owner || !repo) {
+    throw new Error(`Invalid GitHub repository source: ${source}`);
+  }
+  const metadataResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
+  if (!metadataResponse.ok) {
+    throw new Error(`Failed to inspect ${source}: GitHub returned ${metadataResponse.status}`);
+  }
+  const metadata = await metadataResponse.json();
+  if (!metadata.default_branch) {
+    throw new Error(`Failed to inspect ${source}: missing default branch`);
+  }
+  const commit = await resolveGitHubCommit(owner, repo, metadata.default_branch, source);
+  const treeResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${commit}?recursive=1`);
+  if (!treeResponse.ok) {
+    throw new Error(`Failed to inspect ${source}: GitHub tree returned ${treeResponse.status}`);
+  }
+  const treeJson = await treeResponse.json();
+  const names = (treeJson.tree ?? []).flatMap((entry) => {
+    if (entry.type !== "blob" || typeof entry.path !== "string")
+      return [];
+    const match = entry.path.match(GITHUB_RULEBOOK_PATH_RE);
+    return match?.[1] ? [match[1]] : [];
+  }).sort();
+  if (names.length === 0) {
+    throw new Error(`No rulebooks found in ${source} under ${RULES_DIR}/`);
+  }
+  return names.map((name) => ({
+    spec: `${owner}/${repo}#${commit}/${name}`,
+    display_ref: metadata.default_branch
+  }));
+}
+function resolveLocalRulebook(spec, configDir, _options) {
+  assertBareRulebookName(spec);
+  const path = getLocalRulebookPath(configDir, spec);
+  if (!existsSync6(path)) {
+    throw new Error(`Rulebook source not found: ${spec}`);
+  }
+  const content = readFileSync5(path, "utf-8");
+  const rulebook = assertValidRulebook(JSON.parse(content));
+  if (rulebook.name !== spec) {
+    throw new Error(`rulebook name "${rulebook.name}" must match local source "${spec}"`);
+  }
+  return {
+    rulebook,
+    content,
+    entry: {
+      spec,
+      kind: "local-directory",
+      path: spec,
+      name: rulebook.name,
+      version: rulebook.version,
+      digest: sha256Digest(content)
+    }
+  };
+}
+async function resolveGitHubRulebook(spec) {
+  const parsed = parseGitHubSource(spec);
+  const commit = await resolveGitHubCommit(parsed.owner, parsed.repo, parsed.ref, spec);
+  const rawResponse = await fetch(`https://raw.githubusercontent.com/${parsed.owner}/${parsed.repo}/${commit}/${parsed.path}`);
+  if (!rawResponse.ok) {
+    throw new Error(`Failed to fetch ${spec}: GitHub raw returned ${rawResponse.status}`);
+  }
+  const content = await rawResponse.text();
+  const rulebook = assertValidRulebook(JSON.parse(content));
+  if (rulebook.name !== parsed.name) {
+    throw new Error(`rulebook name "${rulebook.name}" must match GitHub source "${parsed.name}"`);
+  }
+  return {
+    rulebook,
+    content,
+    entry: {
+      spec,
+      kind: "github",
+      owner: parsed.owner,
+      repo: parsed.repo,
+      ref: parsed.ref,
+      commit,
+      path: parsed.path,
+      name: rulebook.name,
+      version: rulebook.version,
+      digest: sha256Digest(content)
+    }
+  };
+}
+async function readLockedGitHubRulebook(entry, configDir, options2) {
+  const cachePath = getRulebookCachePath(entry, { ...options2, cacheConfigDir: configDir });
+  if (existsSync6(cachePath)) {
+    const content = readFileSync5(cachePath, "utf-8");
+    if (sha256Digest(content) === entry.digest) {
+      return { entry, rulebook: assertRulebookMatchesLockEntry(content, entry), content };
+    }
+  }
+  return fetchLockedGitHubRulebook(entry);
+}
+async function fetchLockedGitHubRulebook(entry) {
+  const rawResponse = await fetch(`https://raw.githubusercontent.com/${entry.owner}/${entry.repo}/${entry.commit}/${entry.path}`);
+  if (!rawResponse.ok) {
+    throw new Error(`Failed to restore ${entry.spec}: GitHub raw returned ${rawResponse.status}`);
+  }
+  const content = await rawResponse.text();
+  if (sha256Digest(content) !== entry.digest) {
+    throw new Error(`locked GitHub digest mismatch for ${entry.spec}; run ${RULE_SYNC_COMMAND}`);
+  }
+  return { entry, rulebook: assertRulebookMatchesLockEntry(content, entry), content };
+}
+function assertRulebookMatchesLockEntry(content, entry) {
+  const rulebook = assertValidRulebook(JSON.parse(content));
+  if (rulebook.name !== entry.name) {
+    throw new Error(`rulebook name "${rulebook.name}" must match lock entry "${entry.name}"`);
+  }
+  return rulebook;
+}
+async function resolveGitHubCommit(owner, repo, ref, source) {
+  const commitResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits/${encodeURIComponent(ref)}`);
+  if (!commitResponse.ok) {
+    throw new Error(`Failed to resolve ${source}: GitHub returned ${commitResponse.status}`);
+  }
+  const commitJson = await commitResponse.json();
+  if (!commitJson.sha) {
+    throw new Error(`Failed to resolve commit for ${source}`);
+  }
+  return commitJson.sha;
+}
+function getLocalRulebookPath(configDir, name) {
+  return join5(configDir, name, RULEBOOK_FILE);
+}
+function sha256Digest(content) {
+  return `sha256:${createHash("sha256").update(content).digest("hex")}`;
+}
+
+// src/core/rules/policy/scope-policy.ts
+function loadRulesPolicy(options2 = {}) {
+  const paths = getPolicyPaths(options2);
+  const user = readRulesConfig(paths.userConfigPath);
+  const project = readRulesConfig(paths.projectConfigPath);
+  const errors = [
+    ...getLegacyRulesConfigErrors(paths, options2),
+    ...user.errors.map((error) => `${paths.userConfigPath}: ${error}`),
+    ...project.errors.map((error) => `${paths.projectConfigPath}: ${error}`)
+  ];
+  const userPolicy = user.config ? loadScopePolicy(user.config, paths.userLockPath, dirname6(paths.userConfigPath), options2, "user") : emptyScopePolicy();
+  const projectPolicy = project.config ? loadScopePolicy(project.config, paths.projectLockPath, dirname6(paths.projectConfigPath), options2, "project") : emptyScopePolicy();
+  const duplicateNames = getDuplicateRulebookNames([
+    ...user.config ? getConfiguredLockEntries(user.config, paths.userLockPath) : [],
+    ...project.config ? getConfiguredLockEntries(project.config, paths.projectLockPath) : []
+  ]);
+  const overrides = { ...user.config?.overrides ?? {}, ...project.config?.overrides ?? {} };
+  const knownRuleIds = new Set([...userPolicy.knownRuleIds, ...projectPolicy.knownRuleIds]);
+  return {
+    rules: applyOverrides([...userPolicy.rules, ...projectPolicy.rules], overrides),
+    rulebooks: [...userPolicy.rulebooks, ...projectPolicy.rulebooks],
+    errors: [
+      ...errors,
+      ...userPolicy.errors,
+      ...projectPolicy.errors,
+      ...duplicateNames.map((name) => `duplicate active rulebook name "${name}"`),
+      ...userPolicy.canValidateOverrides && projectPolicy.canValidateOverrides ? getUnknownOverrideErrors(overrides, knownRuleIds) : []
+    ],
+    userConfig: user.config ?? undefined,
+    projectConfig: project.config ?? undefined,
+    ...paths
+  };
+}
+function getRulesConfigSourceDisplayMap(configPath) {
+  const config = readRulesConfig(configPath).config;
+  const lock = readLockfile(getRulesLockPathForConfigPath(configPath)).lock;
+  if (!config || !lock)
+    return new Map;
+  const configuredSources = new Set(config.rules);
+  return new Map(lock.rulebooks.filter((entry) => configuredSources.has(entry.spec)).map((entry) => [entry.spec, getRulebookDisplaySource(entry)]));
+}
+function getRulesConfigRuntimeErrorsForConfig(configPath, lockPath, options2) {
+  const loaded = loadScopePolicyForConfig(configPath, lockPath, options2);
+  if (!loaded)
+    return [];
+  return [...loaded.scope.errors, ...getUnknownOverrideErrorsForScope(loaded.config, loaded.scope)];
+}
+function loadScopePolicyForConfig(configPath, lockPath, options2) {
+  const config = readRulesConfig(configPath).config;
+  if (!config) {
+    return null;
+  }
+  return {
+    config,
+    scope: loadScopePolicy(config, lockPath, dirname6(configPath), options2, "project")
+  };
+}
+function getUnknownOverrideErrorsForScope(config, scope) {
+  return scope.canValidateOverrides ? getUnknownOverrideErrors(config.overrides ?? {}, scope.knownRuleIds) : [];
+}
+function loadScopePolicy(config, lockPath, configDir, options2, source) {
+  const lockResult = readLockfile(lockPath);
+  if (lockResult.errors.length > 0) {
+    return { ...emptyScopePolicy(), errors: lockResult.errors, canValidateOverrides: false };
+  }
+  const lock = lockResult.lock;
+  if (!lock && config.rules.length > 0) {
+    return {
+      ...emptyScopePolicy(),
+      errors: [`missing lockfile ${lockPath}; run ${RULE_SYNC_COMMAND}`],
+      canValidateOverrides: false
+    };
+  }
+  const entries = lock?.rulebooks ?? [];
+  const entriesBySpec = new Map(entries.map((entry) => [entry.spec, entry]));
+  const errors = [];
+  const loaded = config.rules.flatMap((spec) => {
+    const entry = entriesBySpec.get(spec);
+    if (!entry) {
+      errors.push(`missing lock entry for ${spec}; run ${RULE_SYNC_COMMAND}`);
+      return [];
+    }
+    const loadedRulebook = loadLockedRulebook(entry, configDir, options2);
+    if (loadedRulebook.errors.length > 0 || !loadedRulebook.rulebook) {
+      errors.push(...loadedRulebook.errors);
+      return [];
+    }
+    const rulebook = loadedRulebook.rulebook;
+    return [
+      {
+        rules: rulebook.rules.map((rule) => ({ ...rule, name: `${rulebook.name}/${rule.name}` })),
+        rulebook: {
+          source,
+          spec: entry.spec,
+          name: rulebook.name,
+          version: rulebook.version,
+          rules: rulebook.rules.map((rule) => `${rulebook.name}/${rule.name}`)
+        }
+      }
+    ];
+  });
+  const rules = loaded.flatMap((item) => item.rules);
+  return {
+    rules,
+    rulebooks: loaded.map((item) => item.rulebook),
+    entries,
+    knownRuleIds: new Set(rules.map((rule) => rule.name)),
+    errors,
+    canValidateOverrides: errors.length === 0
+  };
+}
+function loadLockedRulebook(entry, configDir, options2) {
+  const errors = [];
+  const cachePath = getRulebookCachePath(entry, { ...options2, cacheConfigDir: configDir });
+  if (!existsSync7(cachePath)) {
+    return {
+      rulebook: null,
+      errors: [`missing cache entry for ${entry.spec}; run ${RULE_SYNC_COMMAND}`]
+    };
+  }
+  let cacheContent;
+  try {
+    cacheContent = readFileSync6(cachePath, "utf-8");
+  } catch (error) {
+    return {
+      rulebook: null,
+      errors: [
+        `failed to read cached rulebook for ${entry.spec}: ${error instanceof Error ? error.message : String(error)}`
+      ]
+    };
+  }
+  if (sha256Digest(cacheContent) !== entry.digest) {
+    errors.push(`cache digest mismatch for ${entry.spec}; run ${RULE_SYNC_COMMAND}`);
+  }
+  let rulebook = null;
+  try {
+    const parsed = JSON.parse(cacheContent);
+    assertValidRulebook(parsed);
+    rulebook = parsed;
+  } catch (error) {
+    errors.push(`invalid cached rulebook for ${entry.spec}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (entry.kind === "local-directory") {
+    const sourcePath = resolve5(configDir, entry.path);
+    const sourceRelative = relative(resolve5(configDir), sourcePath);
+    if (sourceRelative === ".." || sourceRelative.startsWith(`..${sep4}`) || isAbsolute6(sourceRelative)) {
+      errors.push(`lockfile local source path for ${entry.spec} must stay within ${configDir}; run ${RULE_SYNC_COMMAND}`);
+      return { rulebook: null, errors };
+    }
+    const localPath = join6(sourcePath, RULEBOOK_FILE);
+    if (!existsSync7(localPath)) {
+      errors.push(`missing local source for ${entry.spec}; run ${RULE_SYNC_COMMAND}`);
+    } else {
+      try {
+        const localContent = readFileSync6(localPath, "utf-8");
+        if (sha256Digest(localContent) !== entry.digest) {
+          errors.push(getLocalSourceDriftError(entry.spec, localContent));
+        }
+      } catch (error) {
+        errors.push(`failed to read local source for ${entry.spec}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+  return { rulebook: errors.length === 0 ? rulebook : null, errors };
+}
+function rulesPolicyToConfig(policy) {
+  if (policy.errors.length > 0) {
+    return {
+      version: 1,
+      rules: [],
+      failClosedReason: withTerminalPeriod(policy.errors.join("; "))
+    };
+  }
+  return { version: 1, rules: policy.rules };
+}
+function getLegacyRulesConfigErrors(paths, options2) {
+  return Array.from(new Set([
+    ...getLegacyRulesConfigError(getLegacyUserRulesConfigPath(options2), paths.userConfigPath, "~/.cc-safety-net/config.json"),
+    ...getLegacyRulesConfigError(getLegacyProjectRulesConfigPath(options2), paths.projectConfigPath, ".safety-net.json")
+  ]));
+}
+function getLegacyRulesConfigError(legacyPath, configPath, migratedFrom) {
+  if (!existsSync7(legacyPath))
+    return [];
+  if (hasMigrationEvidence(configPath, migratedFrom))
+    return [];
+  return [
+    `legacy rules config location is no longer used; ask the user to run ${RULE_MIGRATE_COMMAND}`
+  ];
+}
+function hasMigrationEvidence(configPath, migratedFrom) {
+  const config = readRulesConfig(configPath).config;
+  if (!config)
+    return false;
+  return config.rules.some((source) => getRulebookMigratedFrom(dirname6(configPath), source) === migratedFrom);
+}
+function getRulebookMigratedFrom(configDir, source) {
+  if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(source))
+    return null;
+  const path = join6(configDir, source, RULEBOOK_FILE);
+  if (!existsSync7(path))
+    return null;
+  try {
+    const rulebook = JSON.parse(readFileSync6(path, "utf-8"));
+    return typeof rulebook.migrated_from === "string" ? rulebook.migrated_from : null;
+  } catch {
+    return null;
+  }
+}
+function getLocalSourceDriftError(spec, content) {
+  try {
+    assertValidRulebook(JSON.parse(content));
+  } catch (error) {
+    return `invalid local rulebook for ${spec}: ${error instanceof Error ? error.message : String(error)}; fix the rulebook, then run ${RULE_SYNC_COMMAND}`;
+  }
+  return `local source digest mismatch for ${spec}; run ${RULE_SYNC_COMMAND}`;
+}
+function applyOverrides(rules, overrides) {
+  return rules.flatMap((rule) => {
+    const override = overrides[rule.name];
+    if (override === "off") {
+      return [];
+    }
+    if (override && typeof override === "object") {
+      return [{ ...rule, reason: override.reason }];
+    }
+    return [rule];
+  });
+}
+function getUnknownOverrideErrors(overrides, knownRuleIds) {
+  return Object.keys(overrides).filter((key) => !knownRuleIds.has(key)).map((key) => `unknown override key "${key}"`);
+}
+function getDuplicateRulebookNames(entries) {
+  const seen = new Set;
+  const duplicates = new Set;
+  for (const entry of entries) {
+    if (seen.has(entry.name)) {
+      duplicates.add(entry.name);
+      continue;
+    }
+    seen.add(entry.name);
+  }
+  return [...duplicates];
+}
+function getConfiguredLockEntries(config, path) {
+  return (readLockfile(path).lock?.rulebooks ?? []).filter((entry) => config.rules.includes(entry.spec));
+}
+function emptyScopePolicy() {
+  return {
+    rules: [],
+    rulebooks: [],
+    entries: [],
+    knownRuleIds: new Set,
+    errors: [],
+    canValidateOverrides: true
+  };
+}
+function withTerminalPeriod(message) {
+  return /[.!?]$/.test(message) ? message : `${message}.`;
+}
+
+// src/core/rules/policy/sync.ts
+import {
+  existsSync as existsSync8,
+  lstatSync as lstatSync4,
+  mkdirSync as mkdirSync2,
+  readdirSync,
+  readFileSync as readFileSync7,
+  rmdirSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync as writeFileSync2
+} from "node:fs";
+import { dirname as dirname7, isAbsolute as isAbsolute7, join as join7, relative as relative2, resolve as resolve6, sep as sep5 } from "node:path";
+async function syncRulesConfig(options2 = {}) {
+  const internalOptions = options2;
+  const scope = getScopePaths(options2);
+  const scopeConfig = readScopeRulesConfig(scope.configPath);
+  if (!scopeConfig.ok)
+    return scopeConfig.result;
+  const config = scopeConfig.config;
+  if (options2.check) {
+    return checkRulesConfig(config, scope.configDir, scope.lockPath, options2);
+  }
+  try {
+    const existingLockResult = readLockfile(scope.lockPath);
+    if (options2.only && existingLockResult.errors.length > 0) {
+      return { ok: false, errors: existingLockResult.errors, warnings: [], entries: [] };
+    }
+    const previousLock = existingLockResult.errors.length > 0 ? null : existingLockResult.lock;
+    const selectedSpecs = options2.only ? getSelectedUpdateSpecs(config, previousLock, options2.only) : { ok: true, specs: config.rules };
+    if (!selectedSpecs.ok) {
+      return selectedSpecs.result;
+    }
+    if (options2.only && !previousLock && selectedSpecs.specs.length < config.rules.length) {
+      return {
+        ok: false,
+        errors: [`No lockfile available for partial update; run ${RULE_SYNC_COMMAND}`],
+        warnings: [],
+        entries: []
+      };
+    }
+    const resolved = (await Promise.all(selectedSpecs.specs.map((spec) => resolveRulebookSourceForSync(spec, scope.configDir, options2, previousLock)))).map((item) => preserveDisplayRef(item, previousLock, internalOptions.discoveredDisplayRefs));
+    for (const item of resolved) {
+      writeCache(item.content, item.entry, scope.configDir, options2);
+    }
+    const entries = options2.only ? mergeSelectedLockEntries(config, previousLock, resolved) : resolved.map((item) => item.entry);
+    writeJsonAtomic(scope.lockPath, { version: 1, rulebooks: entries });
+    const ruleCountsBySpec = new Map(resolved.map((item) => [item.entry.spec, item.rulebook.rules.length]));
+    const warnings = pruneUnreferencedRulebookCaches(entries, scope.configDir, options2);
+    return {
+      ok: true,
+      errors: [],
+      warnings,
+      entries: entries.map((entry) => addRuleCount(entry, ruleCountsBySpec))
+    };
+  } catch (error) {
+    return failWithError(error);
+  }
+}
+async function testRulebookSources(sources, options2 = {}) {
+  const scope = getScopePaths(options2);
+  try {
+    const resolved = await Promise.all(sources.map((spec) => resolveRulebookSource(spec, scope.configDir, options2)));
+    const ruleCountsBySpec = new Map(resolved.map((item) => [item.entry.spec, item.rulebook.rules.length]));
+    const testCountsBySpec = new Map(resolved.map((item) => [item.entry.spec, item.rulebook.tests.length]));
+    const fixtureErrors = resolved.flatMap((item) => runRulebookFixtures(item.rulebook).failures.map((failure) => [
+      `${item.entry.spec}: ${failure.command}: ${failure.message}`,
+      ...failure.trace.map((line) => `  ${line}`)
+    ].join(`
+`)));
+    return {
+      ok: fixtureErrors.length === 0,
+      errors: fixtureErrors,
+      warnings: [],
+      entries: resolved.map((item) => ({
+        ...addRuleCount(item.entry, ruleCountsBySpec),
+        testCount: testCountsBySpec.get(item.entry.spec)
+      }))
+    };
+  } catch (error) {
+    return failWithError(error);
+  }
+}
+async function addRulebookSource(source, options2 = {}) {
+  const scope = getScopePaths(options2);
+  mkdirSync2(scope.configDir, { recursive: true });
+  const before = existsSync8(scope.configPath) ? readFileSync7(scope.configPath, "utf-8") : null;
+  const scopeConfig = readScopeRulesConfig(scope.configPath);
+  if (!scopeConfig.ok)
+    return scopeConfig.result;
+  const config = scopeConfig.config;
+  let discoveredSources;
+  try {
+    discoveredSources = isGitHubRepositorySource(source) ? await discoverGitHubRepositoryRulebooks(source) : [{ spec: source }];
+  } catch (error) {
+    return {
+      ok: false,
+      errors: [error instanceof Error ? error.message : String(error)],
+      warnings: [],
+      entries: []
+    };
+  }
+  const sources = discoveredSources.map((item) => item.spec);
+  const nextRules = [...config.rules, ...sources.filter((item) => !config.rules.includes(item))];
+  if (nextRules.length !== config.rules.length) {
+    writeJsonAtomic(scope.configPath, {
+      version: 1,
+      rules: nextRules,
+      overrides: config.overrides ?? {}
+    });
+  }
+  const result = await syncRulesConfig({
+    ...options2,
+    discoveredDisplayRefs: new Map(discoveredSources.filter((item) => !!item.display_ref).map((item) => [item.spec, item.display_ref]))
+  });
+  if (!result.ok) {
+    restoreConfig(scope.configPath, before);
+  }
+  return result;
+}
+async function removeRulebookSource(match, options2 = {}) {
+  const scope = getScopePaths(options2);
+  const loaded = readRulesConfig(scope.configPath);
+  if (loaded.errors.length > 0) {
+    return { ok: false, errors: loaded.errors, warnings: [], entries: [] };
+  }
+  if (!loaded.config) {
+    return {
+      ok: false,
+      errors: [`No config found at ${scope.configPath}`],
+      warnings: [],
+      entries: []
+    };
+  }
+  const lockResult = readLockfile(scope.lockPath);
+  if (lockResult.errors.length > 0) {
+    return { ok: false, errors: lockResult.errors, warnings: [], entries: [] };
+  }
+  const matches = getRemoveMatches(loaded.config.rules, lockResult.lock, match);
+  if (!matches.ok)
+    return matches.result;
+  const sourceDirs = options2.deleteSource ? getLocalSourceDirsForDelete(scope.configDir, matches.specs, lockResult.lock) : { ok: true, dirs: [] };
+  if (!sourceDirs.ok)
+    return sourceDirs.result;
+  const before = readFileSync7(scope.configPath, "utf-8");
+  writeJsonAtomic(scope.configPath, {
+    version: 1,
+    rules: loaded.config.rules.filter((spec) => !matches.specs.includes(spec)),
+    overrides: loaded.config.overrides ?? {}
+  });
+  const result = await syncRulesConfig(options2);
+  if (!result.ok) {
+    restoreConfig(scope.configPath, before);
+    return result;
+  }
+  const deleteResult = deleteLocalSourceDirs(sourceDirs.dirs);
+  if (!deleteResult.ok) {
+    restoreConfig(scope.configPath, before);
+    const rollback = await syncRulesConfig(options2);
+    if (!rollback.ok) {
+      return {
+        ok: false,
+        errors: [...deleteResult.result.errors, ...rollback.errors],
+        warnings: rollback.warnings,
+        entries: rollback.entries
+      };
+    }
+    return deleteResult.result;
+  }
+  return result;
+}
+function repairLocalRulesPolicy(options2 = {}) {
+  repairLocalRulesScope({ ...options2, global: true });
+  repairLocalRulesScope({ ...options2, global: false });
+}
+async function checkRulesConfig(config, configDir, lockPath, options2) {
+  const result = loadScopePolicy(config, lockPath, configDir, options2, "project");
+  return {
+    ok: result.errors.length === 0,
+    errors: result.errors,
+    warnings: [],
+    entries: result.entries
+  };
+}
+function repairLocalRulesScope(options2) {
+  const scope = getScopePaths(options2);
+  const loaded = readRulesConfig(scope.configPath);
+  if (!loaded.config || loaded.errors.length > 0 || loaded.config.rules.length === 0) {
+    return;
+  }
+  if (!loaded.config.rules.every((spec) => /^[a-zA-Z0-9_-]{1,64}$/.test(spec))) {
+    return;
+  }
+  try {
+    const resolved = loaded.config.rules.map((spec) => resolveLocalRulebook(spec, scope.configDir, options2));
+    for (const item of resolved) {
+      writeCache(item.content, item.entry, scope.configDir, options2);
+    }
+    writeJsonAtomic(scope.lockPath, {
+      version: 1,
+      rulebooks: resolved.map((item) => item.entry)
+    });
+  } catch {}
+}
+function preserveDisplayRef(item, previousLock, discoveredDisplayRefs) {
+  const previousEntry = previousLock?.rulebooks.find((entry) => entry.spec === item.entry.spec && entry.kind === "github");
+  const displayRef = discoveredDisplayRefs?.get(item.entry.spec) ?? (previousEntry?.kind === "github" ? previousEntry.display_ref : undefined);
+  if (!displayRef || item.entry.kind !== "github")
+    return item;
+  return { ...item, entry: { ...item.entry, display_ref: displayRef } };
+}
+function mergeSelectedLockEntries(config, previousLock, resolved) {
+  const configuredSpecs = new Set(config.rules);
+  const previousSpecs = new Set(previousLock?.rulebooks.map((entry) => entry.spec) ?? []);
+  const resolvedBySpec = new Map(resolved.map((item) => [item.entry.spec, item.entry]));
+  return [
+    ...(previousLock?.rulebooks.filter((entry) => configuredSpecs.has(entry.spec)) ?? []).map((entry) => resolvedBySpec.get(entry.spec) ?? entry),
+    ...resolved.filter((item) => !previousSpecs.has(item.entry.spec)).map((item) => item.entry)
+  ];
+}
+function addRuleCount(entry, ruleCountsBySpec) {
+  return {
+    ...entry,
+    ruleCount: ruleCountsBySpec.get(entry.spec)
+  };
+}
+function writeCache(content, entry, configDir, options2) {
+  const path = getRulebookCachePath(entry, { ...options2, cacheConfigDir: configDir });
+  mkdirSync2(dirname7(path), { recursive: true });
+  writeFileSync2(path, content, "utf-8");
+}
+function pruneUnreferencedRulebookCaches(entries, configDir, options2) {
+  const cacheRoot = join7(dirname7(configDir), "cache", "rulebooks");
+  if (!existsSync8(cacheRoot))
+    return [];
+  const keep = new Set(entries.map((entry) => dirname7(getRulebookCachePath(entry, { ...options2, cacheConfigDir: configDir }))));
+  return readdirSync(cacheRoot, { withFileTypes: true }).filter((entry) => entry.isDirectory()).flatMap((entry) => {
+    const path = join7(cacheRoot, entry.name);
+    if (keep.has(path))
+      return [];
+    try {
+      rmSync(path, { recursive: true, force: true });
+      return [];
+    } catch (error) {
+      return [
+        `Failed to prune rulebook cache entry ${path}: ${error instanceof Error ? error.message : String(error)}`
+      ];
+    }
+  });
+}
+function getLocalSourceDirsForDelete(configDir, specs, lock) {
+  const entriesBySpec = new Map(lock?.rulebooks.map((entry) => [entry.spec, entry]) ?? []);
+  const errors = specs.flatMap((spec) => {
+    const entry = entriesBySpec.get(spec);
+    if (!entry) {
+      return NAME_PATTERN.test(spec) ? [] : ["--delete-source can only delete local rulebook sources"];
+    }
+    return entry.kind === "local-directory" ? [] : ["--delete-source can only delete local rulebook sources"];
+  });
+  const dirs = specs.map((spec) => {
+    const entry = entriesBySpec.get(spec);
+    return join7(configDir, entry?.kind === "local-directory" ? entry.path : spec);
+  });
+  const dirErrors = errors.length > 0 ? [] : dirs.flatMap((dir) => getLocalSourceDirDeleteError(configDir, dir));
+  const allErrors = [...errors, ...dirErrors];
+  return allErrors.length > 0 ? { ok: false, result: { ok: false, errors: allErrors, warnings: [], entries: [] } } : { ok: true, dirs };
+}
+function getLocalSourceDirDeleteError(configDir, dir) {
+  const resolvedConfigDir = resolve6(configDir);
+  const resolvedDir = resolve6(dir);
+  const relativeDir = relative2(resolvedConfigDir, resolvedDir);
+  if (relativeDir === "" || relativeDir === ".." || relativeDir.startsWith(`..${sep5}`) || isAbsolute7(relativeDir)) {
+    return [`Refusing to delete local rulebook source outside ${configDir}: ${dir}`];
+  }
+  if (!existsSync8(resolvedDir))
+    return [`Local rulebook source directory not found: ${dir}`];
+  if (!lstatSync4(resolvedDir).isDirectory()) {
+    return [`Local rulebook source is not a directory: ${dir}`];
+  }
+  const entries = readdirSync(resolvedDir);
+  if (!entries.includes("rulebook.json")) {
+    return [`Local rulebook source directory is missing rulebook.json: ${dir}`];
+  }
+  if (!lstatSync4(join7(resolvedDir, "rulebook.json")).isFile()) {
+    return [`Local rulebook source rulebook.json is not a file: ${dir}`];
+  }
+  if (entries.length > 1) {
+    return [
+      `Local rulebook source directory contains extra files: ${dir}. delete manually if you really want to remove the directory.`
+    ];
+  }
+  return [];
+}
+function deleteLocalSourceDirs(dirs) {
+  const errors = dirs.flatMap((dir) => {
+    try {
+      unlinkSync(join7(dir, "rulebook.json"));
+      rmdirSync(dir);
+      return [];
+    } catch (error) {
+      return [
+        `Failed to delete local rulebook source ${dir}: ${error instanceof Error ? error.message : String(error)}`
+      ];
+    }
+  });
+  return errors.length > 0 ? { ok: false, result: { ok: false, errors, warnings: [], entries: [] } } : { ok: true };
+}
+function restoreConfig(path, content) {
+  if (content === null) {
+    rmSync(path, { force: true });
+    return;
+  }
+  writeFileSync2(path, content, "utf-8");
+}
+function failWithError(error) {
+  return {
+    ok: false,
+    errors: [error instanceof Error ? error.message : String(error)],
+    warnings: [],
+    entries: []
+  };
+}
+
+// src/core/config.ts
+function loadConfig(cwd, options2) {
+  const safeCwd = typeof cwd === "string" ? cwd : process.cwd();
+  if (options2?.repairLocalRulebooks) {
+    repairLocalRulesPolicy({ cwd: safeCwd, userConfigDir: options2.userConfigDir });
+  }
+  return rulesPolicyToConfig(loadRulesPolicy({ cwd: safeCwd, userConfigDir: options2?.userConfigDir }));
+}
+function validateConfig(config) {
+  const errors = [];
+  const ruleNames = new Set;
+  if (!config || typeof config !== "object") {
+    errors.push("Config must be an object");
+    return { errors, ruleNames };
+  }
+  const cfg = config;
+  if (cfg.version !== 1) {
+    errors.push("version must be 1");
+  }
+  if (cfg.rules !== undefined) {
+    if (!Array.isArray(cfg.rules)) {
+      errors.push("rules must be an array");
+    } else {
+      for (let i = 0;i < cfg.rules.length; i++) {
+        errors.push(...validateCustomRule(cfg.rules[i], i, ruleNames));
+      }
+    }
+  }
+  return { errors, ruleNames };
+}
+function validateConfigFile(path) {
+  return validateParsedConfigFile(path, validateConfig);
+}
+function readConfigFileInput(path) {
+  const errors = [];
+  const ruleNames = new Set;
+  if (!existsSync9(path)) {
+    errors.push(`File not found: ${path}`);
+    return { ok: false, result: { errors, ruleNames } };
+  }
+  try {
+    const content = readFileSync8(path, "utf-8");
+    if (!content.trim()) {
+      errors.push("Config file is empty");
+      return { ok: false, result: { errors, ruleNames } };
+    }
+    return { ok: true, parsed: JSON.parse(content) };
+  } catch (e) {
+    errors.push(`Invalid JSON: ${e instanceof Error ? e.message : String(e)}`);
+    return { ok: false, result: { errors, ruleNames } };
+  }
+}
+function getLegacyProjectConfigPath(cwd) {
+  return resolve7(cwd ?? process.cwd(), ".safety-net.json");
+}
+function validateRulesConfigFile(path) {
+  const loaded = readConfigFileInput(path);
+  if (!loaded.ok)
+    return loaded.result;
+  const result = validateRulesConfig(loaded.parsed);
+  return { errors: result.errors, ruleNames: result.sources };
+}
+function validateParsedConfigFile(path, validate) {
+  const loaded = readConfigFileInput(path);
+  if (!loaded.ok)
+    return loaded.result;
+  return validate(loaded.parsed);
+}
+
 // src/core/analyze/index.ts
 function analyzeCommand(command2, options2 = {}) {
   const config = options2.config ?? loadConfig(options2.cwd);
   return analyzeCommandInternal(command2, 0, { ...options2, config });
 }
 
+// src/core/audit.ts
+import { appendFileSync, existsSync as existsSync10, mkdirSync as mkdirSync3 } from "node:fs";
+import { homedir as homedir3 } from "node:os";
+import { join as join8 } from "node:path";
+function sanitizeSessionIdForFilename(sessionId) {
+  const raw = sessionId.trim();
+  if (!raw) {
+    return null;
+  }
+  let safe = raw.replace(/[^A-Za-z0-9_.-]+/g, "_");
+  safe = safe.replace(/^[._-]+|[._-]+$/g, "").slice(0, 128);
+  if (!safe || safe === "." || safe === "..") {
+    return null;
+  }
+  return safe;
+}
+function writeAuditLog(sessionId, command2, segment, reason, cwd, options2 = {}) {
+  const safeSessionId = sanitizeSessionIdForFilename(sessionId);
+  if (!safeSessionId) {
+    return;
+  }
+  const home = options2.homeDir ?? homedir3();
+  const logsDir = join8(home, ".cc-safety-net", "logs");
+  try {
+    if (!existsSync10(logsDir)) {
+      mkdirSync3(logsDir, { recursive: true });
+    }
+    const logFile = join8(logsDir, `${safeSessionId}.jsonl`);
+    const entry = {
+      ts: new Date().toISOString(),
+      decision: options2.decision ?? "deny",
+      command: redactSecrets(command2).slice(0, 300),
+      segment: redactSecrets(segment).slice(0, 300),
+      reason,
+      cwd
+    };
+    appendFileSync(logFile, `${JSON.stringify(entry)}
+`, "utf-8");
+  } catch {}
+}
+function redactSecrets(text) {
+  let result = text;
+  result = result.replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "<redacted>");
+  result = result.replace(/\b((?:DATABASE|POSTGRES|POSTGRESQL|MYSQL|MARIADB|REDIS|MONGO(?:DB)?|DB)_URL)=([^\s]+)/gi, "$1=<redacted>");
+  result = result.replace(/\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASS|KEY|CREDENTIALS)[A-Z0-9_]*)=([^\s]+)/gi, "$1=<redacted>");
+  result = result.replace(/(['"]?\s*(?:authorization|cookie|x-api-key|api-key)\s*:\s*)([^'"\r\n]+)(['"]?)/gi, "$1<redacted>$3");
+  result = result.replace(/(['"]?\s*authorization\s*:\s*)([^'"]+)(['"]?)/gi, "$1<redacted>$3");
+  result = result.replace(/(authorization\s*:\s*)([^\s"']+)(\s+[^\s"']+)?/gi, "$1<redacted>");
+  result = result.replace(/\b([a-z][a-z0-9+.-]*:\/\/)([^\s/:@]+):([^\s@/]+)@/gi, "$1<redacted>:<redacted>@");
+  result = result.replace(/\b([a-z][a-z0-9+.-]*:\/\/)([^\s/@:]+)@/gi, "$1<redacted>@");
+  result = result.replace(/\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, "<redacted>");
+  result = result.replace(/\bxoxb-[A-Za-z0-9-]{20,}\b/g, "<redacted>");
+  result = result.replace(/\bnpm_[A-Za-z0-9_]{20,}\b/g, "<redacted>");
+  result = result.replace(/\b[rs]k_(?:live|test)_[A-Za-z0-9_]{20,}\b/g, "<redacted>");
+  result = result.replace(/\bpypi-[A-Za-z0-9_-]{20,}\b/g, "<redacted>");
+  result = result.replace(/\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{6,}\b/g, "<redacted>");
+  result = result.replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, "<redacted>");
+  return result;
+}
+
+// src/bin/hook/common.ts
+var REASON_SAFETY_NET_FAILED_CLOSED = "Safety Net failed closed because command analysis failed unexpectedly.";
+async function readHookInput(outputDeny) {
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
+  }
+  const inputText = Buffer.concat(chunks).toString("utf-8").trim();
+  if (!inputText) {
+    outputDeny("Missing hook input JSON.");
+    return null;
+  }
+  return parseHookJson(inputText, outputDeny, "Failed to parse hook input JSON.");
+}
+function parseHookJson(inputText, outputDeny, strictReason) {
+  try {
+    return JSON.parse(inputText);
+  } catch {
+    outputDeny(strictReason);
+    return null;
+  }
+}
+function analyzeHookCommand(command2, cwd) {
+  const paranoidAll = envTruthy(ENV_FLAGS.paranoid);
+  return analyzeCommand(command2, {
+    cwd,
+    config: loadConfig(cwd, { repairLocalRulebooks: true }),
+    strict: envTruthy(ENV_FLAGS.strict),
+    paranoidRm: paranoidAll || envTruthy(ENV_FLAGS.paranoidRm),
+    paranoidInterpreters: paranoidAll || envTruthy(ENV_FLAGS.paranoidInterpreters),
+    worktreeMode: envTruthy(ENV_FLAGS.worktree)
+  });
+}
+function handleBlockedHookCommand(command2, cwd, sessionId, outputDeny) {
+  let result;
+  try {
+    result = analyzeHookCommand(command2, cwd);
+  } catch {
+    outputDeny(REASON_SAFETY_NET_FAILED_CLOSED, command2, command2);
+    return;
+  }
+  if (!result) {
+    if (sessionId && envTruthy(ENV_FLAGS.debug)) {
+      writeAuditLog(sessionId, command2, command2, "allowed", cwd, { decision: "allow" });
+    }
+    return;
+  }
+  if (sessionId) {
+    writeAuditLog(sessionId, command2, result.segment, result.reason, cwd);
+  }
+  outputDeny(result.reason, command2, result.segment);
+}
+async function runHookAdapter(adapter) {
+  const input = await readHookInput(adapter.outputDeny);
+  if (!input) {
+    return;
+  }
+  if (!adapter.isSupported(input)) {
+    return;
+  }
+  const command2 = adapter.getCommand(input, adapter.outputDeny);
+  if (!command2) {
+    return;
+  }
+  handleBlockedHookCommand(command2, adapter.getCwd(input) ?? process.cwd(), adapter.getSessionId(input), adapter.outputDeny);
+}
+
+// src/core/format.ts
+function formatBlockedMessage(input) {
+  const { reason, command: command2, segment } = input;
+  const maxLen = input.maxLen ?? 200;
+  const redact = input.redact ?? ((t) => t);
+  let message = `BLOCKED by CC SafetyNet
+
+Reason: ${reason}`;
+  if (command2) {
+    const safeCommand = redact(command2);
+    message += `
+
+Command: ${excerpt(safeCommand, maxLen)}`;
+  }
+  if (segment && segment !== command2) {
+    const safeSegment = redact(segment);
+    message += `
+
+Segment: ${excerpt(safeSegment, maxLen)}`;
+  }
+  if (input.manualPermissionAdvice !== false) {
+    message += `
+
+If this operation is truly needed, ask the user for explicit permission and have them run the command manually.`;
+  }
+  return message;
+}
+function excerpt(text, maxLen) {
+  return text.length > maxLen ? `${text.slice(0, maxLen)}...` : text;
+}
+
+// src/bin/hook/claude-code.ts
+function outputDeny(reason, command2, segment) {
+  const message = formatBlockedMessage({
+    reason,
+    command: command2,
+    segment,
+    redact: redactSecrets,
+    manualPermissionAdvice: reason.includes("rule sync") ? false : undefined
+  });
+  const output = {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: message
+    }
+  };
+  console.log(JSON.stringify(output));
+}
+async function runClaudeCodeHook() {
+  await runHookAdapter({
+    outputDeny,
+    isSupported: (input) => input.tool_name === "Bash",
+    getCommand: (input) => input.tool_input?.command,
+    getCwd: (input) => input.cwd,
+    getSessionId: (input) => input.session_id
+  });
+}
+
+// src/bin/hook/copilot-cli.ts
+function outputCopilotDeny(reason, command2, segment) {
+  const message = formatBlockedMessage({
+    reason,
+    command: command2,
+    segment,
+    redact: redactSecrets
+  });
+  const output = {
+    permissionDecision: "deny",
+    permissionDecisionReason: message
+  };
+  console.log(JSON.stringify(output));
+}
+async function runCopilotCliHook() {
+  await runHookAdapter({
+    outputDeny: outputCopilotDeny,
+    isSupported: (input) => input.toolName === "bash",
+    getCommand: (input, outputDeny2) => parseHookJson(input.toolArgs, outputDeny2, "Failed to parse toolArgs JSON.")?.command,
+    getCwd: (input) => input.cwd,
+    getSessionId: (input) => `copilot-${input.timestamp ?? Date.now()}`
+  });
+}
+
+// src/bin/hook/gemini-cli.ts
+function outputGeminiDeny(reason, command2, segment) {
+  const message = formatBlockedMessage({
+    reason,
+    command: command2,
+    segment,
+    redact: redactSecrets
+  });
+  const output = {
+    decision: "deny",
+    reason: message,
+    systemMessage: message
+  };
+  console.log(JSON.stringify(output));
+}
+async function runGeminiCLIHook() {
+  await runHookAdapter({
+    outputDeny: outputGeminiDeny,
+    isSupported: (input) => input.hook_event_name === "BeforeTool" && input.tool_name === "run_shell_command",
+    getCommand: (input) => input.tool_input?.command,
+    getCwd: (input) => input.cwd,
+    getSessionId: (input) => input.session_id
+  });
+}
+
+// src/bin/hook/kimi-cli.ts
+function outputKimiDeny(reason, command2, segment, manualPermissionAdvice) {
+  const message = formatBlockedMessage({
+    reason,
+    command: command2,
+    segment,
+    redact: redactSecrets,
+    manualPermissionAdvice
+  });
+  const output = {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "deny",
+      permissionDecisionReason: message
+    }
+  };
+  console.log(JSON.stringify(output));
+}
+async function runKimiCliHook() {
+  await runHookAdapter({
+    outputDeny: outputKimiDeny,
+    isSupported: (input) => input.hook_event_name === "PreToolUse" && input.tool_name === "Shell",
+    getCommand: (input) => input.tool_input?.command,
+    getCwd: (input) => input.cwd,
+    getSessionId: (input) => input.session_id
+  });
+}
+
+// src/bin/hook/integrations.ts
+var hookIntegrations = [
+  {
+    id: "claude-code",
+    displayName: "Claude Code",
+    flags: ["-cc", "--claude-code"],
+    description: "Run as Claude Code PreToolUse hook",
+    legacyTopLevel: true,
+    run: runClaudeCodeHook
+  },
+  {
+    id: "copilot-cli",
+    displayName: "Copilot CLI",
+    flags: ["-cp", "--copilot-cli"],
+    description: "Run as Copilot CLI PreToolUse hook",
+    legacyTopLevel: true,
+    run: runCopilotCliHook
+  },
+  {
+    id: "gemini-cli",
+    displayName: "Gemini CLI",
+    flags: ["-gc", "--gemini-cli"],
+    description: "Run as Gemini CLI BeforeTool hook",
+    legacyTopLevel: true,
+    run: runGeminiCLIHook
+  },
+  {
+    id: "kimi-cli",
+    displayName: "Kimi CLI",
+    flags: ["-kc", "--kimi-cli"],
+    description: "Run as Kimi CLI PreToolUse hook",
+    legacyTopLevel: false,
+    run: runKimiCliHook
+  }
+];
+function findHookIntegrationByFlag(args) {
+  return hookIntegrations.find((integration) => integration.flags.some((flag) => args.includes(flag)));
+}
+function findLegacyTopLevelHookIntegration(flag) {
+  return hookIntegrations.find((integration) => integration.legacyTopLevel && integration.flags.some((integrationFlag) => integrationFlag === flag));
+}
+
+// src/bin/commands/hook.ts
+var platformOptions = hookIntegrations.map((integration) => ({
+  flags: integration.flags.join(", "),
+  description: integration.description
+}));
+var platformExamples = hookIntegrations.flatMap((integration) => integration.flags.map((flag) => `cc-safety-net hook ${flag}`));
+var hookCommand = {
+  name: "hook",
+  description: "Run as an agent CLI hook (reads JSON from stdin)",
+  usage: "hook <coding cli>",
+  subcommands: [
+    { usage: "install --opencode", description: "Install OpenCode hook config" },
+    { usage: "install --kimi-cli", description: "Install Kimi CLI hook config" },
+    { usage: "uninstall --opencode", description: "Uninstall OpenCode hook config" },
+    { usage: "uninstall --kimi-cli", description: "Uninstall Kimi CLI hook config" }
+  ],
+  options: [
+    ...platformOptions,
+    {
+      flags: "-h, --help",
+      description: "Show this help"
+    }
+  ],
+  examples: [...platformExamples, "cc-safety-net hook uninstall --opencode"]
+};
+
+// src/bin/commands/rule.ts
+var ruleCommand = {
+  name: "rule",
+  description: "Manage Safety Net rulebook sources",
+  usage: "rule <subcommand>",
+  subcommands: [
+    { usage: "init", description: "Create starter rule config and rulebook files" },
+    { usage: "add <source>", description: "Add a rulebook source and sync" },
+    { usage: "remove <source>", description: "Remove a rulebook source and sync" },
+    { usage: "update [source]", description: "Refresh rulebook lock/cache state" },
+    { usage: "sync", description: "Sync configured rulebooks" },
+    { usage: "list", description: "List active rulebooks" },
+    { usage: "test [source]", description: "Run rulebook fixtures" },
+    { usage: "migrate [--cleanup]", description: "Migrate legacy inline rules" },
+    { usage: "doc", description: "Print the rulebook authoring guide" },
+    { usage: "verify", description: "Validate rule config files" }
+  ],
+  options: [
+    { flags: "-g, --global", description: "Use user-scope rule config" },
+    { flags: "--check", description: "Check without changing lock/cache state" },
+    { flags: "--cleanup", description: "Delete legacy files after rule migrate verifies them" },
+    { flags: "--delete-source", description: "Delete clean local source directory on remove" },
+    { flags: "-h, --help", description: "Show this help" }
+  ],
+  examples: [
+    "cc-safety-net rule init",
+    "cc-safety-net rule add project-rules",
+    "cc-safety-net rule sync",
+    "cc-safety-net rule migrate --cleanup",
+    "cc-safety-net rule verify"
+  ]
+};
+
+// src/bin/commands/statusline.ts
+var statuslineCommand = {
+  name: "statusline",
+  description: "Print status line with mode indicators for shell integration",
+  usage: "statusline <coding cli>",
+  options: [
+    {
+      flags: "-cc, --claude-code",
+      description: "Print status line for Claude Code"
+    },
+    {
+      flags: "-h, --help",
+      description: "Show this help"
+    }
+  ],
+  examples: ["cc-safety-net statusline -cc", "cc-safety-net statusline --claude-code"]
+};
+
+// src/bin/commands/index.ts
+var commands = [
+  doctorCommand,
+  explainCommand,
+  ruleCommand,
+  hookCommand,
+  statuslineCommand
+];
+function findCommand(nameOrAlias) {
+  const normalized = nameOrAlias.toLowerCase();
+  return commands.find((cmd) => cmd.name.toLowerCase() === normalized || cmd.aliases?.some((alias) => alias.toLowerCase() === normalized));
+}
+function getVisibleCommands() {
+  return commands.filter((cmd) => !cmd.hidden);
+}
+
+// src/bin/doctor/activity.ts
+import { existsSync as existsSync11, readdirSync as readdirSync2, readFileSync as readFileSync9 } from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import { join as join9 } from "node:path";
+function formatRelativeTime(date) {
+  const diff = Date.now() - date.getTime();
+  const minutes = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+  if (days > 0)
+    return `${days}d ago`;
+  if (hours > 0)
+    return `${hours}h ago`;
+  if (minutes > 0)
+    return `${minutes}m ago`;
+  return "just now";
+}
+function getActivitySummary(days = 7, logsDir = join9(homedir4(), ".cc-safety-net", "logs")) {
+  if (!existsSync11(logsDir)) {
+    return { totalBlocked: 0, sessionCount: 0, recentEntries: [] };
+  }
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const recentEntries = [];
+  let totalBlocked = 0;
+  let sessionCount = 0;
+  let oldestEntry;
+  let oldestEntryTs;
+  let newestEntry;
+  let newestEntryTs;
+  let files;
+  try {
+    files = readdirSync2(logsDir).filter((f) => f.endsWith(".jsonl"));
+  } catch {
+    return { totalBlocked: 0, sessionCount: 0, recentEntries: [] };
+  }
+  for (const file of files) {
+    try {
+      const content = readFileSync9(join9(logsDir, file), "utf-8");
+      const lines = content.trim().split(`
+`).filter(Boolean);
+      let hasRecentEntry = false;
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line);
+          if (entry.decision === "allow") {
+            continue;
+          }
+          const ts = new Date(entry.ts).getTime();
+          if (ts >= cutoff) {
+            totalBlocked++;
+            hasRecentEntry = true;
+            if (oldestEntryTs === undefined || ts <= oldestEntryTs) {
+              oldestEntry = entry.ts;
+              oldestEntryTs = ts;
+            }
+            if (newestEntryTs === undefined || ts > newestEntryTs) {
+              newestEntry = entry.ts;
+              newestEntryTs = ts;
+            }
+            insertRecentEntry(recentEntries, entry, ts);
+          }
+        } catch {}
+      }
+      if (hasRecentEntry) {
+        sessionCount++;
+      }
+    } catch {}
+  }
+  const displayEntries = recentEntries.map((e) => ({
+    timestamp: e.ts,
+    command: e.command,
+    reason: e.reason,
+    relativeTime: formatRelativeTime(new Date(e.ts))
+  }));
+  return {
+    totalBlocked,
+    sessionCount,
+    recentEntries: displayEntries,
+    oldestEntry,
+    newestEntry
+  };
+}
+function insertRecentEntry(entries, entry, ts) {
+  const index = entries.findIndex((existing) => ts > new Date(existing.ts).getTime());
+  if (index === -1) {
+    if (entries.length < 3) {
+      entries.push(entry);
+    }
+    return;
+  }
+  entries.splice(index, 0, entry);
+  if (entries.length > 3) {
+    entries.pop();
+  }
+}
+
+// src/bin/doctor/config.ts
+import { existsSync as existsSync12 } from "node:fs";
+import { dirname as dirname8 } from "node:path";
+function getConfigSourceInfo(path, lockPath, userConfigDir) {
+  if (!existsSync12(path)) {
+    return { path, exists: false, valid: false, ruleCount: 0 };
+  }
+  const validation = validateRulesConfigFile(path);
+  validation.errors.push(...getRulesConfigRuntimeErrorsForConfig(path, lockPath, { userConfigDir }));
+  return {
+    path,
+    exists: true,
+    valid: validation.errors.length === 0,
+    ruleCount: validation.ruleNames.size,
+    ...validation.errors.length > 0 ? { errors: validation.errors } : {}
+  };
+}
+function toEffectiveRule(rule, source) {
+  return {
+    source,
+    name: rule.name,
+    command: rule.command,
+    subcommand: rule.subcommand,
+    blockArgs: rule.block_args,
+    reason: rule.reason
+  };
+}
+function getConfigInfo(cwd, options2) {
+  const userPath = options2?.userConfigPath ?? getUserRulesConfigPath();
+  const projectPath = options2?.projectConfigPath ?? getProjectRulesConfigPath(cwd);
+  const userConfigDir = dirname8(userPath);
+  const policy = loadRulesPolicy({
+    cwd,
+    userConfigPath: userPath,
+    projectConfigPath: projectPath,
+    userConfigDir
+  });
+  const rulebookSources = new Map(policy.rulebooks.flatMap((rulebook) => rulebook.rules.map((rule) => [rule, rulebook.source])));
+  return {
+    userConfig: getConfigSourceInfo(userPath, getUserRulesLockPath({ userConfigPath: userPath }), userConfigDir),
+    projectConfig: getConfigSourceInfo(projectPath, getRulesLockPathForConfigPath(projectPath), userConfigDir),
+    effectiveRules: policy.rules.map((rule) => toEffectiveRule(rule, rulebookSources.get(rule.name) ?? "project")),
+    shadowedRules: []
+  };
+}
+
+// src/bin/doctor/environment.ts
+var ENV_VARS = [
+  {
+    flag: ENV_FLAGS.strict,
+    description: "Fail-closed on unparseable commands",
+    defaultBehavior: "permissive"
+  },
+  {
+    flag: ENV_FLAGS.paranoid,
+    description: "Enable all paranoid checks",
+    defaultBehavior: "off"
+  },
+  {
+    flag: ENV_FLAGS.paranoidRm,
+    description: "Block rm -rf even within cwd",
+    defaultBehavior: "off"
+  },
+  {
+    flag: ENV_FLAGS.paranoidInterpreters,
+    description: "Block interpreter one-liners",
+    defaultBehavior: "off"
+  },
+  {
+    flag: ENV_FLAGS.worktree,
+    description: "Allow local git discards in linked worktrees",
+    defaultBehavior: "off"
+  },
+  {
+    flag: ENV_FLAGS.debug,
+    description: "Log allowed hook commands for debugging",
+    defaultBehavior: "off"
+  }
+];
+function getEnvironmentInfo() {
+  return [
+    ...ENV_VARS.map((v) => ({
+      name: v.flag.name,
+      value: getEnvFlagValue(v.flag),
+      isSet: envFlagIsSet(v.flag),
+      legacyName: v.flag.legacyName,
+      legacyValue: v.flag.legacyName ? process.env[v.flag.legacyName] : undefined,
+      legacyIsSet: v.flag.legacyName ? process.env[v.flag.legacyName] !== undefined : undefined,
+      description: v.description,
+      defaultBehavior: v.defaultBehavior
+    })),
+    {
+      name: "CC_SAFETY_NET_HOME",
+      value: process.env.CC_SAFETY_NET_HOME,
+      isSet: process.env.CC_SAFETY_NET_HOME !== undefined,
+      description: "Override user-scope config/cache directory",
+      defaultBehavior: "~/.cc-safety-net"
+    }
+  ];
+}
+
+// src/bin/utils/colors.ts
+function shouldUseColor() {
+  return Boolean(process.stdout.isTTY && !process.env.NO_COLOR);
+}
+var green = (s) => shouldUseColor() ? `\x1B[32m${s}\x1B[0m` : s;
+var yellow = (s) => shouldUseColor() ? `\x1B[33m${s}\x1B[0m` : s;
+var blue = (s) => shouldUseColor() ? `\x1B[34m${s}\x1B[0m` : s;
+var magenta = (s) => shouldUseColor() ? `\x1B[35m${s}\x1B[0m` : s;
+var cyan = (s) => shouldUseColor() ? `\x1B[36m${s}\x1B[0m` : s;
+var red = (s) => shouldUseColor() ? `\x1B[31m${s}\x1B[0m` : s;
+var dim = (s) => shouldUseColor() ? `\x1B[2m${s}\x1B[0m` : s;
+var bold = (s) => shouldUseColor() ? `\x1B[1m${s}\x1B[0m` : s;
+var colors = {
+  green,
+  yellow,
+  blue,
+  magenta,
+  cyan,
+  red,
+  dim,
+  bold
+};
+var ANSI_RESET = "\x1B[0m";
+var DISTINCT_COLORS = [
+  39,
+  82,
+  198,
+  226,
+  208,
+  51,
+  196,
+  46,
+  201,
+  214,
+  93,
+  154,
+  220,
+  27,
+  49,
+  190,
+  200,
+  33,
+  129,
+  227,
+  45,
+  160,
+  63,
+  118,
+  123,
+  202
+];
+function createRandom(seed) {
+  let state = seed;
+  return () => {
+    state = (state * 1664525 + 1013904223) % 4294967296;
+    return state / 4294967296;
+  };
+}
+function getShuffledPalette(seed) {
+  const palette = [...DISTINCT_COLORS];
+  const random = createRandom(seed);
+  for (let i = palette.length - 1;i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    const temp = palette[i];
+    palette[i] = palette[j];
+    palette[j] = temp;
+  }
+  return palette;
+}
+function generateDistinctColor(index, seed = 0) {
+  if (!shouldUseColor())
+    return "";
+  const palette = getShuffledPalette(seed);
+  const colorCode = palette[index % palette.length];
+  return `\x1B[38;5;${colorCode}m`;
+}
+function colorizeToken(token, index, seed = 0) {
+  if (!shouldUseColor())
+    return `"${token}"`;
+  const colorCode = generateDistinctColor(index, seed);
+  return `${colorCode}"${token}"${ANSI_RESET}`;
+}
+
+// src/bin/doctor/format.ts
+var PLATFORM_NAMES = {
+  "claude-code": "Claude Code",
+  opencode: "OpenCode",
+  "gemini-cli": "Gemini CLI",
+  "copilot-cli": "Copilot CLI",
+  codex: "Codex"
+};
+function formatAsciiTable(options2) {
+  const rawRows = options2.rawRows ?? options2.rows;
+  const colWidths = (options2.headers ?? rawRows[0] ?? []).map((h, i) => {
+    const maxDataWidth = Math.max(...rawRows.map((r) => r[i]?.length ?? 0));
+    return Math.max(h.length, maxDataWidth);
+  });
+  const pad = (s, w, raw) => s + " ".repeat(Math.max(0, w - raw.length));
+  const line = (char, corners) => corners[0] + colWidths.map((w) => char.repeat(w + 2)).join(corners[1]) + corners[2];
+  const formatRow = (cells, rawCells) => `│ ${cells.map((c, i) => pad(c, colWidths[i] ?? 0, rawCells[i] ?? "")).join(" │ ")} │`;
+  const headerLines = options2.headers ? [`   ${formatRow(options2.headers, options2.headers)}`, `   ${line("─", ["├", "┼", "┤"])}`] : [];
+  return [
+    `   ${line("─", ["┌", "┬", "┐"])}`,
+    ...headerLines,
+    ...options2.rows.map((r, i) => `   ${formatRow(r, rawRows[i] ?? [])}`),
+    `   ${line("─", ["└", "┴", "┘"])}`
+  ].join(`
+`);
+}
+function formatHooksSection(hooks) {
+  const lines = [];
+  lines.push("Hook Integration");
+  lines.push(formatHooksTable(hooks));
+  const failures = [];
+  const warnings = [];
+  const errors = [];
+  for (const hook of hooks) {
+    const platformName = PLATFORM_NAMES[hook.platform] ?? hook.platform;
+    if (hook.selfTest) {
+      for (const result of hook.selfTest.results) {
+        if (!result.passed) {
+          failures.push({ platform: platformName, result });
+        }
+      }
+    }
+    if (hook.errors && hook.errors.length > 0) {
+      for (const err of hook.errors) {
+        if (hook.status === "configured") {
+          warnings.push({ platform: platformName, message: err });
+        } else {
+          errors.push({ platform: platformName, message: err });
+        }
+      }
+    }
+  }
+  if (failures.length > 0) {
+    lines.push("");
+    lines.push(colors.red("   Failures:"));
+    for (const f of failures) {
+      lines.push(colors.red(`   • ${f.platform}: ${f.result.description}`));
+      lines.push(colors.red(`     expected ${f.result.expected}, got ${f.result.actual}`));
+    }
+  }
+  for (const w of warnings) {
+    lines.push(`   Warning (${w.platform}): ${w.message}`);
+  }
+  for (const e of errors) {
+    lines.push(colors.red(`   Error (${e.platform}): ${e.message}`));
+  }
+  return lines.join(`
+`);
+}
+function formatHooksTable(hooks) {
+  const headers = ["Platform", "Status", "Tests"];
+  const getStatusDisplay = (h) => {
+    switch (h.status) {
+      case "configured":
+        return { text: "Configured", colored: colors.green("Configured") };
+      case "disabled":
+        return { text: "Disabled", colored: colors.yellow("Disabled") };
+      case "n/a":
+        return { text: "N/A", colored: colors.dim("N/A") };
+    }
+  };
+  const rowData = hooks.map((h) => {
+    const platformName = PLATFORM_NAMES[h.platform] ?? h.platform;
+    const statusDisplay = getStatusDisplay(h);
+    let testsText = "-";
+    if (h.status === "configured" && h.selfTest) {
+      const label = h.selfTest.failed > 0 ? "FAIL" : "OK";
+      testsText = `${h.selfTest.passed}/${h.selfTest.total} ${label}`;
+    }
+    return {
+      colored: [platformName, statusDisplay.colored, testsText],
+      raw: [platformName, statusDisplay.text, testsText]
+    };
+  });
+  const rows = rowData.map((r) => r.colored);
+  const rawRows = rowData.map((r) => r.raw);
+  return formatAsciiTable({ headers, rows, rawRows });
+}
+function formatRulesTable(rules) {
+  if (rules.length === 0) {
+    return "   (no custom rules)";
+  }
+  const headers = ["Source", "Name", "Command", "Block Args"];
+  const rows = rules.map((r) => [
+    r.source,
+    r.name,
+    r.subcommand ? `${r.command} ${r.subcommand}` : r.command,
+    r.blockArgs.join(", ")
+  ]);
+  return formatAsciiTable({ headers, rows });
+}
+function formatConfigSection(report) {
+  const lines = [];
+  lines.push("Configuration");
+  lines.push(formatConfigTable(report.userConfig, report.projectConfig));
+  lines.push("");
+  if (report.effectiveRules.length > 0) {
+    lines.push(`   Effective rules (${report.effectiveRules.length} total):`);
+    lines.push(formatRulesTable(report.effectiveRules));
+  } else {
+    lines.push("   Effective rules: (none - using built-in rules only)");
+  }
+  for (const shadow of report.shadowedRules) {
+    lines.push("");
+    lines.push(`   Note: Project rule "${shadow.name}" shadows user rule with same name`);
+  }
+  return lines.join(`
+`);
+}
+function formatConfigTable(userConfig, projectConfig) {
+  const headers = ["Scope", "Status"];
+  const getStatusDisplay = (config) => {
+    if (!config.exists) {
+      return { text: "N/A", colored: colors.dim("N/A") };
+    }
+    if (!config.valid) {
+      const errMsg = config.errors?.[0] ?? "unknown error";
+      const text = `Invalid (${errMsg})`;
+      return { text, colored: colors.red(text) };
+    }
+    return { text: "Configured", colored: colors.green("Configured") };
+  };
+  const userStatus = getStatusDisplay(userConfig);
+  const projectStatus = getStatusDisplay(projectConfig);
+  const rows = [
+    ["User", userStatus.colored],
+    ["Project", projectStatus.colored]
+  ];
+  const rawRows = [
+    ["User", userStatus.text],
+    ["Project", projectStatus.text]
+  ];
+  return formatAsciiTable({ headers, rows, rawRows });
+}
+function formatEnvironmentSection(envVars) {
+  const lines = [];
+  lines.push("Environment");
+  lines.push(formatEnvironmentTable(envVars));
+  return lines.join(`
+`);
+}
+function formatEnvironmentTable(envVars) {
+  const headers = ["Variable", "Status", "Legacy"];
+  const rows = envVars.map((v) => {
+    const statusIcon = v.isSet ? colors.green("✓") : colors.dim("✗");
+    const legacyStatus = v.legacyName && v.legacyIsSet ? `${v.legacyName} ${colors.green("✓")}` : v.legacyName ?? "";
+    return [v.name, statusIcon, legacyStatus];
+  });
+  const rawRows = envVars.map((v) => [
+    v.name,
+    v.isSet ? "✓" : "✗",
+    v.legacyName && v.legacyIsSet ? `${v.legacyName} ✓` : v.legacyName ?? ""
+  ]);
+  return formatAsciiTable({ headers, rows, rawRows });
+}
+function formatActivitySection(activity) {
+  const lines = [];
+  if (activity.totalBlocked === 0) {
+    lines.push("Recent Activity");
+    lines.push("   No blocked commands in the last 7 days");
+    lines.push("   Tip: This is normal for new installations");
+  } else {
+    lines.push(`Recent Activity (${activity.totalBlocked} blocked / ${activity.sessionCount} sessions)`);
+    lines.push(formatActivityTable(activity.recentEntries));
+  }
+  return lines.join(`
+`);
+}
+function formatActivityTable(entries) {
+  const headers = ["Time", "Command"];
+  const rows = entries.map((e) => {
+    const cmd = e.command.length > 40 ? `${e.command.slice(0, 37)}...` : e.command;
+    return [e.relativeTime, cmd];
+  });
+  return formatAsciiTable({ headers, rows });
+}
+function formatUpdateSection(update) {
+  const lines = [];
+  lines.push("Update Check");
+  const rowData = [];
+  if (update.latestVersion === null && !update.error) {
+    rowData.push({
+      label: "Status",
+      value: colors.dim("Skipped"),
+      rawValue: "Skipped"
+    });
+    rowData.push({
+      label: "Installed",
+      value: update.currentVersion,
+      rawValue: update.currentVersion
+    });
+    lines.push(formatUpdateTable(rowData));
+    return lines.join(`
+`);
+  }
+  if (update.error) {
+    rowData.push({
+      label: "Status",
+      value: `${colors.yellow("⚠")} Error`,
+      rawValue: "⚠ Error"
+    });
+    rowData.push({
+      label: "Installed",
+      value: update.currentVersion,
+      rawValue: update.currentVersion
+    });
+    rowData.push({
+      label: "Error",
+      value: colors.dim(update.error),
+      rawValue: update.error
+    });
+    lines.push(formatUpdateTable(rowData));
+    return lines.join(`
+`);
+  }
+  if (update.updateAvailable) {
+    rowData.push({
+      label: "Status",
+      value: `${colors.yellow("⚠")} Update Available`,
+      rawValue: "⚠ Update Available"
+    });
+    rowData.push({
+      label: "Current",
+      value: update.currentVersion,
+      rawValue: update.currentVersion
+    });
+    rowData.push({
+      label: "Latest",
+      value: colors.green(update.latestVersion ?? ""),
+      rawValue: update.latestVersion ?? ""
+    });
+    lines.push(formatUpdateTable(rowData));
+    lines.push("");
+    lines.push("   Run: bunx cc-safety-net@latest doctor");
+    lines.push("   Or:  npx cc-safety-net@latest doctor");
+    return lines.join(`
+`);
+  }
+  rowData.push({
+    label: "Status",
+    value: `${colors.green("✓")} Up to date`,
+    rawValue: "✓ Up to date"
+  });
+  rowData.push({
+    label: "Version",
+    value: update.currentVersion,
+    rawValue: update.currentVersion
+  });
+  lines.push(formatUpdateTable(rowData));
+  return lines.join(`
+`);
+}
+function formatUpdateTable(rowData) {
+  const rows = rowData.map((r) => [r.label, r.value]);
+  const rawRows = rowData.map((r) => [r.label, r.rawValue]);
+  return formatAsciiTable({ rows, rawRows });
+}
+function formatSystemInfoSection(system) {
+  const lines = [];
+  lines.push("System Info");
+  lines.push(formatSystemInfoTable(system));
+  return lines.join(`
+`);
+}
+function formatSystemInfoTable(system) {
+  const headers = ["Component", "Version"];
+  const formatValue = (value) => {
+    if (value === null)
+      return colors.dim("not found");
+    return value;
+  };
+  const rawValue = (value) => {
+    return value ?? "not found";
+  };
+  const rowData = [
+    { label: "cc-safety-net", value: system.version },
+    { label: "Claude Code", value: system.claudeCodeVersion },
+    { label: "OpenCode", value: system.openCodeVersion },
+    { label: "Gemini CLI", value: system.geminiCliVersion },
+    { label: "Copilot CLI", value: system.copilotCliVersion },
+    { label: "Node.js", value: system.nodeVersion },
+    { label: "npm", value: system.npmVersion },
+    { label: "Bun", value: system.bunVersion },
+    { label: "Platform", value: system.platform }
+  ];
+  const rows = rowData.map((r) => [r.label, formatValue(r.value)]);
+  const rawRows = rowData.map((r) => [r.label, rawValue(r.value)]);
+  return formatAsciiTable({ headers, rows, rawRows });
+}
+function formatSummary(report) {
+  const hooksFailed = report.hooks.every((h) => h.status !== "configured");
+  const selfTestFailed = report.hooks.some((h) => h.selfTest && h.selfTest.failed > 0);
+  const configFailed = (report.userConfig.errors?.length ?? 0) > 0 || (report.projectConfig.errors?.length ?? 0) > 0;
+  const failures = [hooksFailed, selfTestFailed, configFailed].filter(Boolean).length;
+  let warnings = 0;
+  if (report.update.updateAvailable)
+    warnings++;
+  if (report.activity.totalBlocked === 0)
+    warnings++;
+  warnings += report.shadowedRules.length;
+  if (failures > 0) {
+    return colors.red(`
+${failures} check(s) failed.`);
+  }
+  if (warnings > 0) {
+    return colors.yellow(`
+All checks passed with ${warnings} warning(s).`);
+  }
+  return colors.green(`
+All checks passed.`);
+}
+
 // src/bin/doctor/hooks.ts
+import { existsSync as existsSync13, readdirSync as readdirSync3, readFileSync as readFileSync10 } from "node:fs";
+import { homedir as homedir5, tmpdir as tmpdir3 } from "node:os";
+import { join as join10 } from "node:path";
 var COPILOT_PLUGIN_CONFIG_PATH = "copilot-plugin";
 var CLAUDE_PLUGIN_LIST_CONFIG_PATH = "claude plugin list";
 var CLAUDE_SAFETY_NET_PLUGIN_ID = "safety-net@cc-marketplace";
@@ -6783,7 +7016,7 @@ var SELF_TEST_CASES = [
 ];
 var SELF_TEST_CONFIG = { version: 1, rules: [] };
 function runSelfTest() {
-  const selfTestCwd = join9(tmpdir3(), "cc-safety-net-self-test");
+  const selfTestCwd = join10(tmpdir3(), "cc-safety-net-self-test");
   const results = SELF_TEST_CASES.map((tc) => {
     const result = analyzeCommand(tc.command, {
       cwd: selfTestCwd,
@@ -6941,11 +7174,11 @@ function _escapeRegExp(value) {
 }
 function detectOpenCode(homeDir) {
   const errors = [];
-  const configDir = join9(homeDir, ".config", "opencode");
+  const configDir = join10(homeDir, ".config", "opencode");
   const candidates = ["opencode.json", "opencode.jsonc"];
   for (const filename of candidates) {
-    const configPath = join9(configDir, filename);
-    if (existsSync12(configPath)) {
+    const configPath = join10(configDir, filename);
+    if (existsSync13(configPath)) {
       try {
         const content = readFileSync10(configPath, "utf-8");
         const json = stripJsonComments(content);
@@ -7027,7 +7260,7 @@ function _parseGeminiEnabledValue(block, scope) {
   return match[1] === "true";
 }
 function _getCodexHome(homeDir) {
-  return process.env.CODEX_HOME || join9(homeDir, ".codex");
+  return process.env.CODEX_HOME || join10(homeDir, ".codex");
 }
 function _parseCodexConfig(content) {
   const result = {};
@@ -7063,9 +7296,9 @@ function _readCodexConfig(configPath, errors) {
 }
 function detectCodex(homeDir) {
   const codexHome = _getCodexHome(homeDir);
-  const pluginCachePath = join9(codexHome, "plugins", "cache", "cc-marketplace", "safety-net");
+  const pluginCachePath = join10(codexHome, "plugins", "cache", "cc-marketplace", "safety-net");
   const errors = [];
-  if (!existsSync12(pluginCachePath)) {
+  if (!existsSync13(pluginCachePath)) {
     return { platform: "codex", status: "n/a", configPath: pluginCachePath };
   }
   try {
@@ -7080,7 +7313,7 @@ function detectCodex(homeDir) {
       errors: [`Failed to read ${pluginCachePath}: ${e instanceof Error ? e.message : String(e)}`]
     };
   }
-  const configPath = join9(codexHome, "config.toml");
+  const configPath = join10(codexHome, "config.toml");
   const config = _readCodexConfig(configPath, errors);
   if (config.safetyNetEnabled !== true) {
     return {
@@ -7152,7 +7385,7 @@ function _supportsCopilotInlineHooks(version) {
   return comparison >= 0;
 }
 function _getCopilotConfigHome(homeDir) {
-  return process.env.COPILOT_HOME || join9(homeDir, ".copilot");
+  return process.env.COPILOT_HOME || join10(homeDir, ".copilot");
 }
 function _hasSafetyNetCopilotHook(config) {
   const preToolUseHooks = config.hooks?.preToolUse ?? [];
@@ -7179,11 +7412,11 @@ function _listJsonFiles(dirPath, errors) {
   }
 }
 function _collectSafetyNetCopilotHookFiles(dirPath, errors) {
-  if (!existsSync12(dirPath))
+  if (!existsSync13(dirPath))
     return [];
   const matches = [];
   for (const filename of _listJsonFiles(dirPath, errors)) {
-    const configPath = join9(dirPath, filename);
+    const configPath = join10(dirPath, filename);
     const config = _readCopilotConfigFile(configPath, errors);
     if (config && _hasSafetyNetCopilotHook(config)) {
       matches.push(configPath);
@@ -7192,7 +7425,7 @@ function _collectSafetyNetCopilotHookFiles(dirPath, errors) {
   return matches;
 }
 function _collectCopilotInlineConfig(configPath, errors) {
-  if (!existsSync12(configPath))
+  if (!existsSync13(configPath))
     return;
   const config = _readCopilotConfigFile(configPath, errors);
   if (!config)
@@ -7222,15 +7455,15 @@ function _resolveCopilotInlineDisableSource(inlineSources) {
 }
 function _checkCopilotEnabled(homeDir, cwd, copilotCliVersion, errors) {
   const configHome = _getCopilotConfigHome(homeDir);
-  const repoHookDir = join9(cwd, ".github", "hooks");
-  const userHookDir = join9(configHome, "hooks");
-  const repoConfigDir = join9(cwd, ".github", "copilot");
+  const repoHookDir = join10(cwd, ".github", "hooks");
+  const userHookDir = join10(configHome, "hooks");
+  const repoConfigDir = join10(cwd, ".github", "copilot");
   const inlineSupport = _supportsCopilotInlineHooks(copilotCliVersion);
   const inlineErrors = inlineSupport === true ? errors : undefined;
   const inlineSources = {
-    userConfig: _collectCopilotInlineConfig(join9(configHome, "config.json"), inlineErrors),
-    repoSettings: _collectCopilotInlineConfig(join9(repoConfigDir, "settings.json"), inlineErrors),
-    localSettings: _collectCopilotInlineConfig(join9(repoConfigDir, "settings.local.json"), inlineErrors)
+    userConfig: _collectCopilotInlineConfig(join10(configHome, "config.json"), inlineErrors),
+    repoSettings: _collectCopilotInlineConfig(join10(repoConfigDir, "settings.json"), inlineErrors),
+    localSettings: _collectCopilotInlineConfig(join10(repoConfigDir, "settings.local.json"), inlineErrors)
   };
   if (inlineSupport !== false) {
     const disableSource = _resolveCopilotInlineDisableSource(inlineSources);
@@ -7244,10 +7477,10 @@ function _checkCopilotEnabled(homeDir, cwd, copilotCliVersion, errors) {
   const repoHookPaths = _collectSafetyNetCopilotHookFiles(repoHookDir, errors);
   const userHookSupport = _supportsCopilotUserHookFiles(copilotCliVersion);
   const userHookErrors = userHookSupport === true ? errors : undefined;
-  const userHookFiles = existsSync12(userHookDir) ? _listJsonFiles(userHookDir, userHookErrors) : [];
+  const userHookFiles = existsSync13(userHookDir) ? _listJsonFiles(userHookDir, userHookErrors) : [];
   const userHookPaths = [];
   for (const filename of userHookFiles) {
-    const configPath = join9(userHookDir, filename);
+    const configPath = join10(userHookDir, filename);
     const config = _readCopilotConfigFile(configPath, userHookErrors);
     if (config && _hasSafetyNetCopilotHook(config)) {
       userHookPaths.push(configPath);
@@ -7286,7 +7519,7 @@ function _checkCopilotEnabled(homeDir, cwd, copilotCliVersion, errors) {
   };
 }
 function detectAllHooks(cwd, options2) {
-  const homeDir = options2?.homeDir ?? homedir4();
+  const homeDir = options2?.homeDir ?? homedir5();
   const detectCopilotCLI = () => {
     const errors = [];
     const hooksCheck = _checkCopilotEnabled(homeDir, cwd, options2?.copilotCliVersion, errors);
@@ -7555,12 +7788,12 @@ function printReport(report) {
 }
 
 // src/bin/explain/config.ts
-import { existsSync as existsSync13 } from "node:fs";
+import { existsSync as existsSync14 } from "node:fs";
 import { resolve as resolve8 } from "node:path";
 function getConfigSource(options2) {
   const projectPath = getProjectRulesConfigPath(options2?.cwd);
   let invalidProjectPath = null;
-  if (existsSync13(projectPath)) {
+  if (existsSync14(projectPath)) {
     const validation = validateRulesConfigFile(projectPath);
     if (validation.errors.length === 0) {
       return { configSource: projectPath, configValid: true };
@@ -7568,7 +7801,7 @@ function getConfigSource(options2) {
     invalidProjectPath = projectPath;
   }
   const userPath = options2?.userConfigPath ?? getUserRulesConfigPath(options2);
-  if (existsSync13(userPath)) {
+  if (existsSync14(userPath)) {
     const validation = validateRulesConfigFile(userPath);
     return { configSource: userPath, configValid: validation.errors.length === 0 };
   }
@@ -8648,249 +8881,6 @@ function showCommandHelp(commandName) {
   return true;
 }
 
-// src/core/audit.ts
-import { appendFileSync, existsSync as existsSync14, mkdirSync as mkdirSync3 } from "node:fs";
-import { homedir as homedir5 } from "node:os";
-import { join as join10 } from "node:path";
-function sanitizeSessionIdForFilename(sessionId) {
-  const raw = sessionId.trim();
-  if (!raw) {
-    return null;
-  }
-  let safe = raw.replace(/[^A-Za-z0-9_.-]+/g, "_");
-  safe = safe.replace(/^[._-]+|[._-]+$/g, "").slice(0, 128);
-  if (!safe || safe === "." || safe === "..") {
-    return null;
-  }
-  return safe;
-}
-function writeAuditLog(sessionId, command2, segment, reason, cwd, options2 = {}) {
-  const safeSessionId = sanitizeSessionIdForFilename(sessionId);
-  if (!safeSessionId) {
-    return;
-  }
-  const home = options2.homeDir ?? homedir5();
-  const logsDir = join10(home, ".cc-safety-net", "logs");
-  try {
-    if (!existsSync14(logsDir)) {
-      mkdirSync3(logsDir, { recursive: true });
-    }
-    const logFile = join10(logsDir, `${safeSessionId}.jsonl`);
-    const entry = {
-      ts: new Date().toISOString(),
-      decision: options2.decision ?? "deny",
-      command: redactSecrets(command2).slice(0, 300),
-      segment: redactSecrets(segment).slice(0, 300),
-      reason,
-      cwd
-    };
-    appendFileSync(logFile, `${JSON.stringify(entry)}
-`, "utf-8");
-  } catch {}
-}
-function redactSecrets(text) {
-  let result = text;
-  result = result.replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "<redacted>");
-  result = result.replace(/\b((?:DATABASE|POSTGRES|POSTGRESQL|MYSQL|MARIADB|REDIS|MONGO(?:DB)?|DB)_URL)=([^\s]+)/gi, "$1=<redacted>");
-  result = result.replace(/\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASS|KEY|CREDENTIALS)[A-Z0-9_]*)=([^\s]+)/gi, "$1=<redacted>");
-  result = result.replace(/(['"]?\s*(?:authorization|cookie|x-api-key|api-key)\s*:\s*)([^'"\r\n]+)(['"]?)/gi, "$1<redacted>$3");
-  result = result.replace(/(['"]?\s*authorization\s*:\s*)([^'"]+)(['"]?)/gi, "$1<redacted>$3");
-  result = result.replace(/(authorization\s*:\s*)([^\s"']+)(\s+[^\s"']+)?/gi, "$1<redacted>");
-  result = result.replace(/\b([a-z][a-z0-9+.-]*:\/\/)([^\s/:@]+):([^\s@/]+)@/gi, "$1<redacted>:<redacted>@");
-  result = result.replace(/\b([a-z][a-z0-9+.-]*:\/\/)([^\s/@:]+)@/gi, "$1<redacted>@");
-  result = result.replace(/\bgh[pousr]_[A-Za-z0-9]{20,}\b/g, "<redacted>");
-  result = result.replace(/\bxoxb-[A-Za-z0-9-]{20,}\b/g, "<redacted>");
-  result = result.replace(/\bnpm_[A-Za-z0-9_]{20,}\b/g, "<redacted>");
-  result = result.replace(/\b[rs]k_(?:live|test)_[A-Za-z0-9_]{20,}\b/g, "<redacted>");
-  result = result.replace(/\bpypi-[A-Za-z0-9_-]{20,}\b/g, "<redacted>");
-  result = result.replace(/\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{6,}\b/g, "<redacted>");
-  result = result.replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, "<redacted>");
-  return result;
-}
-
-// src/bin/hook/common.ts
-var REASON_SAFETY_NET_FAILED_CLOSED = "Safety Net failed closed because command analysis failed unexpectedly.";
-async function readHookInput(outputDeny) {
-  const chunks = [];
-  for await (const chunk of process.stdin) {
-    chunks.push(chunk);
-  }
-  const inputText = Buffer.concat(chunks).toString("utf-8").trim();
-  if (!inputText) {
-    outputDeny("Missing hook input JSON.");
-    return null;
-  }
-  return parseHookJson(inputText, outputDeny, "Failed to parse hook input JSON.");
-}
-function parseHookJson(inputText, outputDeny, strictReason) {
-  try {
-    return JSON.parse(inputText);
-  } catch {
-    outputDeny(strictReason);
-    return null;
-  }
-}
-function analyzeHookCommand(command2, cwd) {
-  const paranoidAll = envTruthy(ENV_FLAGS.paranoid);
-  return analyzeCommand(command2, {
-    cwd,
-    config: loadConfig(cwd, { repairLocalRulebooks: true }),
-    strict: envTruthy(ENV_FLAGS.strict),
-    paranoidRm: paranoidAll || envTruthy(ENV_FLAGS.paranoidRm),
-    paranoidInterpreters: paranoidAll || envTruthy(ENV_FLAGS.paranoidInterpreters),
-    worktreeMode: envTruthy(ENV_FLAGS.worktree)
-  });
-}
-function handleBlockedHookCommand(command2, cwd, sessionId, outputDeny) {
-  let result;
-  try {
-    result = analyzeHookCommand(command2, cwd);
-  } catch {
-    outputDeny(REASON_SAFETY_NET_FAILED_CLOSED, command2, command2);
-    return;
-  }
-  if (!result) {
-    if (sessionId && envTruthy(ENV_FLAGS.debug)) {
-      writeAuditLog(sessionId, command2, command2, "allowed", cwd, { decision: "allow" });
-    }
-    return;
-  }
-  if (sessionId) {
-    writeAuditLog(sessionId, command2, result.segment, result.reason, cwd);
-  }
-  outputDeny(result.reason, command2, result.segment);
-}
-
-// src/core/format.ts
-function formatBlockedMessage(input) {
-  const { reason, command: command2, segment } = input;
-  const maxLen = input.maxLen ?? 200;
-  const redact = input.redact ?? ((t) => t);
-  let message = `BLOCKED by CC SafetyNet
-
-Reason: ${reason}`;
-  if (command2) {
-    const safeCommand = redact(command2);
-    message += `
-
-Command: ${excerpt(safeCommand, maxLen)}`;
-  }
-  if (segment && segment !== command2) {
-    const safeSegment = redact(segment);
-    message += `
-
-Segment: ${excerpt(safeSegment, maxLen)}`;
-  }
-  if (input.manualPermissionAdvice !== false) {
-    message += `
-
-If this operation is truly needed, ask the user for explicit permission and have them run the command manually.`;
-  }
-  return message;
-}
-function excerpt(text, maxLen) {
-  return text.length > maxLen ? `${text.slice(0, maxLen)}...` : text;
-}
-
-// src/bin/hook/claude-code.ts
-function outputDeny(reason, command2, segment) {
-  const message = formatBlockedMessage({
-    reason,
-    command: command2,
-    segment,
-    redact: redactSecrets,
-    manualPermissionAdvice: reason.includes("rule sync") ? false : undefined
-  });
-  const output = {
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: message
-    }
-  };
-  console.log(JSON.stringify(output));
-}
-async function runClaudeCodeHook() {
-  const input = await readHookInput(outputDeny);
-  if (!input) {
-    return;
-  }
-  if (input.tool_name !== "Bash") {
-    return;
-  }
-  const command2 = input.tool_input?.command;
-  if (!command2) {
-    return;
-  }
-  handleBlockedHookCommand(command2, input.cwd ?? process.cwd(), input.session_id, outputDeny);
-}
-
-// src/bin/hook/copilot-cli.ts
-function outputCopilotDeny(reason, command2, segment) {
-  const message = formatBlockedMessage({
-    reason,
-    command: command2,
-    segment,
-    redact: redactSecrets
-  });
-  const output = {
-    permissionDecision: "deny",
-    permissionDecisionReason: message
-  };
-  console.log(JSON.stringify(output));
-}
-async function runCopilotCliHook() {
-  const input = await readHookInput(outputCopilotDeny);
-  if (!input) {
-    return;
-  }
-  if (input.toolName !== "bash") {
-    return;
-  }
-  const toolArgs = parseHookJson(input.toolArgs, outputCopilotDeny, "Failed to parse toolArgs JSON.");
-  if (!toolArgs) {
-    return;
-  }
-  const command2 = toolArgs.command;
-  if (!command2) {
-    return;
-  }
-  handleBlockedHookCommand(command2, input.cwd ?? process.cwd(), `copilot-${input.timestamp ?? Date.now()}`, outputCopilotDeny);
-}
-
-// src/bin/hook/gemini-cli.ts
-function outputGeminiDeny(reason, command2, segment) {
-  const message = formatBlockedMessage({
-    reason,
-    command: command2,
-    segment,
-    redact: redactSecrets
-  });
-  const output = {
-    decision: "deny",
-    reason: message,
-    systemMessage: message
-  };
-  console.log(JSON.stringify(output));
-}
-async function runGeminiCLIHook() {
-  const input = await readHookInput(outputGeminiDeny);
-  if (!input) {
-    return;
-  }
-  if (input.hook_event_name !== "BeforeTool") {
-    return;
-  }
-  if (input.tool_name !== "run_shell_command") {
-    return;
-  }
-  const command2 = input.tool_input?.command;
-  if (!command2) {
-    return;
-  }
-  handleBlockedHookCommand(command2, input.cwd ?? process.cwd(), input.session_id, outputGeminiDeny);
-}
-
 // src/bin/hook/install.ts
 import { existsSync as existsSync15, mkdirSync as mkdirSync4, readFileSync as readFileSync11, writeFileSync as writeFileSync3 } from "node:fs";
 import { homedir as homedir6 } from "node:os";
@@ -9325,42 +9315,6 @@ function runHookInstallCommand(action, args) {
     console.error(e instanceof Error ? e.message : String(e));
     return 1;
   }
-}
-
-// src/bin/hook/kimi-cli.ts
-function outputKimiDeny(reason, command2, segment, manualPermissionAdvice) {
-  const message = formatBlockedMessage({
-    reason,
-    command: command2,
-    segment,
-    redact: redactSecrets,
-    manualPermissionAdvice
-  });
-  const output = {
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: message
-    }
-  };
-  console.log(JSON.stringify(output));
-}
-async function runKimiCliHook() {
-  const input = await readHookInput(outputKimiDeny);
-  if (!input) {
-    return;
-  }
-  if (input.hook_event_name !== "PreToolUse") {
-    return;
-  }
-  if (input.tool_name !== "Shell") {
-    return;
-  }
-  const command2 = input.tool_input?.command;
-  if (!command2) {
-    return;
-  }
-  handleBlockedHookCommand(command2, input.cwd ?? process.cwd(), input.session_id, outputKimiDeny);
 }
 
 // src/bin/rule/index.ts
@@ -10326,8 +10280,7 @@ function handleCommandHelp(args) {
   }
   return false;
 }
-function handleCliFlags() {
-  const args = process.argv.slice(2);
+function parseCliArgs(args) {
   if (handleHelpCommand(args)) {
     return null;
   }
@@ -10335,32 +10288,25 @@ function handleCliFlags() {
     return null;
   }
   if (args[0] === "explain") {
-    return "explain";
+    return { mode: "explain", args: args.slice(1) };
   }
   if (args[0] === "rule") {
-    return "rule";
+    return { mode: "rule", args: args.slice(1) };
   }
   if (args[0] === "statusline") {
     if (args.includes("--claude-code") || args.includes("-cc"))
-      return "statusline";
+      return { mode: "statusline" };
     showCommandHelp("statusline");
     process.exit(1);
   }
   if (args[0] === "hook") {
     if (args[1] === "install")
-      return "hook-install";
+      return { mode: "hook-install", args: args.slice(2) };
     if (args[1] === "uninstall")
-      return "hook-uninstall";
-    if (args.includes("--claude-code") || args.includes("-cc"))
-      return "claude-code";
-    if (args.includes("--copilot-cli") || args.includes("-cp"))
-      return "copilot-cli";
-    if (args.includes("--gemini-cli") || args.includes("-gc"))
-      return "gemini-cli";
-    if (args.includes("--kimi-cli"))
-      return "kimi-cli";
-    if (args.includes("-kc"))
-      return "kimi-cli";
+      return { mode: "hook-uninstall", args: args.slice(2) };
+    const integration = findHookIntegrationByFlag(args);
+    if (integration)
+      return { mode: "hook", integration };
     showCommandHelp("hook");
     process.exit(1);
   }
@@ -10373,53 +10319,40 @@ function handleCliFlags() {
     process.exit(0);
   }
   if (args.includes("doctor") || args.includes("--doctor")) {
-    return "doctor";
+    return { mode: "doctor", args };
   }
-  if (args[0] === "--claude-code" || args[0] === "-cc") {
-    return "claude-code";
-  }
-  if (args[0] === "--copilot-cli" || args[0] === "-cp") {
-    return "copilot-cli";
-  }
-  if (args[0] === "--gemini-cli" || args[0] === "-gc") {
-    return "gemini-cli";
-  }
+  const legacyIntegration = findLegacyTopLevelHookIntegration(args[0]);
+  if (legacyIntegration)
+    return { mode: "hook", integration: legacyIntegration };
   console.error(`Unknown option: ${args[0]}`);
   console.error("Run 'cc-safety-net --help' for usage.");
   process.exit(1);
 }
 async function main() {
-  const mode = handleCliFlags();
-  if (mode === "claude-code") {
-    await runClaudeCodeHook();
-  } else if (mode === "copilot-cli") {
-    await runCopilotCliHook();
-  } else if (mode === "gemini-cli") {
-    await runGeminiCLIHook();
-  } else if (mode === "kimi-cli") {
-    await runKimiCliHook();
-  } else if (mode === "hook-install") {
-    process.exit(runHookInstallCommand("install", process.argv.slice(4)));
-  } else if (mode === "hook-uninstall") {
-    process.exit(runHookInstallCommand("uninstall", process.argv.slice(4)));
-  } else if (mode === "rule") {
-    process.exit(await runRuleCommand(process.argv.slice(3)));
-  } else if (mode === "statusline") {
+  const command2 = parseCliArgs(process.argv.slice(2));
+  if (command2?.mode === "hook") {
+    await command2.integration.run();
+  } else if (command2?.mode === "hook-install") {
+    process.exit(runHookInstallCommand("install", command2.args));
+  } else if (command2?.mode === "hook-uninstall") {
+    process.exit(runHookInstallCommand("uninstall", command2.args));
+  } else if (command2?.mode === "rule") {
+    process.exit(await runRuleCommand(command2.args));
+  } else if (command2?.mode === "statusline") {
     await printStatusline();
-  } else if (mode === "doctor") {
-    const flags = parseDoctorFlags(process.argv.slice(2));
+  } else if (command2?.mode === "doctor") {
+    const flags = parseDoctorFlags(command2.args);
     const exitCode = await runDoctor({
       json: flags.json,
       skipUpdateCheck: flags.skipUpdateCheck
     });
     process.exit(exitCode);
-  } else if (mode === "explain") {
-    const args = process.argv.slice(3);
-    if (hasHelpFlag(args) || args.length === 0) {
+  } else if (command2?.mode === "explain") {
+    if (hasHelpFlag(command2.args) || command2.args.length === 0) {
       showCommandHelp("explain");
       process.exit(0);
     }
-    const flags = parseExplainFlags(args);
+    const flags = parseExplainFlags(command2.args);
     if (!flags) {
       process.exit(1);
     }
