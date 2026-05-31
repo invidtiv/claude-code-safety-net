@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 
 import { $ } from 'bun';
+import pkg from '../package.json';
 import { formatReleaseNotes, generateChangelog, getContributors } from './generate-changelog';
 import { parseBump } from './publish-options';
 
-const PACKAGE_NAME = 'cc-safety-net';
+const PACKAGE_NAME = pkg.name;
 
 let bump: ReturnType<typeof parseBump>;
 try {
@@ -71,7 +72,7 @@ async function updatePluginVersion(newVersion: string): Promise<void> {
 }
 
 async function revertVersionChanges(): Promise<void> {
-  await $`git checkout -- package.json .claude-plugin/plugin.json assets/cc-safety-net.schema.json`.nothrow();
+  await $`git checkout -- package.json .claude-plugin/plugin.json`.nothrow();
   await $`git checkout -- dist/`.nothrow();
   await $`git clean -fd dist/`.nothrow(); // Remove untracked build artifacts
 }

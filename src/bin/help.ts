@@ -31,15 +31,16 @@ function getSubcommandsColumnWidth(subcommands: readonly { usage: string }[]): n
   return Math.max(...subcommands.map((subcommand) => subcommand.usage.length));
 }
 
+function getCommandSummaryWidth(commands: readonly Command[]): number {
+  return Math.max(...commands.map((cmd) => `${PROGRAM_NAME} ${cmd.usage}`.length));
+}
+
 /**
  * Format a single command for the main help listing.
  */
 function formatCommandSummary(cmd: Command, maxUsageWidth: number): string {
   const usage = `${PROGRAM_NAME} ${cmd.usage}`;
-  if (cmd.name === 'hook') {
-    return `${INDENT}${usage.padEnd(maxUsageWidth + PROGRAM_NAME.length + 6)}${cmd.description}`;
-  }
-  return `${INDENT}${usage.padEnd(maxUsageWidth + PROGRAM_NAME.length + 4)}${cmd.description}`;
+  return `${INDENT}${usage.padEnd(maxUsageWidth + 2)}${cmd.description}`;
 }
 
 function formatEnvironmentVariable(name: string, description: string): string {
@@ -105,7 +106,7 @@ export function printHelp(): void {
   const visibleCommands = getVisibleCommands();
 
   // Calculate max usage width for alignment
-  const maxUsageWidth = Math.max(...visibleCommands.map((cmd) => cmd.usage.length));
+  const maxUsageWidth = getCommandSummaryWidth(visibleCommands);
 
   const lines: string[] = [];
 

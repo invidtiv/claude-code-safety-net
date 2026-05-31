@@ -24,15 +24,6 @@ if (!result.success) {
   process.exit(1);
 }
 
-const indexOutput = result.outputs.find((o) => o.path.endsWith('index.js'));
-const binOutput = result.outputs.find((o) => o.path.endsWith('cc-safety-net.js'));
-if (indexOutput) {
-  console.log(`  dist/index.js              ${(indexOutput.size / 1024).toFixed(2)} KB`);
-}
-if (binOutput) {
-  console.log(`  dist/bin/cc-safety-net.js  ${(binOutput.size / 1024).toFixed(2)} KB`);
-}
-
 // Run build:types and build:schema
 const typesResult = Bun.spawnSync(['bun', 'run', 'build:types']);
 if (typesResult.exitCode !== 0) {
@@ -54,4 +45,12 @@ for (const file of expectedFiles) {
     process.exit(1);
   }
 }
+const indexOutput = result.outputs.find((o) => o.path.endsWith('index.js'));
+const binOutput = result.outputs.find((o) => o.path.endsWith('cc-safety-net.js'));
+if (!indexOutput || !binOutput) {
+  console.error('Build verification failed: expected bundled outputs not found');
+  process.exit(1);
+}
+console.log(`  dist/index.js              ${(indexOutput.size / 1024).toFixed(2)} KB`);
+console.log(`  dist/bin/cc-safety-net.js  ${(binOutput.size / 1024).toFixed(2)} KB`);
 console.log('  ✓ Build verification passed');

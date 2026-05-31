@@ -19,7 +19,7 @@ export const REPO = process.env.GITHUB_REPOSITORY ?? 'kenryu42/claude-code-safet
 /** Paths that indicate Claude Code plugin changes */
 const CLAUDE_CODE_PATHS = ['skills/', 'hooks/', '.claude-plugin/'];
 
-/** Paths that indicate OpenCode plugin changes */
+/** Paths that indicate OpenCode plugin changes; .opencode/ is reserved for future config assets. */
 const OPENCODE_PATHS = ['.opencode/'];
 
 /**
