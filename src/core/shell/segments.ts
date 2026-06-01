@@ -111,6 +111,9 @@ export function splitShellCommandsWithInfo(command: string): ShellCommandSegment
 
     const tokenText = getCommandTokenText(token);
     if (tokenText === null) {
+      if (token && typeof token === 'object' && 'op' in token && typeof token.op === 'string') {
+        _pushInlineSubstitutionSegmentInfos(segments, token.op);
+      }
       i++;
       continue;
     }
@@ -847,7 +850,7 @@ function advanceQuotedScanState(char: string, state: QuoteScanState): boolean {
     return true;
   }
 
-  if (char === '\\') {
+  if (char === '\\' && !state.inSingle) {
     state.escaped = true;
     return true;
   }

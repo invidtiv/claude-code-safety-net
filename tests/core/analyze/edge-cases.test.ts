@@ -214,6 +214,14 @@ describe('edge cases', () => {
       assertAllowed('echo $(rm -f /tmp/a )');
     });
 
+    test('quote boundary command substitution rm root blocked', () => {
+      assertBlocked("echo 'b\\'$(rm -rf /)'c'", 'extremely dangerous');
+    });
+
+    test('quote boundary command substitution safe command allowed', () => {
+      assertAllowed("echo 'b\\'$(printf ok)'c'");
+    });
+
     test('command substitution git status allowed', () => {
       assertAllowed('echo $(git status )');
     });

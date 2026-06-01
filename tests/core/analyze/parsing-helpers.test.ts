@@ -381,6 +381,11 @@ describe('shell parsing helpers', () => {
       ]);
     });
 
+    test('keeps quote boundary command substitutions analyzable', () => {
+      expect(splitShellCommands("echo 'b\\'$(rm -rf /)'c'")).toContainEqual(['rm', '-rf', '/']);
+      expect(splitShellCommands("echo 'b\\'$(printf ok)'c'")).toContainEqual(['printf', 'ok']);
+    });
+
     test('does not treat escaped or quoted inline substitutions as executable commands', () => {
       expect(splitShellCommands('echo $(printf "x\\$(git status)y")')).toEqual([
         ['echo'],

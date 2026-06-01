@@ -730,6 +730,9 @@ function splitShellCommandsWithInfo(command) {
     }
     const tokenText = getCommandTokenText(token);
     if (tokenText === null) {
+      if (token && typeof token === "object" && "op" in token && typeof token.op === "string") {
+        _pushInlineSubstitutionSegmentInfos(segments, token.op);
+      }
       i++;
       continue;
     }
@@ -1288,7 +1291,7 @@ function advanceQuotedScanState(char, state) {
     state.escaped = false;
     return true;
   }
-  if (char === "\\") {
+  if (char === "\\" && !state.inSingle) {
     state.escaped = true;
     return true;
   }
