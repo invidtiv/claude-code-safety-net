@@ -323,18 +323,11 @@ function analyzeGitClean(tokens: readonly string[]): string | null {
 }
 
 function analyzeGitPush(tokens: readonly string[]): string | null {
-  let hasForceWithLease = false;
   const shortOpts = extractShortOpts(tokens.filter((t) => t !== '--'));
   const hasForce =
     tokens.some((token) => matchesGitLongOption(token, '--force')) || shortOpts.has('-f');
 
-  for (const token of tokens) {
-    if (token === '--force-with-lease' || token.startsWith('--force-with-lease=')) {
-      hasForceWithLease = true;
-    }
-  }
-
-  if (hasForce && !hasForceWithLease) {
+  if (hasForce) {
     return REASON_PUSH_FORCE;
   }
 

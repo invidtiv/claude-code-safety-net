@@ -870,6 +870,13 @@ describe('edge cases', () => {
       assertBlocked('node -pe \'require("child_process").execSync("rm -rf /")\'', 'dangerous');
     });
 
+    test('interpreter rm recursive force variants blocked', () => {
+      assertBlocked('python -c \'import os; os.system("rm -Rf /")\'', 'dangerous');
+      assertBlocked('python -c \'import os; os.system("rm -FR /")\'', 'dangerous');
+      assertBlocked('python -c \'import os; os.system("rm --recursive --force /")\'', 'dangerous');
+      assertBlocked('python -c \'import os; os.system("rm --force --recursive /")\'', 'dangerous');
+    });
+
     test('wrapped combined interpreter execution flags with dangerous code blocked', () => {
       assertBlocked('env perl -we \'system("rm -rf /")\'', 'dangerous');
     });

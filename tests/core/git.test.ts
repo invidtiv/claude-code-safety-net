@@ -1593,12 +1593,12 @@ describe('git push', () => {
     assertAllowed('git push --force-with-lease=refs/heads/main');
   });
 
-  test('git push --force --force-with-lease allowed', () => {
-    assertAllowed('git push --force --force-with-lease');
+  test('git push --force --force-with-lease blocked', () => {
+    assertBlocked('git push --force --force-with-lease', 'push --force');
   });
 
-  test('git push -f --force-with-lease allowed', () => {
-    assertAllowed('git push -f --force-with-lease');
+  test('git push -f --force-with-lease blocked', () => {
+    assertBlocked('git push -f --force-with-lease', 'push --force');
   });
 
   test('git push origin main allowed', () => {

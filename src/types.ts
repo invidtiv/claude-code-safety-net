@@ -176,10 +176,8 @@ export const INTERPRETERS = new Set(['python', 'python3', 'python2', 'node', 'ru
 
 /** Dangerous commands to detect in interpreter code */
 export const DANGEROUS_PATTERNS = [
-  /\brm\s+.*-[rR].*-f\b/,
-  /\brm\s+.*-f.*-[rR]\b/,
-  /\brm\s+-rf\b/,
-  /\brm\s+-fr\b/,
+  /\brm\s+(?=[^\n;&|]*-[^\s]*[rR])(?=[^\n;&|]*-[^\s]*[fF])[^\n;&|]*/,
+  /\brm\s+(?=[^\n;&|]*--recursive\b)(?=[^\n;&|]*--force\b)[^\n;&|]*/,
   /\bgit\s+reset\s+--hard\b/,
   /\bgit\s+checkout\s+--\b/,
   /\bgit\s+clean\s+-f\b/,

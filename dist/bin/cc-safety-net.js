@@ -277,7 +277,7 @@ function dangerousInText(text) {
   const isEchoOrRg = stripped.startsWith("echo ") || stripped.startsWith("rg ");
   const patterns = [
     {
-      regex: /(^|[^\w])\\?r\\?m\s+(-[^\s]*r[^\s]*\s+-[^\s]*f|-[^\s]*f[^\s]*\s+-[^\s]*r|-[^\s]*rf|-[^\s]*fr)\b/,
+      regex: /(^|[^\w])\\?r\\?m\s+(-[^\s]*r[^\s]*\s+-[^\s]*f|-[^\s]*f[^\s]*\s+-[^\s]*r|-[^\s]*rf|-[^\s]*fr|(?=[^\n;&|]*--recursive\b)(?=[^\n;&|]*--force\b)[^\n;&|]*)\b/,
       reason: "rm -rf"
     },
     {
@@ -635,10 +635,8 @@ var SHELL_OPERATORS = new Set(["&&", "||", "|&", "|", "&", ";", `
 var SHELL_WRAPPERS = new Set(["bash", "sh", "zsh", "ksh", "dash", "fish", "csh", "tcsh"]);
 var INTERPRETERS = new Set(["python", "python3", "python2", "node", "ruby", "perl"]);
 var DANGEROUS_PATTERNS = [
-  /\brm\s+.*-[rR].*-f\b/,
-  /\brm\s+.*-f.*-[rR]\b/,
-  /\brm\s+-rf\b/,
-  /\brm\s+-fr\b/,
+  /\brm\s+(?=[^\n;&|]*-[^\s]*[rR])(?=[^\n;&|]*-[^\s]*[fF])[^\n;&|]*/,
+  /\brm\s+(?=[^\n;&|]*--recursive\b)(?=[^\n;&|]*--force\b)[^\n;&|]*/,
   /\bgit\s+reset\s+--hard\b/,
   /\bgit\s+checkout\s+--\b/,
   /\bgit\s+clean\s+-f\b/,
@@ -2858,15 +2856,9 @@ function analyzeGitClean(tokens) {
   return null;
 }
 function analyzeGitPush(tokens) {
-  let hasForceWithLease = false;
   const shortOpts = extractShortOpts(tokens.filter((t) => t !== "--"));
   const hasForce = tokens.some((token) => matchesGitLongOption(token, "--force")) || shortOpts.has("-f");
-  for (const token of tokens) {
-    if (token === "--force-with-lease" || token.startsWith("--force-with-lease=")) {
-      hasForceWithLease = true;
-    }
-  }
-  if (hasForce && !hasForceWithLease) {
+  if (hasForce) {
     return REASON_PUSH_FORCE;
   }
   return null;

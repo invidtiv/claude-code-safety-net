@@ -576,6 +576,8 @@ describe('dangerousInText', () => {
     expect(dangerousInText('rm -R -f /tmp/x')).toBe('rm -rf');
     expect(dangerousInText('rm -fr /tmp/x')).toBe('rm -rf');
     expect(dangerousInText('rm -f -r /tmp/x')).toBe('rm -rf');
+    expect(dangerousInText('rm --recursive --force /tmp/x')).toBe('rm -rf');
+    expect(dangerousInText('rm --force --recursive /tmp/x')).toBe('rm -rf');
   });
 
   test('detects with leading whitespace (trimStart)', () => {
