@@ -180,26 +180,10 @@ Running both together provides defense-in-depth. Sandboxing handles unknown thre
 
 ### OpenCode Installation
 
-Install Safety Net into your OpenCode config:
+Install Safety Net with OpenCode's native plugin command:
 
 ```bash
-npx -y cc-safety-net hook install --opencode
-```
-
-This updates the first existing OpenCode config file in OpenCode's priority order:
-
-1. `opencode.jsonc`
-2. `opencode.json`
-3. `config.json`
-
-If no config file exists, Safety Net creates `opencode.jsonc`.
-
-The config directory is `$OPENCODE_CONFIG_DIR` when set, otherwise `$XDG_CONFIG_HOME/opencode` or `~/.config/opencode`.
-
-To uninstall:
-
-```bash
-npx -y cc-safety-net hook uninstall --opencode
+opencode plugin -g cc-safety-net
 ```
 
 ---
