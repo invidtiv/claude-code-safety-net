@@ -4024,6 +4024,7 @@ function analyzeSegment(tokens, depth, options2) {
     envAssignments,
     allowTmpdirVar,
     depth,
+    effectiveCwd: nestedEffectiveCwd,
     options: options2
   };
   const commandAnalyzer = getCommandAnalyzer(commandContext);
@@ -4068,6 +4069,16 @@ function analyzeEmbeddedCommand(context, index) {
     return null;
   }
   const cmd = normalizeCommandToken(token);
+  if (isShellWrapperCommand(token, cmd)) {
+    const dashCArg = extractDashCArg([token, ...context.tokens.slice(index + 1)]);
+    if (!dashCArg) {
+      return null;
+    }
+    return context.options.analyzeNested(dashCArg, {
+      effectiveCwd: context.effectiveCwd,
+      envAssignments: context.envAssignments
+    });
+  }
   const analyzer = COMMAND_ANALYZERS.get(cmd);
   if (!analyzer || cmd === "xargs" || cmd === "parallel") {
     return null;
@@ -8396,7 +8407,26 @@ function explainSegment(tokens, depth, options2, steps) {
         continue;
       tokensScanned.push(token);
       const cmd = normalizeCommandToken(token);
-      if (cmd === "rm") {
+      if (isShellWrapperCommand2(token, cmd)) {
+        const innerCmd = extractDashCArg([token, ...strippedTokens.slice(i + 1)]);
+        if (innerCmd) {
+          embeddedCommandFound = cmd;
+          const redactedInnerCmd = redactEnvAssignmentsInString(innerCmd);
+          steps.push({
+            type: "shell-wrapper",
+            wrapper: cmd,
+            innerCommand: redactedInnerCmd
+          });
+          steps.push({
+            type: "recurse",
+            reason: "shell-wrapper",
+            innerCommand: redactedInnerCmd,
+            depth: depth + 1
+          });
+          fallbackReason = explainInnerSegments(innerCmd, depth, nestedOptions, steps)?.reason ?? null;
+        }
+      }
+      if (!fallbackReason && cmd === "rm") {
         embeddedCommandFound = "rm";
         const rmTokens = ["rm", ...strippedTokens.slice(i + 1)];
         fallbackReason = analyzeRm(rmTokens, {

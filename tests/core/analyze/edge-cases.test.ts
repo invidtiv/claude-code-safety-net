@@ -1071,6 +1071,18 @@ describe('edge cases', () => {
     test('watch with separate interval value executes embedded rm command', () => {
       assertBlocked('watch -n 1 rm -rf /', 'rm -rf');
     });
+
+    test('time executes embedded shell wrapper command', () => {
+      assertBlocked("time sh -c 'git reset --hard'", 'git reset --hard');
+    });
+
+    test('watch executes embedded shell wrapper command', () => {
+      assertBlocked("watch sh -c 'git reset --hard'", 'git reset --hard');
+    });
+
+    test('timeout executes embedded shell wrapper command', () => {
+      assertBlocked("timeout 10 sh -c 'rm -rf /'", 'rm -rf');
+    });
   });
 
   describe('recursion depth boundary', () => {

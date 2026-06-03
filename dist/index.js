@@ -3968,6 +3968,7 @@ function analyzeSegment(tokens, depth, options2) {
     envAssignments,
     allowTmpdirVar,
     depth,
+    effectiveCwd: nestedEffectiveCwd,
     options: options2
   };
   const commandAnalyzer = getCommandAnalyzer(commandContext);
@@ -4012,6 +4013,16 @@ function analyzeEmbeddedCommand(context, index) {
     return null;
   }
   const cmd = normalizeCommandToken(token);
+  if (isShellWrapperCommand(token, cmd)) {
+    const dashCArg = extractDashCArg([token, ...context.tokens.slice(index + 1)]);
+    if (!dashCArg) {
+      return null;
+    }
+    return context.options.analyzeNested(dashCArg, {
+      effectiveCwd: context.effectiveCwd,
+      envAssignments: context.envAssignments
+    });
+  }
   const analyzer = COMMAND_ANALYZERS.get(cmd);
   if (!analyzer || cmd === "xargs" || cmd === "parallel") {
     return null;

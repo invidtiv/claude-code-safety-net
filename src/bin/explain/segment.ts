@@ -458,7 +458,27 @@ export function explainSegment(
       tokensScanned.push(token);
 
       const cmd = normalizeCommandToken(token);
-      if (cmd === 'rm') {
+      if (isShellWrapperCommand(token, cmd)) {
+        const innerCmd = extractDashCArg([token, ...strippedTokens.slice(i + 1)]);
+        if (innerCmd) {
+          embeddedCommandFound = cmd;
+          const redactedInnerCmd = redactEnvAssignmentsInString(innerCmd);
+          steps.push({
+            type: 'shell-wrapper',
+            wrapper: cmd,
+            innerCommand: redactedInnerCmd,
+          });
+          steps.push({
+            type: 'recurse',
+            reason: 'shell-wrapper',
+            innerCommand: redactedInnerCmd,
+            depth: depth + 1,
+          });
+          fallbackReason =
+            explainInnerSegments(innerCmd, depth, nestedOptions, steps)?.reason ?? null;
+        }
+      }
+      if (!fallbackReason && cmd === 'rm') {
         embeddedCommandFound = 'rm';
         const rmTokens = ['rm', ...strippedTokens.slice(i + 1)];
         fallbackReason = analyzeRm(rmTokens, {

@@ -536,6 +536,10 @@ describe('explainCommand guard parity fixes', () => {
     expectFallbackScan('nice rm -rf /');
   });
 
+  test('fallback scan recurses into embedded shell wrapper', () => {
+    expectFallbackScan("time sh -c 'git reset --hard'", 'sh');
+  });
+
   test('Fix #5: shell wrapper recurses and blocks dangerous nested commands', () => {
     const result = explainCommand('bash -c "git reset --hard"');
     expect(result.result).toBe('blocked');

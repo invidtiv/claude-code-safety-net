@@ -45,6 +45,7 @@ interface CommandAnalysisContext {
   envAssignments: ReadonlyMap<string, string>;
   allowTmpdirVar: boolean;
   depth: number;
+  effectiveCwd: string | null | undefined;
   options: InternalOptions;
 }
 
@@ -175,6 +176,7 @@ export function analyzeSegment(
     envAssignments,
     allowTmpdirVar,
     depth,
+    effectiveCwd: nestedEffectiveCwd,
     options,
   };
   const commandAnalyzer = getCommandAnalyzer(commandContext);
@@ -235,6 +237,17 @@ function analyzeEmbeddedCommand(context: CommandAnalysisContext, index: number):
   }
 
   const cmd = normalizeCommandToken(token);
+  if (isShellWrapperCommand(token, cmd)) {
+    const dashCArg = extractDashCArg([token, ...context.tokens.slice(index + 1)]);
+    if (!dashCArg) {
+      return null;
+    }
+    return context.options.analyzeNested(dashCArg, {
+      effectiveCwd: context.effectiveCwd,
+      envAssignments: context.envAssignments,
+    });
+  }
+
   const analyzer = COMMAND_ANALYZERS.get(cmd);
   if (!analyzer || cmd === 'xargs' || cmd === 'parallel') {
     return null;
