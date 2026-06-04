@@ -5,6 +5,7 @@
  */
 
 import pkg from '../package.json';
+import { getBundledOutputs } from './build-output';
 import { formatSubprocessFailure } from './subprocess-output';
 
 const result = await Bun.build({
@@ -51,9 +52,7 @@ for (const file of expectedFiles) {
     process.exit(1);
   }
 }
-const indexOutput = result.outputs.find((o) => o.path.endsWith('index.js'));
-const binOutput = result.outputs.find((o) => o.path.endsWith('cc-safety-net.js'));
-const piOutput = result.outputs.find((o) => o.path.endsWith('pi/index.js'));
+const { indexOutput, binOutput, piOutput } = getBundledOutputs(result.outputs);
 if (!indexOutput || !binOutput || !piOutput) {
   console.error('Build verification failed: expected bundled outputs not found');
   process.exit(1);
