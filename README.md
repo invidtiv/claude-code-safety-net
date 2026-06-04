@@ -35,8 +35,6 @@ A Coding Agent CLI plugin that acts as a safety net, catching destructive git an
   - [OpenCode Installation](#opencode-installation)
   - [Pi Installation](#pi-installation)
 - [Status Line Integration](#status-line-integration)
-  - [Setup via Slash Command](#setup-via-slash-command)
-  - [Manual Setup](#manual-setup)
   - [Emoji Mode Indicators](#emoji-mode-indicators)
 - [Diagnostics](#diagnostics)
 - [Explain (Debug Analysis)](#explain-debug-analysis)
@@ -78,7 +76,7 @@ Claude Code's `.claude/settings.json` supports [deny rules](https://code.claude.
 | **Setup** | Manual configuration required | Works out of the box |
 | **Parsing** | Wildcard pattern matching | Semantic command analysis |
 | **Execution order** | Runs second | Runs first (PreToolUse hook) |
-| **Shell wrappers** | Not handled automatically (must match wrapper forms) | Recursively analyzed (5 levels) |
+| **Shell wrappers** | Not handled automatically (must match wrapper forms) | Recursively analyzed (up to 10 levels) |
 | **Interpreter one-liners** | Not handled automatically (must match interpreter forms) | Detected and blocked |
 
 ### Permission Rules Have Known Bypass Vectors
@@ -316,14 +314,14 @@ The status line displays different emojis based on the current configuration:
 |--------|---------|---------|
 | Plugin disabled | `🛡️ CC Safety Net ❌` | CC Safety Net plugin is not enabled |
 | Default mode | `🛡️ CC Safety Net ✅` | Protection active with default settings |
-| Strict mode | `🛡️ CC Safety Net 🔒` | `SAFETY_NET_STRICT=1` — fail-closed on unparseable commands |
-| Paranoid mode | `🛡️ CC Safety Net 👁️` | `SAFETY_NET_PARANOID=1` — all paranoid checks enabled |
-| Paranoid RM only | `🛡️ CC Safety Net 🗑️` | `SAFETY_NET_PARANOID_RM=1` — blocks `rm -rf` even within cwd |
-| Paranoid interpreters only | `🛡️ CC Safety Net 🐚` | `SAFETY_NET_PARANOID_INTERPRETERS=1` — blocks interpreter one-liners |
-| Worktree mode | `🛡️ CC Safety Net 🌳` | `SAFETY_NET_WORKTREE=1` — relax local git discards inside linked worktrees |
+| Strict mode | `🛡️ CC Safety Net 🔒` | `CC_SAFETY_NET_STRICT=1` — fail-closed on unparseable commands |
+| Paranoid mode | `🛡️ CC Safety Net 👁️` | `CC_SAFETY_NET_PARANOID=1` — all paranoid checks enabled |
+| Paranoid RM only | `🛡️ CC Safety Net 🗑️` | `CC_SAFETY_NET_PARANOID_RM=1` — blocks `rm -rf` even within cwd |
+| Paranoid interpreters only | `🛡️ CC Safety Net 🐚` | `CC_SAFETY_NET_PARANOID_INTERPRETERS=1` — blocks interpreter one-liners |
+| Worktree mode | `🛡️ CC Safety Net 🌳` | `CC_SAFETY_NET_WORKTREE=1` — relax local git discards inside linked worktrees |
 | Strict + Paranoid | `🛡️ CC Safety Net 🔒👁️` | Both strict and paranoid modes enabled |
 
-Multiple mode emojis are combined when multiple environment variables are set.
+Multiple mode emojis are combined when multiple environment variables are set. Mode flags use `CC_SAFETY_NET_*` names; legacy `SAFETY_NET_*` names are still accepted.
 
 ## Diagnostics
 
@@ -342,7 +340,7 @@ The doctor command checks:
 | Hook Integration | Verifies the plugin is properly configured for each supported platform |
 | Self-Test | Runs sample commands to confirm blocking works correctly |
 | Configuration | Validates custom rules in user and project configs |
-| Environment | Shows status of mode flags (SAFETY_NET_STRICT, SAFETY_NET_PARANOID, etc.) |
+| Environment | Shows status of mode flags (`CC_SAFETY_NET_STRICT`, `CC_SAFETY_NET_PARANOID`, etc.; legacy `SAFETY_NET_*` also listed when set) |
 | Recent Activity | Summarizes blocked commands from the last 7 days |
 | System Info | Displays versions of all relevant tools |
 | Update Check | Checks if a newer version is available |
@@ -388,6 +386,8 @@ npx cc-safety-net explain --cwd /tmp "git status"
 | git checkout \<ref\> \<path\> | May overwrite working tree when Git disambiguates ref vs pathspec |
 | git restore files | Discards uncommitted changes |
 | git restore --worktree | Explicitly discards working tree changes |
+| git switch --discard-changes | Discards uncommitted changes when switching branches |
+| git switch --force / -f | Discards uncommitted changes (force switch) |
 | git reset --hard | Destroys all uncommitted changes |
 | git reset --merge | Can lose uncommitted changes |
 | git clean -f | Removes untracked files permanently |
@@ -422,7 +422,7 @@ npx cc-safety-net explain --cwd /tmp "git status"
 | rm -rf /var/tmp/... | System temp directory |
 | rm -rf $TMPDIR/... | User's temp directory |
 | rm -rf ./... (within cwd) | Limited to current working directory |
-| git restore / checkout -- / reset --hard / clean -f (in linked worktree) | Relaxed only when `SAFETY_NET_WORKTREE=1` and cwd is a linked worktree |
+| git restore / checkout -- / reset --hard / clean -f (in linked worktree) | Relaxed only when `CC_SAFETY_NET_WORKTREE=1` and cwd is a linked worktree |
 
 ## What Happens When Blocked
 
@@ -758,6 +758,8 @@ Command: git add -A
 
 ## Advanced Features
 
+Mode and debug flags use **`CC_SAFETY_NET_*`** environment variables. Older **`SAFETY_NET_*`** names (without the `CC_` prefix) still work for strict, paranoid, and worktree toggles.
+
 ### Strict Mode
 
 Malformed or missing hook input JSON always fails closed. By default, ambiguous shell
@@ -766,7 +768,7 @@ command cannot be safely analyzed (e.g., unterminated quotes or malformed `bash 
 wrappers):
 
 ```bash
-export SAFETY_NET_STRICT=1
+export CC_SAFETY_NET_STRICT=1
 ```
 
 ### Paranoid Mode
@@ -776,11 +778,11 @@ You can enable it globally or via focused toggles:
 
 ```bash
 # Enable all paranoid checks
-export SAFETY_NET_PARANOID=1
+export CC_SAFETY_NET_PARANOID=1
 
 # Or enable specific paranoid checks
-export SAFETY_NET_PARANOID_RM=1
-export SAFETY_NET_PARANOID_INTERPRETERS=1
+export CC_SAFETY_NET_PARANOID_RM=1
+export CC_SAFETY_NET_PARANOID_INTERPRETERS=1
 ```
 
 Paranoid behavior:
@@ -797,7 +799,7 @@ local-discard rules when (and only when) the command is proven to run inside a
 linked worktree:
 
 ```bash
-export SAFETY_NET_WORKTREE=1
+export CC_SAFETY_NET_WORKTREE=1
 ```
 
 When enabled, these commands are allowed inside a linked worktree:
