@@ -15,7 +15,7 @@ import {
   formatUpdateSection,
 } from '@/bin/doctor/format';
 import { getSystemInfo } from '@/bin/doctor/system-info';
-import type { DoctorReport, EffectiveRule, HookStatus } from '@/bin/doctor/types';
+import type { DoctorReport, EffectiveRule, HookStatus, SystemInfo } from '@/bin/doctor/types';
 import { mockVersionFetcher, withStdoutColor } from '../../helpers.ts';
 
 function createDoctorReport(overrides: Partial<DoctorReport> = {}): DoctorReport {
@@ -37,10 +37,16 @@ function createDoctorReport(overrides: Partial<DoctorReport> = {}): DoctorReport
       geminiExtensionsListOutput: null,
       copilotCliVersion: null,
       kimiCliVersion: null,
+      piCliVersion: null,
       nodeVersion: '22.0.0',
       npmVersion: '10.0.0',
       bunVersion: '1.0.0',
       copilotPluginInstalled: false,
+      piSafetyNetProbe: {
+        status: 'unavailable',
+        installedAndEnabled: false,
+        matched: [],
+      },
       platform: 'darwin',
     },
     ...overrides,
@@ -151,6 +157,14 @@ describe('formatHooksSection', () => {
 
     const output = formatHooksSection(hooks);
     expect(output).toContain('Kimi CLI');
+    expect(output).toContain('Configured');
+  });
+
+  test('formats Pi hooks', () => {
+    const hooks: HookStatus[] = [{ platform: 'pi', status: 'configured' }];
+
+    const output = formatHooksSection(hooks);
+    expect(output).toContain('Pi');
     expect(output).toContain('Configured');
   });
 
@@ -409,13 +423,14 @@ describe('formatSystemInfoSection', () => {
     expect(output).toContain('Bun');
     expect(output).toContain('Copilot CLI');
     expect(output).toContain('Kimi CLI');
+    expect(output).toContain('Pi');
     // Should have table borders
     expect(output).toContain('┌');
     expect(output).toContain('┘');
   });
 
   test('formats null versions as "not found"', () => {
-    const sysInfo = {
+    const sysInfo: SystemInfo = {
       version: 'dev',
       claudeCodeVersion: null,
       claudePluginListOutput: null,
@@ -424,10 +439,16 @@ describe('formatSystemInfoSection', () => {
       geminiExtensionsListOutput: null,
       copilotCliVersion: null,
       kimiCliVersion: null,
+      piCliVersion: null,
       nodeVersion: '22.0.0',
       npmVersion: null,
       bunVersion: '1.0.0',
       copilotPluginInstalled: false,
+      piSafetyNetProbe: {
+        status: 'unavailable',
+        installedAndEnabled: false,
+        matched: [],
+      },
       platform: 'darwin arm64',
     };
     const output = formatSystemInfoSection(sysInfo);

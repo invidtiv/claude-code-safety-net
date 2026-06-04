@@ -5,7 +5,13 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { HookStatus, SelfTestCase, SelfTestResult, SelfTestSummary } from '@/bin/doctor/types';
+import type {
+  HookStatus,
+  PiProbeInfo,
+  SelfTestCase,
+  SelfTestResult,
+  SelfTestSummary,
+} from '@/bin/doctor/types';
 import { doctorIntegrationOrder } from '@/bin/integration-metadata';
 import { analyzeCommand } from '@/core/analyze';
 import type { LoadConfigOptions } from '@/core/config';
@@ -17,6 +23,7 @@ interface HookDetectOptions extends LoadConfigOptions {
   geminiExtensionsListOutput?: string | null;
   copilotCliVersion?: string | null;
   copilotPluginInstalled?: boolean;
+  piSafetyNetProbe?: PiProbeInfo;
 }
 
 interface CopilotHookEntry {
@@ -410,6 +417,38 @@ function detectKimiCLI(homeDir: string): HookStatus {
     status: 'configured',
     method: 'hook config',
     configPath,
+    selfTest: runSelfTest(),
+  };
+}
+
+function detectPi(probe: PiProbeInfo | undefined): HookStatus {
+  if (!probe || probe.status === 'unavailable') {
+    return { platform: 'pi', status: 'n/a' };
+  }
+
+  if (probe.status === 'error') {
+    return {
+      platform: 'pi',
+      status: 'n/a',
+      method: 'pi probe',
+      errors: [probe.error ?? 'Pi probe failed'],
+    };
+  }
+
+  if (!probe.installedAndEnabled) {
+    return { platform: 'pi', status: 'n/a', method: 'pi probe' };
+  }
+
+  const configPaths = probe.matched
+    .map((resource) => resource.path)
+    .filter((path): path is string => typeof path === 'string');
+
+  return {
+    platform: 'pi',
+    status: 'configured',
+    method: 'pi probe',
+    configPath: configPaths[0],
+    configPaths: configPaths.length > 0 ? configPaths : undefined,
     selfTest: runSelfTest(),
   };
 }
@@ -835,6 +874,8 @@ export function detectAllHooks(cwd: string, options?: HookDetectOptions): HookSt
         return detectCopilotCLI();
       case 'kimi-cli':
         return detectKimiCLI(homeDir);
+      case 'pi':
+        return detectPi(options?.piSafetyNetProbe);
       case 'codex':
         return detectCodex(homeDir);
     }

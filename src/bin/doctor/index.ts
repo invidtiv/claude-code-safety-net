@@ -26,12 +26,13 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<number> {
   const cwd = options.cwd ?? process.cwd();
 
   // Collect all data
-  const system = await getSystemInfo();
+  const system = await getSystemInfo(undefined, { cwd });
   const hooks = detectAllHooks(cwd, {
     claudePluginListOutput: system.claudePluginListOutput,
     geminiExtensionsListOutput: system.geminiExtensionsListOutput,
     copilotCliVersion: system.copilotCliVersion,
     copilotPluginInstalled: system.copilotPluginInstalled,
+    piSafetyNetProbe: system.piSafetyNetProbe,
   });
   const configInfo = getConfigInfo(cwd);
   const environment = getEnvironmentInfo();

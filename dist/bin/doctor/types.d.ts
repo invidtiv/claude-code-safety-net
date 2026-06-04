@@ -91,6 +91,19 @@ export interface UpdateInfo {
     updateAvailable: boolean;
     error?: string;
 }
+export type PiProbeStatus = 'configured' | 'not-found' | 'unavailable' | 'error';
+export interface PiProbeResource {
+    kind: 'command' | 'tool';
+    name: string;
+    path?: string;
+    source?: string;
+}
+export interface PiProbeInfo {
+    status: PiProbeStatus;
+    installedAndEnabled: boolean;
+    matched: PiProbeResource[];
+    error?: string;
+}
 /** System information */
 export interface SystemInfo {
     /** cc-safety-net version */
@@ -109,6 +122,8 @@ export interface SystemInfo {
     copilotCliVersion: string | null;
     /** Kimi CLI version (from `kimi --version`) */
     kimiCliVersion: string | null;
+    /** Pi CLI version (from `pi --version`) */
+    piCliVersion: string | null;
     /** Node.js version (from `node --version`) */
     nodeVersion: string | null;
     /** npm version (from `npm --version`) */
@@ -117,6 +132,8 @@ export interface SystemInfo {
     bunVersion: string | null;
     /** Whether the copilot-safety-net plugin is installed (from `copilot plugin list`) */
     copilotPluginInstalled: boolean;
+    /** Whether the Pi extension sentinel is runtime-visible */
+    piSafetyNetProbe: PiProbeInfo;
     /** Platform (e.g., "darwin arm64") */
     platform: string;
 }

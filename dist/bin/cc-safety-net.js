@@ -6434,6 +6434,11 @@ var integrationMetadata = [
     }
   },
   {
+    id: "pi",
+    displayName: "Pi",
+    doctorVisible: true
+  },
+  {
     id: "codex",
     displayName: "Codex",
     doctorVisible: true
@@ -7140,6 +7145,7 @@ function formatSystemInfoTable(system) {
     { label: "Gemini CLI", value: system.geminiCliVersion },
     { label: "Copilot CLI", value: system.copilotCliVersion },
     { label: "Kimi CLI", value: system.kimiCliVersion },
+    { label: "Pi", value: system.piCliVersion },
     { label: "Node.js", value: system.nodeVersion },
     { label: "npm", value: system.npmVersion },
     { label: "Bun", value: system.bunVersion },
@@ -7435,6 +7441,31 @@ function detectKimiCLI(homeDir) {
     status: "configured",
     method: "hook config",
     configPath,
+    selfTest: runSelfTest()
+  };
+}
+function detectPi(probe) {
+  if (!probe || probe.status === "unavailable") {
+    return { platform: "pi", status: "n/a" };
+  }
+  if (probe.status === "error") {
+    return {
+      platform: "pi",
+      status: "n/a",
+      method: "pi probe",
+      errors: [probe.error ?? "Pi probe failed"]
+    };
+  }
+  if (!probe.installedAndEnabled) {
+    return { platform: "pi", status: "n/a", method: "pi probe" };
+  }
+  const configPaths = probe.matched.map((resource) => resource.path).filter((path) => typeof path === "string");
+  return {
+    platform: "pi",
+    status: "configured",
+    method: "pi probe",
+    configPath: configPaths[0],
+    configPaths: configPaths.length > 0 ? configPaths : undefined,
     selfTest: runSelfTest()
   };
 }
@@ -7767,6 +7798,8 @@ function detectAllHooks(cwd, options2) {
         return detectCopilotCLI();
       case "kimi-cli":
         return detectKimiCLI(homeDir);
+      case "pi":
+        return detectPi(options2?.piSafetyNetProbe);
       case "codex":
         return detectCodex(homeDir);
     }
@@ -7776,8 +7809,19 @@ function detectAllHooks(cwd, options2) {
 
 // src/bin/doctor/system-info.ts
 import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir as tmpdir4 } from "node:os";
+import { join as join11 } from "node:path";
 var CURRENT_VERSION = "0.9.0";
 var VERSION_FETCH_TIMEOUT_MS = 2000;
+var PI_PROBE_TIMEOUT_MS = 5000;
+var PI_SENTINEL_COMMAND = "cc-safety-net";
+var PI_PROBE_COMMAND = "__cc_safety_net_probe";
+var PI_PROBE_UNAVAILABLE = {
+  status: "unavailable",
+  installedAndEnabled: false,
+  matched: []
+};
 function getPackageVersion() {
   return CURRENT_VERSION;
 }
@@ -7822,6 +7866,190 @@ var defaultVersionFetcher = async (args) => {
     }
   });
 };
+var PI_PROBE_EXTENSION = `
+import { writeFileSync } from "node:fs";
+
+export default function (pi) {
+  pi.registerCommand("${PI_PROBE_COMMAND}", {
+    description: "Probe loaded CC Safety Net Pi resources",
+    handler: async (args, ctx) => {
+      const needle = args.trim();
+      const commands = typeof pi.getCommands === "function"
+        ? pi.getCommands().map((command) => ({
+            kind: "command",
+            name: command.name,
+            path: command.sourceInfo?.path,
+            source: command.sourceInfo?.source,
+          }))
+        : [];
+      const tools = typeof pi.getAllTools === "function"
+        ? pi.getAllTools().map((tool) => ({
+            kind: "tool",
+            name: tool.name,
+            path: tool.sourceInfo?.path,
+            source: tool.sourceInfo?.source,
+          }))
+        : [];
+      const resources = [...commands, ...tools];
+      const matched = resources.filter(
+        (resource) => resource.name === needle || resource.path === needle,
+      );
+
+      writeFileSync(
+        process.env.PI_PROBE_OUT,
+        JSON.stringify({
+          installedAndEnabled: matched.length > 0,
+          matched,
+        }),
+      );
+
+      ctx.shutdown?.();
+    },
+  });
+}
+`.trimStart();
+function runCommand(args, options2) {
+  const [cmd, ...rest] = args;
+  if (!cmd) {
+    return Promise.resolve({ code: null, stdout: "", stderr: "", timedOut: false });
+  }
+  return new Promise((resolve8) => {
+    try {
+      const proc = spawn(cmd, rest, {
+        cwd: options2.cwd,
+        env: { ...process.env, ...options2.env ?? {} },
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+      let isSettled = false;
+      let stdout = "";
+      let stderr = "";
+      proc.stdout.on("data", (data) => {
+        stdout += data.toString();
+      });
+      proc.stderr.on("data", (data) => {
+        stderr += data.toString();
+      });
+      const finish = (result) => {
+        if (isSettled)
+          return;
+        isSettled = true;
+        clearTimeout(timeoutId);
+        resolve8(result);
+      };
+      const timeoutId = setTimeout(() => {
+        proc.kill();
+        finish({ code: null, stdout, stderr, timedOut: true });
+      }, options2.timeoutMs);
+      proc.on("close", (code) => {
+        finish({ code, stdout, stderr, timedOut: false });
+      });
+      proc.on("error", (error) => {
+        finish({ code: null, stdout, stderr, timedOut: false, error: error.message });
+      });
+    } catch (error) {
+      resolve8({
+        code: null,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+}
+var defaultPiProbeRunner = async (cwd) => {
+  const tempDir = await mkdtemp(join11(tmpdir4(), "cc-safety-net-pi-probe-"));
+  const probePath = join11(tempDir, "pi-extension-probe.ts");
+  const resultPath = join11(tempDir, "result.json");
+  const stdoutPath = join11(tempDir, "stdout.jsonl");
+  try {
+    await writeFile(probePath, PI_PROBE_EXTENSION);
+    const result = await runCommand(["pi", "-e", probePath, "--mode", "json", `/${PI_PROBE_COMMAND} ${PI_SENTINEL_COMMAND}`], {
+      cwd,
+      env: { PI_PROBE_OUT: resultPath },
+      timeoutMs: PI_PROBE_TIMEOUT_MS
+    });
+    await writeFile(stdoutPath, result.stdout);
+    if (result.timedOut) {
+      return {
+        status: "error",
+        installedAndEnabled: false,
+        matched: [],
+        error: "Pi probe timed out"
+      };
+    }
+    if (result.error) {
+      return {
+        status: "error",
+        installedAndEnabled: false,
+        matched: [],
+        error: `Pi probe failed: ${result.error}`
+      };
+    }
+    if (result.code !== 0) {
+      return {
+        status: "error",
+        installedAndEnabled: false,
+        matched: [],
+        error: `Pi probe exited with code ${result.code ?? "unknown"}${result.stderr.trim() ? `: ${result.stderr.trim()}` : ""}`
+      };
+    }
+    return parsePiProbeResult(await readFile(resultPath, "utf-8"));
+  } catch (error) {
+    return {
+      status: "error",
+      installedAndEnabled: false,
+      matched: [],
+      error: `Pi probe failed: ${error instanceof Error ? error.message : String(error)}`
+    };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+};
+function parsePiProbeResult(content) {
+  try {
+    const parsed = JSON.parse(content);
+    if (!isObject(parsed)) {
+      return {
+        status: "error",
+        installedAndEnabled: false,
+        matched: [],
+        error: "Pi probe result was not an object"
+      };
+    }
+    const matched = Array.isArray(parsed.matched) ? parsed.matched.map(parsePiProbeResource).filter((resource) => resource !== null) : [];
+    const installedAndEnabled = parsed.installedAndEnabled === true;
+    return {
+      status: installedAndEnabled ? "configured" : "not-found",
+      installedAndEnabled,
+      matched
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      installedAndEnabled: false,
+      matched: [],
+      error: `Failed to parse Pi probe result: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
+function parsePiProbeResource(value) {
+  if (!isObject(value))
+    return null;
+  if (value.kind !== "command" && value.kind !== "tool")
+    return null;
+  if (typeof value.name !== "string")
+    return null;
+  return {
+    kind: value.kind,
+    name: value.name,
+    ...typeof value.path === "string" ? { path: value.path } : {},
+    ...typeof value.source === "string" ? { source: value.source } : {}
+  };
+}
+function isObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
 function parseVersion(output) {
   if (!output)
     return null;
@@ -7841,7 +8069,17 @@ function hasCopilotSafetyNetPlugin(output) {
   const pluginPattern = new RegExp(`(^|[^a-z0-9-])${COPILOT_PLUGIN_ID}([^a-z0-9-]|$)`, "m");
   return pluginPattern.test(output);
 }
-async function getSystemInfo(fetcher = defaultVersionFetcher) {
+async function getSystemInfo(fetcher = defaultVersionFetcher, options2 = {}) {
+  const piRawPromise = fetcher(["pi", "--version"]);
+  const piProbeRunner = options2.piProbeRunner ?? defaultPiProbeRunner;
+  const shouldRunPiProbe = !!options2.piProbeRunner || fetcher === defaultVersionFetcher;
+  const piProbePromise = piRawPromise.then((piRaw2) => {
+    if (!piRaw2)
+      return PI_PROBE_UNAVAILABLE;
+    if (!shouldRunPiProbe)
+      return PI_PROBE_UNAVAILABLE;
+    return piProbeRunner(options2.cwd ?? process.cwd());
+  });
   const fetchCopilotVersion = async () => {
     const binaryVersionPromise = fetcher(["copilot", "--binary-version"]);
     const fallbackVersionPromise = fetcher(["copilot", "--version"]);
@@ -7859,10 +8097,12 @@ async function getSystemInfo(fetcher = defaultVersionFetcher) {
     geminiExtensionsListOutput,
     copilotRaw,
     kimiRaw,
+    piRaw,
     nodeRaw,
     npmRaw,
     bunRaw,
-    pluginListRaw
+    pluginListRaw,
+    piSafetyNetProbe
   ] = await Promise.all([
     fetcher(["claude", "--version"]),
     fetcher(["claude", "plugin", "list"]),
@@ -7871,10 +8111,12 @@ async function getSystemInfo(fetcher = defaultVersionFetcher) {
     fetcher(["gemini", "extensions", "list"]),
     fetchCopilotVersion(),
     fetcher(["kimi", "--version"]),
+    piRawPromise,
     fetcher(["node", "--version"]),
     fetcher(["npm", "--version"]),
     fetcher(["bun", "--version"]),
-    fetcher(["copilot", "plugin", "list"])
+    fetcher(["copilot", "plugin", "list"]),
+    piProbePromise
   ]);
   return {
     version: CURRENT_VERSION,
@@ -7885,10 +8127,12 @@ async function getSystemInfo(fetcher = defaultVersionFetcher) {
     geminiExtensionsListOutput,
     copilotCliVersion: parseVersion(copilotRaw),
     kimiCliVersion: parseVersion(kimiRaw),
+    piCliVersion: parseVersion(piRaw),
     nodeVersion: parseVersion(nodeRaw),
     npmVersion: parseVersion(npmRaw),
     bunVersion: parseVersion(bunRaw),
     copilotPluginInstalled: hasCopilotSafetyNetPlugin(pluginListRaw),
+    piSafetyNetProbe,
     platform: `${process.platform} ${process.arch}`
   };
 }
@@ -7953,12 +8197,13 @@ function parseDoctorFlags(args) {
 // src/bin/doctor/index.ts
 async function runDoctor(options2 = {}) {
   const cwd = options2.cwd ?? process.cwd();
-  const system = await getSystemInfo();
+  const system = await getSystemInfo(undefined, { cwd });
   const hooks = detectAllHooks(cwd, {
     claudePluginListOutput: system.claudePluginListOutput,
     geminiExtensionsListOutput: system.geminiExtensionsListOutput,
     copilotCliVersion: system.copilotCliVersion,
-    copilotPluginInstalled: system.copilotPluginInstalled
+    copilotPluginInstalled: system.copilotPluginInstalled,
+    piSafetyNetProbe: system.piSafetyNetProbe
   });
   const configInfo = getConfigInfo(cwd);
   const environment = getEnvironmentInfo();
@@ -9124,7 +9369,7 @@ import { homedir as homedir6 } from "node:os";
 
 // src/bin/hook/install/kimi-cli.ts
 import { existsSync as existsSync15, mkdirSync as mkdirSync4, readFileSync as readFileSync11, writeFileSync as writeFileSync3 } from "node:fs";
-import { dirname as dirname9, join as join11 } from "node:path";
+import { dirname as dirname9, join as join12 } from "node:path";
 
 // src/bin/hook/config-edit.ts
 function isWhitespace(char) {
@@ -9218,7 +9463,7 @@ matcher = "Shell"
 command = "${KIMI_HOOK_COMMAND}"`;
 var KIMI_INLINE_HOOK = `{ event = "PreToolUse", matcher = "Shell", command = "${KIMI_HOOK_COMMAND}" }`;
 function getKimiConfigPath(homeDir) {
-  return join11(process.env.KIMI_SHARE_DIR ?? join11(homeDir, ".kimi"), "config.toml");
+  return join12(process.env.KIMI_SHARE_DIR ?? join12(homeDir, ".kimi"), "config.toml");
 }
 function removeTopLevelEmptyHooksArray(content) {
   const result = content.split(`
@@ -9382,7 +9627,7 @@ Check that every parent path component is a directory.`;
 
 // src/bin/rule/index.ts
 import { existsSync as existsSync18 } from "node:fs";
-import { join as join14 } from "node:path";
+import { join as join15 } from "node:path";
 
 // src/bin/rule/doc.ts
 var RULE_DOC = `# Custom Rules Reference
@@ -9624,7 +9869,7 @@ function printResultWarnings(result) {
 
 // src/bin/rule/migrate.ts
 import { existsSync as existsSync16, readFileSync as readFileSync12, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "node:fs";
-import { dirname as dirname10, join as join12 } from "node:path";
+import { dirname as dirname10, join as join13 } from "node:path";
 var PROJECT_MIGRATED_FROM = ".safety-net.json";
 var USER_MIGRATED_FROM = "~/.cc-safety-net/config.json";
 async function runRulesMigrate(options2) {
@@ -9667,7 +9912,7 @@ async function migrateRulesScope(options2) {
   }
   const config = loaded.config ?? { version: 1, rules: [], overrides: {} };
   const rulebookName = getMigratedRulebookName(dirname10(options2.configPath), config.rules, options2.defaultRulebookName, options2.migratedFrom);
-  const rulebookPath = join12(dirname10(options2.configPath), rulebookName, "rulebook.json");
+  const rulebookPath = join13(dirname10(options2.configPath), rulebookName, "rulebook.json");
   const snapshots = [
     snapshotFile(options2.configPath),
     snapshotFile(rulebookPath),
@@ -9729,11 +9974,11 @@ function getMigratedRulebookName(configDir, sources, defaultRulebookName, migrat
   const existing = sources.find((source) => getRulebookMigratedFrom(configDir, source) === migratedFrom);
   if (existing)
     return existing;
-  if (!existsSync16(join12(configDir, defaultRulebookName, "rulebook.json")))
+  if (!existsSync16(join13(configDir, defaultRulebookName, "rulebook.json")))
     return defaultRulebookName;
   for (let i = 2;; i++) {
     const name = `${defaultRulebookName}-${i}`;
-    if (!existsSync16(join12(configDir, name, "rulebook.json")))
+    if (!existsSync16(join13(configDir, name, "rulebook.json")))
       return name;
   }
 }
@@ -9780,7 +10025,7 @@ function restoreFiles(snapshots) {
 
 // src/bin/rule/verify.ts
 import { existsSync as existsSync17, readdirSync as readdirSync4, readFileSync as readFileSync13, statSync as statSync2, writeFileSync as writeFileSync5 } from "node:fs";
-import { dirname as dirname11, join as join13, resolve as resolve9 } from "node:path";
+import { dirname as dirname11, join as join14, resolve as resolve9 } from "node:path";
 var VERIFY_HEADER = "CC Safety Net Config";
 var VERIFY_SEPARATOR = "═".repeat(VERIFY_HEADER.length);
 var RULES_SCHEMA_URL = "https://raw.githubusercontent.com/kenryu42/claude-code-safety-net/main/assets/cc-safety-net.schema.json";
@@ -9950,7 +10195,7 @@ function validateGitHubSourceRules(path) {
       errors.push(`${entry.name} must be a rulebook directory`);
       continue;
     }
-    const rulebookPath = join13(path, entry.name, "rulebook.json");
+    const rulebookPath = join14(path, entry.name, "rulebook.json");
     if (!existsSync17(rulebookPath)) {
       errors.push(`${entry.name}/rulebook.json is required`);
       continue;
@@ -10091,7 +10336,7 @@ async function runRuleCommand(args) {
     const configPath = flags.global ? getUserRulesConfigPath() : getProjectRulesConfigPath();
     const rulebookName = flags.global ? "user-rules" : "project-rules";
     ensureDefaultRulebookSource(configPath, rulebookName);
-    const rulebookPath = join14(dir, rulebookName, "rulebook.json");
+    const rulebookPath = join15(dir, rulebookName, "rulebook.json");
     if (!existsSync18(rulebookPath))
       writeStarterRulebook(rulebookPath, rulebookName);
     const result = await syncRulesConfig(options2);
@@ -10236,7 +10481,7 @@ function ensureDefaultRulebookSource(configPath, rulebookName) {
 // src/bin/statusline.ts
 import { existsSync as existsSync19, readFileSync as readFileSync14 } from "node:fs";
 import { homedir as homedir7 } from "node:os";
-import { join as join15 } from "node:path";
+import { join as join16 } from "node:path";
 async function readStdinAsync() {
   if (process.stdin.isTTY) {
     return null;
@@ -10260,7 +10505,7 @@ function getSettingsPath() {
   if (process.env.CLAUDE_SETTINGS_PATH) {
     return process.env.CLAUDE_SETTINGS_PATH;
   }
-  return join15(homedir7(), ".claude", "settings.json");
+  return join16(homedir7(), ".claude", "settings.json");
 }
 function isPluginEnabled() {
   const settingsPath = getSettingsPath();

@@ -43,6 +43,10 @@ declare const integrationMetadata: readonly [{
         readonly order: 4;
     };
 }, {
+    readonly id: "pi";
+    readonly displayName: "Pi";
+    readonly doctorVisible: true;
+}, {
     readonly id: "codex";
     readonly displayName: "Codex";
     readonly doctorVisible: true;
@@ -52,7 +56,7 @@ type RuntimeHookIntegrationMetadata = Extract<(typeof integrationMetadata)[numbe
     runtimeHook: object;
 }>;
 export type RuntimeHookIntegrationId = RuntimeHookIntegrationMetadata['id'];
-export declare const doctorIntegrationOrder: ("claude-code" | "opencode" | "gemini-cli" | "copilot-cli" | "kimi-cli" | "codex")[];
+export declare const doctorIntegrationOrder: ("claude-code" | "opencode" | "gemini-cli" | "copilot-cli" | "kimi-cli" | "pi" | "codex")[];
 export declare const runtimeHookIntegrationMetadata: {
     id: "claude-code" | "gemini-cli" | "copilot-cli" | "kimi-cli";
     displayName: "Claude Code" | "Gemini CLI" | "Copilot CLI" | "Kimi CLI";

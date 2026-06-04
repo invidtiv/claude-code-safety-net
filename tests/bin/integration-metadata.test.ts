@@ -13,17 +13,19 @@ describe('integration metadata', () => {
       'Gemini CLI',
       'Copilot CLI',
       'Kimi CLI',
+      'Pi',
       'Codex',
     ]);
   });
 
-  test('keeps doctor order centralized with Kimi before Codex', () => {
+  test('keeps doctor order centralized with Pi before Codex', () => {
     expect(doctorIntegrationOrder).toEqual([
       'claude-code',
       'opencode',
       'gemini-cli',
       'copilot-cli',
       'kimi-cli',
+      'pi',
       'codex',
     ]);
   });

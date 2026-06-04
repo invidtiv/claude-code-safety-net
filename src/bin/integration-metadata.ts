@@ -61,6 +61,11 @@ const integrationMetadata = [
     },
   },
   {
+    id: 'pi',
+    displayName: 'Pi',
+    doctorVisible: true,
+  },
+  {
     id: 'codex',
     displayName: 'Codex',
     doctorVisible: true,

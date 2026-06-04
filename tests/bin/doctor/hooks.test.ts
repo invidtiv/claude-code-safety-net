@@ -179,8 +179,86 @@ describe('detectAllHooks', () => {
         'gemini-cli',
         'copilot-cli',
         'kimi-cli',
+        'pi',
         'codex',
       ]);
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Pi: configured when runtime probe finds cc-safety-net command', () => {
+    const tmpBase = join(tmpdir(), `doctor-pi-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+
+    try {
+      const pi = detectAllHooks(projectDir, {
+        homeDir,
+        piSafetyNetProbe: {
+          status: 'configured',
+          installedAndEnabled: true,
+          matched: [{ kind: 'command', name: 'cc-safety-net', path: '/tmp/safety-net.js' }],
+        },
+      }).find((hook) => hook.platform === 'pi');
+
+      expect(pi?.status).toBe('configured');
+      expect(pi?.method).toBe('pi probe');
+      expect(pi?.configPath).toBe('/tmp/safety-net.js');
+      expect(pi?.selfTest?.failed).toBe(0);
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Pi: n/a when runtime probe does not find cc-safety-net command', () => {
+    const tmpBase = join(tmpdir(), `doctor-pi-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+
+    try {
+      const pi = detectAllHooks(projectDir, {
+        homeDir,
+        piSafetyNetProbe: {
+          status: 'not-found',
+          installedAndEnabled: false,
+          matched: [],
+        },
+      }).find((hook) => hook.platform === 'pi');
+
+      expect(pi?.status).toBe('n/a');
+      expect(pi?.selfTest).toBeUndefined();
+      expect(pi?.errors).toBeUndefined();
+    } finally {
+      rmSync(tmpBase, { recursive: true, force: true });
+    }
+  });
+
+  test('Pi: n/a with error when runtime probe fails', () => {
+    const tmpBase = join(tmpdir(), `doctor-pi-${Date.now()}`);
+    const homeDir = join(tmpBase, 'home');
+    const projectDir = join(tmpBase, 'project');
+    mkdirSync(homeDir, { recursive: true });
+    mkdirSync(projectDir, { recursive: true });
+
+    try {
+      const pi = detectAllHooks(projectDir, {
+        homeDir,
+        piSafetyNetProbe: {
+          status: 'error',
+          installedAndEnabled: false,
+          matched: [],
+          error: 'probe failed',
+        },
+      }).find((hook) => hook.platform === 'pi');
+
+      expect(pi?.status).toBe('n/a');
+      expect(pi?.errors).toEqual(['probe failed']);
+      expect(pi?.selfTest).toBeUndefined();
     } finally {
       rmSync(tmpBase, { recursive: true, force: true });
     }

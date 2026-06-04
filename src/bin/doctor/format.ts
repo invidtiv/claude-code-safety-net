@@ -425,6 +425,7 @@ function formatSystemInfoTable(system: SystemInfo): string {
     { label: 'Gemini CLI', value: system.geminiCliVersion },
     { label: 'Copilot CLI', value: system.copilotCliVersion },
     { label: 'Kimi CLI', value: system.kimiCliVersion },
+    { label: 'Pi', value: system.piCliVersion },
     { label: 'Node.js', value: system.nodeVersion },
     { label: 'npm', value: system.npmVersion },
     { label: 'Bun', value: system.bunVersion },
