@@ -11,7 +11,7 @@ import {
   getSystemInfo,
   type PiProbeRunner,
 } from '@/bin/doctor/system-info';
-import { mockVersionFetcher, withTempDir } from '../../helpers.ts';
+import { mockVersionFetcher, withEnv, withTempDir } from '../../helpers.ts';
 
 function createDeferred<T>(): {
   promise: Promise<T>;
@@ -519,6 +519,52 @@ describe('defaultVersionFetcher', () => {
     const result = await defaultVersionFetcher(['bun', '--version']);
     expect(result).toMatch(/^\d+\.\d+/);
   }, 5000);
+
+  test('preserves arguments when resolving Windows exe commands', async () => {
+    if (process.platform === 'win32') return;
+
+    await withTempDir('doctor-windows-exe-', async (tmpDir) => {
+      const commandPath = join(tmpDir, 'fake.EXE');
+      writeFileSync(commandPath, '#!/bin/sh\nprintf "%s" "$1"\n');
+      chmodSync(commandPath, 0o755);
+
+      const result = await withEnv(
+        {
+          PATH: tmpDir,
+          PATHEXT: '.EXE;.CMD',
+          _CC_SAFETY_NET_TEST_SPAWN_PLATFORM: 'win32',
+        },
+        () => defaultVersionFetcher(['fake', 'stderr-only output']),
+      );
+
+      expect(result).toBe('stderr-only output');
+    });
+  });
+
+  test('wraps Windows cmd shims without shelling exe commands', async () => {
+    if (process.platform === 'win32') return;
+
+    await withTempDir('doctor-windows-cmd-', async (tmpDir) => {
+      const commandPath = join(tmpDir, 'fake.CMD');
+      const comspecPath = join(tmpDir, 'cmd');
+      writeFileSync(commandPath, '');
+      writeFileSync(comspecPath, '#!/bin/sh\nprintf "%s" "$4"\n');
+      chmodSync(comspecPath, 0o755);
+
+      const result = await withEnv(
+        {
+          COMSPEC: comspecPath,
+          PATH: tmpDir,
+          PATHEXT: '.CMD',
+          _CC_SAFETY_NET_TEST_SPAWN_PLATFORM: 'win32',
+        },
+        () => defaultVersionFetcher(['fake', 'arg with space']),
+      );
+
+      expect(result).toContain(join(tmpDir, 'fake.CMD'));
+      expect(result).toContain('"arg with space"');
+    });
+  });
 });
 
 describe('version comparison', () => {

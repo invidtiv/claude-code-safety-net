@@ -3,9 +3,10 @@
  */
 
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, extname, join } from 'node:path';
 
 import type { PiProbeInfo, PiProbeResource, SystemInfo } from '@/bin/doctor/types';
 
@@ -16,6 +17,7 @@ const VERSION_FETCH_TIMEOUT_MS = 2000;
 const PI_PROBE_TIMEOUT_MS = 5000;
 const PI_SENTINEL_COMMAND = 'cc-safety-net';
 const PI_PROBE_COMMAND = '__cc_safety_net_probe';
+const TEST_SPAWN_PLATFORM_ENV = '_CC_SAFETY_NET_TEST_SPAWN_PLATFORM';
 
 const PI_PROBE_UNAVAILABLE: PiProbeInfo = {
   status: 'unavailable',
@@ -40,6 +42,49 @@ export type PiProbeRunner = (cwd: string) => Promise<PiProbeInfo>;
 
 const COPILOT_PLUGIN_ID = 'copilot-safety-net';
 
+function getWindowsExecutableExtensions(env: NodeJS.ProcessEnv): string[] {
+  return (env.PATHEXT || '.COM;.EXE;.BAT;.CMD')
+    .split(';')
+    .filter((extension) => extension.length > 0);
+}
+
+function resolveWindowsCommand(command: string, env: NodeJS.ProcessEnv): string {
+  const candidates = extname(command)
+    ? [command]
+    : [
+        command,
+        ...getWindowsExecutableExtensions(env).map((extension) => `${command}${extension}`),
+      ];
+  if (command.includes('/') || command.includes('\\')) {
+    return candidates.find((candidate) => existsSync(candidate)) ?? command;
+  }
+  return (
+    (env.PATH ?? '')
+      .split(delimiter)
+      .flatMap((dir) => candidates.map((candidate) => join(dir, candidate)))
+      .find((candidate) => existsSync(candidate)) ?? command
+  );
+}
+
+function quoteWindowsCommandArg(value: string): string {
+  if (!/[\s"&|<>^]/.test(value)) return value;
+  return `"${value.replace(/"/g, '\\"')}"`;
+}
+
+function getSpawnCommand(args: string[], env: NodeJS.ProcessEnv): { cmd: string; args: string[] } {
+  const [command, ...rest] = args;
+  const platform = env[TEST_SPAWN_PLATFORM_ENV] === 'win32' ? 'win32' : process.platform;
+  if (!command || platform !== 'win32') return { cmd: command ?? '', args: rest };
+
+  const resolved = resolveWindowsCommand(command, env);
+  if (!/\.(?:bat|cmd)$/i.test(resolved)) return { cmd: resolved, args: rest };
+
+  return {
+    cmd: env.ComSpec ?? env.COMSPEC ?? 'cmd.exe',
+    args: ['/d', '/s', '/c', [resolved, ...rest].map(quoteWindowsCommandArg).join(' ')],
+  };
+}
+
 /**
  * Default version fetcher that runs shell commands.
  * Uses Node.js child_process.spawn for compatibility with both Node and Bun runtimes.
@@ -51,8 +96,8 @@ export const defaultVersionFetcher: VersionFetcher = async (args: string[]) => {
 
   return new Promise((resolve) => {
     try {
-      const proc = spawn(cmd, rest, {
-        shell: process.platform === 'win32',
+      const spawnCommand = getSpawnCommand([cmd, ...rest], process.env);
+      const proc = spawn(spawnCommand.cmd, spawnCommand.args, {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       let isSettled = false;
@@ -153,10 +198,11 @@ function runCommand(
 
   return new Promise((resolve) => {
     try {
-      const proc = spawn(cmd, rest, {
+      const env = { ...process.env, ...(options.env ?? {}) };
+      const spawnCommand = getSpawnCommand([cmd, ...rest], env);
+      const proc = spawn(spawnCommand.cmd, spawnCommand.args, {
         cwd: options.cwd,
-        env: { ...process.env, ...(options.env ?? {}) },
-        shell: process.platform === 'win32',
+        env,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       let isSettled = false;

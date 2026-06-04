@@ -7826,14 +7826,16 @@ function detectAllHooks(cwd, options2) {
 
 // src/bin/doctor/system-info.ts
 import { spawn } from "node:child_process";
+import { existsSync as existsSync14 } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir as tmpdir4 } from "node:os";
-import { join as join11 } from "node:path";
+import { delimiter, extname, join as join11 } from "node:path";
 var CURRENT_VERSION = "0.9.0";
 var VERSION_FETCH_TIMEOUT_MS = 2000;
 var PI_PROBE_TIMEOUT_MS = 5000;
 var PI_SENTINEL_COMMAND = "cc-safety-net";
 var PI_PROBE_COMMAND = "__cc_safety_net_probe";
+var TEST_SPAWN_PLATFORM_ENV = "_CC_SAFETY_NET_TEST_SPAWN_PLATFORM";
 var PI_PROBE_UNAVAILABLE = {
   status: "unavailable",
   installedAndEnabled: false,
@@ -7843,14 +7845,45 @@ function getPackageVersion() {
   return CURRENT_VERSION;
 }
 var COPILOT_PLUGIN_ID = "copilot-safety-net";
+function getWindowsExecutableExtensions(env) {
+  return (env.PATHEXT || ".COM;.EXE;.BAT;.CMD").split(";").filter((extension) => extension.length > 0);
+}
+function resolveWindowsCommand(command2, env) {
+  const candidates = extname(command2) ? [command2] : [
+    command2,
+    ...getWindowsExecutableExtensions(env).map((extension) => `${command2}${extension}`)
+  ];
+  if (command2.includes("/") || command2.includes("\\")) {
+    return candidates.find((candidate) => existsSync14(candidate)) ?? command2;
+  }
+  return (env.PATH ?? "").split(delimiter).flatMap((dir) => candidates.map((candidate) => join11(dir, candidate))).find((candidate) => existsSync14(candidate)) ?? command2;
+}
+function quoteWindowsCommandArg(value) {
+  if (!/[\s"&|<>^]/.test(value))
+    return value;
+  return `"${value.replace(/"/g, "\\\"")}"`;
+}
+function getSpawnCommand(args, env) {
+  const [command2, ...rest] = args;
+  const platform = env[TEST_SPAWN_PLATFORM_ENV] === "win32" ? "win32" : process.platform;
+  if (!command2 || platform !== "win32")
+    return { cmd: command2 ?? "", args: rest };
+  const resolved = resolveWindowsCommand(command2, env);
+  if (!/\.(?:bat|cmd)$/i.test(resolved))
+    return { cmd: resolved, args: rest };
+  return {
+    cmd: env.ComSpec ?? env.COMSPEC ?? "cmd.exe",
+    args: ["/d", "/s", "/c", [resolved, ...rest].map(quoteWindowsCommandArg).join(" ")]
+  };
+}
 var defaultVersionFetcher = async (args) => {
   const [cmd, ...rest] = args;
   if (!cmd)
     return null;
   return new Promise((resolve8) => {
     try {
-      const proc = spawn(cmd, rest, {
-        shell: process.platform === "win32",
+      const spawnCommand = getSpawnCommand([cmd, ...rest], process.env);
+      const proc = spawn(spawnCommand.cmd, spawnCommand.args, {
         stdio: ["ignore", "pipe", "pipe"]
       });
       let isSettled = false;
@@ -7933,10 +7966,11 @@ function runCommand(args, options2) {
   }
   return new Promise((resolve8) => {
     try {
-      const proc = spawn(cmd, rest, {
+      const env = { ...process.env, ...options2.env ?? {} };
+      const spawnCommand = getSpawnCommand([cmd, ...rest], env);
+      const proc = spawn(spawnCommand.cmd, spawnCommand.args, {
         cwd: options2.cwd,
-        env: { ...process.env, ...options2.env ?? {} },
-        shell: process.platform === "win32",
+        env,
         stdio: ["ignore", "pipe", "pipe"]
       });
       let isSettled = false;
@@ -8274,12 +8308,12 @@ function printReport(report) {
 }
 
 // src/bin/explain/config.ts
-import { existsSync as existsSync14 } from "node:fs";
+import { existsSync as existsSync15 } from "node:fs";
 import { resolve as resolve8 } from "node:path";
 function getConfigSource(options2) {
   const projectPath = getProjectRulesConfigPath(options2?.cwd);
   let invalidProjectPath = null;
-  if (existsSync14(projectPath)) {
+  if (existsSync15(projectPath)) {
     const validation = validateRulesConfigFile(projectPath);
     if (validation.errors.length === 0) {
       return { configSource: projectPath, configValid: true };
@@ -8287,7 +8321,7 @@ function getConfigSource(options2) {
     invalidProjectPath = projectPath;
   }
   const userPath = options2?.userConfigPath ?? getUserRulesConfigPath(options2);
-  if (existsSync14(userPath)) {
+  if (existsSync15(userPath)) {
     const validation = validateRulesConfigFile(userPath);
     return { configSource: userPath, configValid: validation.errors.length === 0 };
   }
@@ -9390,7 +9424,7 @@ function showCommandHelp(commandName) {
 import { homedir as homedir6 } from "node:os";
 
 // src/bin/hook/install/kimi-cli.ts
-import { existsSync as existsSync15, mkdirSync as mkdirSync4, readFileSync as readFileSync11, writeFileSync as writeFileSync3 } from "node:fs";
+import { existsSync as existsSync16, mkdirSync as mkdirSync4, readFileSync as readFileSync11, writeFileSync as writeFileSync3 } from "node:fs";
 import { dirname as dirname9, join as join12 } from "node:path";
 
 // src/bin/hook/config-edit.ts
@@ -9576,7 +9610,7 @@ function removeKimiInlineHook(content, hooksRange) {
 function installKimiCli(homeDir) {
   const configPath = getKimiConfigPath(homeDir);
   mkdirSync4(dirname9(configPath), { recursive: true });
-  if (!existsSync15(configPath)) {
+  if (!existsSync16(configPath)) {
     writeFileSync3(configPath, `${KIMI_HOOK_BLOCK}
 `);
     return { path: configPath, alreadyInstalled: false };
@@ -9589,7 +9623,7 @@ function installKimiCli(homeDir) {
 }
 function uninstallKimiCli(homeDir) {
   const configPath = getKimiConfigPath(homeDir);
-  if (!existsSync15(configPath))
+  if (!existsSync16(configPath))
     return { path: configPath, alreadyInstalled: false };
   const content = readFileSync11(configPath, "utf-8");
   if (!content.includes(KIMI_HOOK_COMMAND))
@@ -9648,7 +9682,7 @@ Check that every parent path component is a directory.`;
 }
 
 // src/bin/rule/index.ts
-import { existsSync as existsSync18 } from "node:fs";
+import { existsSync as existsSync19 } from "node:fs";
 import { join as join15 } from "node:path";
 
 // src/bin/rule/doc.ts
@@ -9890,7 +9924,7 @@ function printResultWarnings(result) {
 }
 
 // src/bin/rule/migrate.ts
-import { existsSync as existsSync16, readFileSync as readFileSync12, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "node:fs";
+import { existsSync as existsSync17, readFileSync as readFileSync12, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "node:fs";
 import { dirname as dirname10, join as join13 } from "node:path";
 var PROJECT_MIGRATED_FROM = ".safety-net.json";
 var USER_MIGRATED_FROM = "~/.cc-safety-net/config.json";
@@ -9916,7 +9950,7 @@ async function runRulesMigrate(options2) {
   return results.every((result) => result) ? 0 : 1;
 }
 async function migrateRulesScope(options2) {
-  if (!existsSync16(options2.legacyPath)) {
+  if (!existsSync17(options2.legacyPath)) {
     console.log(`No legacy config found at ${options2.legacyPath}`);
     return true;
   }
@@ -9996,11 +10030,11 @@ function getMigratedRulebookName(configDir, sources, defaultRulebookName, migrat
   const existing = sources.find((source) => getRulebookMigratedFrom(configDir, source) === migratedFrom);
   if (existing)
     return existing;
-  if (!existsSync16(join13(configDir, defaultRulebookName, "rulebook.json")))
+  if (!existsSync17(join13(configDir, defaultRulebookName, "rulebook.json")))
     return defaultRulebookName;
   for (let i = 2;; i++) {
     const name = `${defaultRulebookName}-${i}`;
-    if (!existsSync16(join13(configDir, name, "rulebook.json")))
+    if (!existsSync17(join13(configDir, name, "rulebook.json")))
       return name;
   }
 }
@@ -10023,7 +10057,7 @@ function getMigratedRulebook(name, migratedFrom, rules) {
 }
 function isCleanupVerified(configPath, rulebookPath, rulebookName, migratedFrom, legacyRules) {
   const config = readRulesConfig(configPath).config;
-  if (!config?.rules.includes(rulebookName) || !existsSync16(rulebookPath))
+  if (!config?.rules.includes(rulebookName) || !existsSync17(rulebookPath))
     return false;
   try {
     const rulebook = JSON.parse(readFileSync12(rulebookPath, "utf-8"));
@@ -10033,7 +10067,7 @@ function isCleanupVerified(configPath, rulebookPath, rulebookName, migratedFrom,
   }
 }
 function snapshotFile(path) {
-  return { path, content: existsSync16(path) ? readFileSync12(path, "utf-8") : null };
+  return { path, content: existsSync17(path) ? readFileSync12(path, "utf-8") : null };
 }
 function restoreFiles(snapshots) {
   for (const snapshot of snapshots) {
@@ -10046,7 +10080,7 @@ function restoreFiles(snapshots) {
 }
 
 // src/bin/rule/verify.ts
-import { existsSync as existsSync17, readdirSync as readdirSync4, readFileSync as readFileSync13, statSync as statSync2, writeFileSync as writeFileSync5 } from "node:fs";
+import { existsSync as existsSync18, readdirSync as readdirSync4, readFileSync as readFileSync13, statSync as statSync2, writeFileSync as writeFileSync5 } from "node:fs";
 import { dirname as dirname11, join as join14, resolve as resolve9 } from "node:path";
 var VERIFY_HEADER = "CC Safety Net Config";
 var VERIFY_SEPARATOR = "═".repeat(VERIFY_HEADER.length);
@@ -10066,7 +10100,7 @@ function runRulesVerify(options2 = {}) {
   const warnings = [];
   const githubSourceRules = getGitHubSourceRulesValidation(githubSourceRulesDir);
   printRulesVerifyHeader();
-  if (existsSync17(userConfig)) {
+  if (existsSync18(userConfig)) {
     const result = validateRulesConfigFile(userConfig);
     result.errors.push(...getRulesConfigRuntimeErrorsForConfig(userConfig, getUserRulesLockPath({ userConfigDir }), {
       userConfigDir
@@ -10081,9 +10115,9 @@ function runRulesVerify(options2 = {}) {
     if (result.errors.length > 0)
       hasErrors = true;
   }
-  if (existsSync17(legacyUserConfig)) {
+  if (existsSync18(legacyUserConfig)) {
     hasWarnings = true;
-    if (existsSync17(userConfig)) {
+    if (existsSync18(userConfig)) {
       warnings.push(getLegacyRulesConfigWarning("user", "cleanup"));
     } else {
       const result = validateConfigFile(legacyUserConfig);
@@ -10099,7 +10133,7 @@ function runRulesVerify(options2 = {}) {
       warnings.push(getLegacyRulesConfigWarning("user", result.errors.length > 0 ? "fix-or-delete" : "migrate"));
     }
   }
-  if (existsSync17(projectConfig)) {
+  if (existsSync18(projectConfig)) {
     const result = validateRulesConfigFile(projectConfig);
     result.errors.push(...getRulesConfigRuntimeErrorsForConfig(projectConfig, getRulesLockPathForConfigPath(projectConfig), {
       userConfigDir
@@ -10113,11 +10147,11 @@ function runRulesVerify(options2 = {}) {
     });
     if (result.errors.length > 0)
       hasErrors = true;
-    if (existsSync17(legacyProjectConfig)) {
+    if (existsSync18(legacyProjectConfig)) {
       hasWarnings = true;
       warnings.push(getLegacyRulesConfigWarning("project", "cleanup"));
     }
-  } else if (existsSync17(legacyProjectConfig)) {
+  } else if (existsSync18(legacyProjectConfig)) {
     hasWarnings = true;
     hasErrors = true;
     const result = validateConfigFile(legacyProjectConfig);
@@ -10182,7 +10216,7 @@ function getLegacyRulesConfigWarning(scope, action) {
   return `Warning: Legacy ${scope} config is no longer supported. Fix or delete the ${label}, then run \`npx -y cc-safety-net rule migrate\`.`;
 }
 function getGitHubSourceRulesValidation(path) {
-  if (!existsSync17(path))
+  if (!existsSync18(path))
     return null;
   const result = validateGitHubSourceRules(path);
   if (result.ruleNames.size === 0 && result.errors.length === 0)
@@ -10218,7 +10252,7 @@ function validateGitHubSourceRules(path) {
       continue;
     }
     const rulebookPath = join14(path, entry.name, "rulebook.json");
-    if (!existsSync17(rulebookPath)) {
+    if (!existsSync18(rulebookPath)) {
       errors.push(`${entry.name}/rulebook.json is required`);
       continue;
     }
@@ -10359,7 +10393,7 @@ async function runRuleCommand(args) {
     const rulebookName = flags.global ? "user-rules" : "project-rules";
     ensureDefaultRulebookSource(configPath, rulebookName);
     const rulebookPath = join15(dir, rulebookName, "rulebook.json");
-    if (!existsSync18(rulebookPath))
+    if (!existsSync19(rulebookPath))
       writeStarterRulebook(rulebookPath, rulebookName);
     const result = await syncRulesConfig(options2);
     printRuleChangeResult(result, "Rule config initialized.");
@@ -10486,7 +10520,7 @@ function unknownRuleOption(subcommand, option) {
   return `Unknown rule option: ${option}`;
 }
 function ensureDefaultRulebookSource(configPath, rulebookName) {
-  if (!existsSync18(configPath)) {
+  if (!existsSync19(configPath)) {
     writeDefaultRulesConfig(configPath, [rulebookName]);
     return;
   }
@@ -10501,7 +10535,7 @@ function ensureDefaultRulebookSource(configPath, rulebookName) {
 }
 
 // src/bin/statusline.ts
-import { existsSync as existsSync19, readFileSync as readFileSync14 } from "node:fs";
+import { existsSync as existsSync20, readFileSync as readFileSync14 } from "node:fs";
 import { homedir as homedir7 } from "node:os";
 import { join as join16 } from "node:path";
 async function readStdinAsync() {
@@ -10531,7 +10565,7 @@ function getSettingsPath() {
 }
 function isPluginEnabled() {
   const settingsPath = getSettingsPath();
-  if (!existsSync19(settingsPath)) {
+  if (!existsSync20(settingsPath)) {
     return false;
   }
   try {
