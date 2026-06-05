@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { handlePiToolUse } from '@/pi/tool-use';
+import { withEnv, withLinkedWorktreeFixture } from '../helpers';
 import {
   syncInitialGitRulebook,
   updatedGitRule,
@@ -22,6 +23,66 @@ describe('Pi tool_use event', () => {
       reason: expect.stringContaining('BLOCKED by CC Safety Net'),
     });
     expect(result?.reason).toContain('Command: rm -rf .');
+  });
+
+  test('blocks dangerous Grok Shell commands', () => {
+    const result = handlePiToolUse(
+      shellToolCall({ command: 'git checkout -- README.md' }),
+      piContext(process.cwd()),
+    );
+
+    expect(result?.reason).toContain('git checkout -- discards uncommitted changes permanently');
+  });
+
+  test('allows safe Grok Shell commands', () => {
+    expect(
+      handlePiToolUse(shellToolCall({ command: 'git status' }), piContext(process.cwd())),
+    ).toBeUndefined();
+  });
+
+  test('fails closed when Grok Shell command is malformed', () => {
+    const result = handlePiToolUse(shellToolCall({}), piContext(process.cwd()));
+
+    expect(result).toEqual({
+      block: true,
+      reason: expect.stringContaining('CC Safety Net failed closed'),
+    });
+  });
+
+  test('uses Grok Shell working_directory for analysis', async () => {
+    await withLinkedWorktreeFixture((fixture) => {
+      withEnv({ CC_SAFETY_NET_WORKTREE: '1' }, () => {
+        expect(
+          handlePiToolUse(
+            shellToolCall({ command: 'git reset --hard' }),
+            piContext(fixture.mainWorktree),
+          )?.reason,
+        ).toContain('git reset --hard');
+        expect(
+          handlePiToolUse(
+            shellToolCall({
+              command: 'git reset --hard',
+              working_directory: fixture.linkedWorktree,
+            }),
+            piContext(fixture.mainWorktree),
+          ),
+        ).toBeUndefined();
+      });
+    });
+  });
+
+  test('ignores unknown custom tools', () => {
+    expect(
+      handlePiToolUse(
+        {
+          type: 'tool_call',
+          toolCallId: 'pi-tool-call',
+          toolName: 'NotShell',
+          input: { command: 'rm -rf .' },
+        },
+        piContext(process.cwd()),
+      ),
+    ).toBeUndefined();
   });
 
   test('blocks Pi tool call payloads without a type field', () => {
@@ -113,6 +174,15 @@ function bashToolCall(command: string) {
     toolCallId: 'pi-tool-call',
     toolName: 'bash',
     input: { command },
+  };
+}
+
+function shellToolCall(input: Record<string, unknown>) {
+  return {
+    type: 'tool_call',
+    toolCallId: 'pi-tool-call',
+    toolName: 'Shell',
+    input,
   };
 }
 

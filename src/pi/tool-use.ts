@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { REASON_SAFETY_NET_FAILED_CLOSED } from '@/bin/hook/common';
 import { analyzeCommand, loadConfig } from '@/core/analyze';
 import { redactSecrets, writeAuditLog } from '@/core/audit';
@@ -26,28 +27,53 @@ type PiToolUseResult = { block: true; reason: string } | undefined;
 type PiToolUseEvent = {
   type?: string;
   toolName?: string;
-  input?: {
-    command?: unknown;
-  };
+  input?: Record<string, unknown>;
 };
+
+type PiShellToolAdapter = {
+  commandField: string;
+  cwdField?: string;
+};
+
+const PI_SHELL_TOOL_ADAPTERS: Partial<Record<string, PiShellToolAdapter>> = {
+  bash: {
+    commandField: 'command',
+  },
+  Shell: {
+    commandField: 'command',
+    cwdField: 'working_directory',
+  },
+};
+
+type PiShellToolUse =
+  | {
+      command: string;
+      cwd: string;
+    }
+  | {
+      malformed: true;
+    };
 
 export function registerToolUseEvent(pi: PiApi): void {
   pi.on('tool_call', handlePiToolUse);
 }
 
 export function handlePiToolUse(event: unknown, ctx: PiToolUseContext): PiToolUseResult {
-  if (!isPiBashToolUseEvent(event)) return undefined;
+  const shellToolUse = getPiShellToolUse(event, ctx);
+  if (!shellToolUse) return undefined;
 
-  if (typeof event.input.command !== 'string') {
+  if ('malformed' in shellToolUse) {
     return blockPiToolUse(REASON_SAFETY_NET_FAILED_CLOSED);
   }
 
+  const command = shellToolUse.command;
+  const cwd = shellToolUse.cwd;
   const modes = getCCSafetyNetEnvModes();
   let result: ReturnType<typeof analyzeCommand>;
   try {
-    result = (ctx.safetyNetAnalyzeCommand ?? analyzeCommand)(event.input.command, {
-      cwd: ctx.cwd,
-      config: loadConfig(ctx.cwd, {
+    result = (ctx.safetyNetAnalyzeCommand ?? analyzeCommand)(command, {
+      cwd,
+      config: loadConfig(cwd, {
         repairLocalRulebooks: true,
         ...ctx.safetyNetConfigOptions,
       }),
@@ -62,17 +88,13 @@ export function handlePiToolUse(event: unknown, ctx: PiToolUseContext): PiToolUs
         `CC Safety Net debug: pi tool_use analysis failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`,
       );
     }
-    return blockPiToolUse(
-      REASON_SAFETY_NET_FAILED_CLOSED,
-      event.input.command,
-      event.input.command,
-    );
+    return blockPiToolUse(REASON_SAFETY_NET_FAILED_CLOSED, command, command);
   }
 
   if (!result) {
     const sessionId = ctx.sessionManager.getSessionFile();
     if (sessionId && envTruthy(ENV_FLAGS.debug)) {
-      writeAuditLog(sessionId, event.input.command, event.input.command, 'allowed', ctx.cwd, {
+      writeAuditLog(sessionId, command, command, 'allowed', cwd, {
         decision: 'allow',
       });
     }
@@ -81,23 +103,26 @@ export function handlePiToolUse(event: unknown, ctx: PiToolUseContext): PiToolUs
 
   const sessionId = ctx.sessionManager.getSessionFile();
   if (sessionId) {
-    writeAuditLog(sessionId, event.input.command, result.segment, result.reason, ctx.cwd);
+    writeAuditLog(sessionId, command, result.segment, result.reason, cwd);
   }
-  return blockPiToolUse(
-    result.reason,
-    event.input.command,
-    result.segment,
-    result.manualPermissionAdvice,
-  );
+  return blockPiToolUse(result.reason, command, result.segment, result.manualPermissionAdvice);
 }
 
-function isPiBashToolUseEvent(event: unknown): event is PiToolUseEvent & {
-  toolName: 'bash';
-  input: { command?: unknown };
-} {
-  if (!event || typeof event !== 'object') return false;
+function getPiShellToolUse(event: unknown, ctx: PiToolUseContext): PiShellToolUse | undefined {
+  if (!event || typeof event !== 'object') return undefined;
   const toolUse = event as PiToolUseEvent;
-  return toolUse.toolName === 'bash' && !!toolUse.input;
+  if (typeof toolUse.toolName !== 'string') return undefined;
+
+  const adapter = PI_SHELL_TOOL_ADAPTERS[toolUse.toolName];
+  if (!adapter) return undefined;
+  if (!toolUse.input || typeof toolUse.input !== 'object') return { malformed: true };
+
+  const command = toolUse.input[adapter.commandField];
+  if (typeof command !== 'string') return { malformed: true };
+
+  const cwdInput = adapter.cwdField ? toolUse.input[adapter.cwdField] : undefined;
+  const cwd = typeof cwdInput === 'string' ? resolve(ctx.cwd, cwdInput) : ctx.cwd;
+  return { command, cwd };
 }
 
 function blockPiToolUse(
