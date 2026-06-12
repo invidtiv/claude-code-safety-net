@@ -8,3 +8,4 @@ export type InternalOptions = AnalyzeOptions & {
 };
 export declare function analyzeSegment(tokens: string[], depth: number, options: InternalOptions): string | null;
 export declare function segmentChangesCwd(segment: readonly string[]): boolean;
+export declare function resolveCwdAfterSegment(segment: readonly string[], cwd: string | null | undefined): string | null | undefined;

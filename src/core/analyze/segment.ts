@@ -1,3 +1,5 @@
+import { realpathSync } from 'node:fs';
+import { normalize } from 'node:path';
 import { AWK_INTERPRETERS, analyzeAwkSystemCalls } from '@/core/analyze/awk';
 import { DISPLAY_COMMANDS } from '@/core/analyze/constants';
 import { analyzeFind } from '@/core/analyze/find';
@@ -8,6 +10,7 @@ import { extractDashCArg } from '@/core/analyze/shell-wrappers';
 import { isTmpdirOverriddenToNonTemp } from '@/core/analyze/tmpdir';
 import { analyzeXargs } from '@/core/analyze/xargs';
 import { analyzeGit } from '@/core/git';
+import { resolveChdirTarget } from '@/core/path';
 import { checkCustomRules } from '@/core/rules/custom';
 import {
   getBasename,
@@ -322,8 +325,7 @@ const CWD_CHANGE_REGEX =
   /^\s*(?:\$\(\s*)?[({]*\s*(?:command\s+|builtin\s+)?(?:cd|pushd|popd)(?:\s|$)/;
 
 export function segmentChangesCwd(segment: readonly string[]): boolean {
-  const stripped = stripLeadingGrouping(segment);
-  const unwrapped = stripWrappers([...stripped]);
+  const unwrapped = getCwdChangeTokens(segment);
 
   if (unwrapped.length === 0) {
     return false;
@@ -347,12 +349,76 @@ export function segmentChangesCwd(segment: readonly string[]): boolean {
   return CWD_CHANGE_REGEX.test(joined);
 }
 
+export function resolveCwdAfterSegment(
+  segment: readonly string[],
+  cwd: string | null | undefined,
+): string | null | undefined {
+  if (!segmentChangesCwd(segment)) {
+    return undefined;
+  }
+
+  if (!cwd) {
+    return null;
+  }
+
+  const unwrapped = getCwdChangeTokens(segment, cwd);
+  const cdIndex = getCdCommandIndex(unwrapped);
+  if (cdIndex === -1 || unwrapped[cdIndex] !== 'cd') {
+    return null;
+  }
+
+  const target = unwrapped[cdIndex + 1];
+  if (!target || target === '-' || target.includes('$') || target.includes('`')) {
+    return null;
+  }
+
+  try {
+    const resolved = resolveChdirTarget(cwd, target);
+    if (samePath(resolved, cwd)) {
+      return cwd;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 function getHeadAfterTimePrefix(tokens: readonly string[], startIndex: number): string {
   let i = startIndex;
   while (tokens[i]?.startsWith('-')) {
     i++;
   }
   return tokens[i] ?? '';
+}
+
+function getCdCommandIndex(tokens: readonly string[]): number {
+  let headIndex = 0;
+  if (tokens[0] === 'builtin' && tokens.length > 1) {
+    headIndex = 1;
+  }
+  if (tokens[headIndex] !== 'time') {
+    return headIndex;
+  }
+
+  let i = headIndex + 1;
+  while (tokens[i]?.startsWith('-')) {
+    i++;
+  }
+  return i;
+}
+
+function getCwdChangeTokens(segment: readonly string[], cwd?: string | null): string[] {
+  const stripped = stripLeadingGrouping(segment);
+  return stripWrappers([...stripped], cwd);
+}
+
+function samePath(a: string, b: string): boolean {
+  try {
+    return normalize(realpathSync(a)) === normalize(realpathSync(b));
+  } catch {
+    return normalize(a) === normalize(b);
+  }
 }
 
 function stripLeadingGrouping(tokens: readonly string[]): readonly string[] {

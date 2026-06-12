@@ -282,6 +282,10 @@ function dangerousInText(text) {
   return null;
 }
 
+// src/core/analyze/segment.ts
+import { realpathSync as realpathSync6 } from "node:fs";
+import { normalize as normalize3 } from "node:path";
+
 // src/core/analyze/awk.ts
 var AWK_INTERPRETERS = new Set(["awk", "gawk", "nawk", "mawk"]);
 var REASON_AWK_SYSTEM_DYNAMIC = "Detected awk system() call with dynamic command that cannot be safely analyzed.";
@@ -4087,8 +4091,7 @@ function analyzeParallelCommand(context) {
 }
 var CWD_CHANGE_REGEX = /^\s*(?:\$\(\s*)?[({]*\s*(?:command\s+|builtin\s+)?(?:cd|pushd|popd)(?:\s|$)/;
 function segmentChangesCwd(segment) {
-  const stripped = stripLeadingGrouping(segment);
-  const unwrapped = stripWrappers([...stripped]);
+  const unwrapped = getCwdChangeTokens(segment);
   if (unwrapped.length === 0) {
     return false;
   }
@@ -4107,12 +4110,63 @@ function segmentChangesCwd(segment) {
   const joined = segment.join(" ");
   return CWD_CHANGE_REGEX.test(joined);
 }
+function resolveCwdAfterSegment(segment, cwd) {
+  if (!segmentChangesCwd(segment)) {
+    return;
+  }
+  if (!cwd) {
+    return null;
+  }
+  const unwrapped = getCwdChangeTokens(segment, cwd);
+  const cdIndex = getCdCommandIndex(unwrapped);
+  if (cdIndex === -1 || unwrapped[cdIndex] !== "cd") {
+    return null;
+  }
+  const target = unwrapped[cdIndex + 1];
+  if (!target || target === "-" || target.includes("$") || target.includes("`")) {
+    return null;
+  }
+  try {
+    const resolved = resolveChdirTarget(cwd, target);
+    if (samePath(resolved, cwd)) {
+      return cwd;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 function getHeadAfterTimePrefix(tokens, startIndex) {
   let i = startIndex;
   while (tokens[i]?.startsWith("-")) {
     i++;
   }
   return tokens[i] ?? "";
+}
+function getCdCommandIndex(tokens) {
+  let headIndex = 0;
+  if (tokens[0] === "builtin" && tokens.length > 1) {
+    headIndex = 1;
+  }
+  if (tokens[headIndex] !== "time") {
+    return headIndex;
+  }
+  let i = headIndex + 1;
+  while (tokens[i]?.startsWith("-")) {
+    i++;
+  }
+  return i;
+}
+function getCwdChangeTokens(segment, cwd) {
+  const stripped = stripLeadingGrouping(segment);
+  return stripWrappers([...stripped], cwd);
+}
+function samePath(a, b) {
+  try {
+    return normalize3(realpathSync6(a)) === normalize3(realpathSync6(b));
+  } catch {
+    return normalize3(a) === normalize3(b);
+  }
 }
 function stripLeadingGrouping(tokens) {
   let i = 0;
@@ -4464,8 +4518,9 @@ function analyzeCommandInternal(command2, depth, options2) {
       if (textReason) {
         return { reason: textReason, segment: segmentStr };
       }
-      if (segmentChangesCwd(segment)) {
-        effectiveCwd = null;
+      const nextCwd2 = resolveCwdAfterSegment(segment, effectiveCwd);
+      if (nextCwd2 !== undefined) {
+        effectiveCwd = nextCwd2;
       }
       continue;
     }
@@ -4487,8 +4542,9 @@ function analyzeCommandInternal(command2, depth, options2) {
     if (reason) {
       return { reason, segment: segmentStr };
     }
-    if (segmentChangesCwd(segment)) {
-      effectiveCwd = null;
+    const nextCwd = resolveCwdAfterSegment(segment, effectiveCwd);
+    if (nextCwd !== undefined) {
+      effectiveCwd = nextCwd;
     }
     applyShellGitContextEnvSegment(segment, shellGitContextState);
   }

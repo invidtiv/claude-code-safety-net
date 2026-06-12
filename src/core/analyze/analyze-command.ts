@@ -1,5 +1,5 @@
 import { dangerousInText } from '@/core/analyze/dangerous-text';
-import { analyzeSegment, segmentChangesCwd } from '@/core/analyze/segment';
+import { analyzeSegment, resolveCwdAfterSegment } from '@/core/analyze/segment';
 import {
   applyShellGitContextEnvSegment,
   createShellGitContextEnvState,
@@ -68,8 +68,9 @@ export function analyzeCommandInternal(
       if (textReason) {
         return { reason: textReason, segment: segmentStr };
       }
-      if (segmentChangesCwd(segment)) {
-        effectiveCwd = null;
+      const nextCwd = resolveCwdAfterSegment(segment, effectiveCwd);
+      if (nextCwd !== undefined) {
+        effectiveCwd = nextCwd;
       }
       continue;
     }
@@ -99,8 +100,9 @@ export function analyzeCommandInternal(
       return { reason, segment: segmentStr };
     }
 
-    if (segmentChangesCwd(segment)) {
-      effectiveCwd = null;
+    const nextCwd = resolveCwdAfterSegment(segment, effectiveCwd);
+    if (nextCwd !== undefined) {
+      effectiveCwd = nextCwd;
     }
 
     applyShellGitContextEnvSegment(segment, shellGitContextState);
