@@ -70,7 +70,7 @@ describe('hook install command', () => {
 
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain('Choose exactly one install target: --kimi-code');
-      expect(existsSync(join(homeDir, '.kimi', 'config.toml'))).toBe(false);
+      expect(existsSync(join(homeDir, '.kimi-code', 'config.toml'))).toBe(false);
     } finally {
       rmSync(homeDir, { recursive: true, force: true });
     }
@@ -81,7 +81,7 @@ describe('hook install command', () => {
 
     try {
       const result = await runCli(['hook', 'install', '--kimi-code'], '', { HOME: homeDir });
-      const configPath = join(homeDir, '.kimi', 'config.toml');
+      const configPath = join(homeDir, '.kimi-code', 'config.toml');
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain(`Installed Kimi Code hook in ${configPath}`);
@@ -189,7 +189,7 @@ hooks = []
 
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain('Unexpected argument for hook install: extra');
-      expect(existsSync(join(homeDir, '.kimi', 'config.toml'))).toBe(false);
+      expect(existsSync(join(homeDir, '.kimi-code', 'config.toml'))).toBe(false);
     } finally {
       rmSync(homeDir, { recursive: true, force: true });
     }
@@ -205,7 +205,7 @@ hooks = []
 
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain('Unknown install option: --opencode');
-      expect(existsSync(join(homeDir, '.kimi', 'config.toml'))).toBe(false);
+      expect(existsSync(join(homeDir, '.kimi-code', 'config.toml'))).toBe(false);
     } finally {
       rmSync(homeDir, { recursive: true, force: true });
     }
