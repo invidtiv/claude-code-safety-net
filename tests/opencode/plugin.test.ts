@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CCSafetyNetPlugin } from '@/index';
@@ -11,7 +11,7 @@ import {
 
 type ToolPlugin = {
   'tool.execute.before': (
-    input: { tool: string },
+    input: { tool: string; sessionID?: string },
     output: { args: { command?: string } },
   ) => Promise<void>;
 };
@@ -67,6 +67,33 @@ describe('OpenCode plugin', () => {
     );
   });
 
+  test('writes audit log for blocked commands with session id', async () => {
+    const homeDir = mkdtempSync(join(tmpdir(), 'safety-net-opencode-home-'));
+    const projectDir = mkdtempSync(join(tmpdir(), 'safety-net-opencode-project-'));
+    try {
+      const plugin = await loadToolPlugin(projectDir, homeDir);
+
+      await expect(
+        plugin['tool.execute.before'](
+          { tool: 'bash', sessionID: 'opencode-test-session' },
+          { args: { command: 'git reset --hard' } },
+        ),
+      ).rejects.toThrow('git reset --hard');
+
+      const logFile = join(homeDir, '.cc-safety-net', 'logs', 'opencode-test-session.jsonl');
+      expect(existsSync(logFile)).toBe(true);
+      const entry = JSON.parse(readFileSync(logFile, 'utf-8').trim());
+      expect(entry.decision).toBe('deny');
+      expect(entry.command).toBe('git reset --hard');
+      expect(entry.segment).toBe('git reset --hard');
+      expect(entry.reason).toContain('git reset --hard');
+      expect(entry.cwd).toBe(projectDir);
+    } finally {
+      rmSync(homeDir, { recursive: true, force: true });
+      rmSync(projectDir, { recursive: true, force: true });
+    }
+  });
+
   test('reloads and repairs local rules before each tool execution', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'safety-net-opencode-plugin-'));
     try {
@@ -84,8 +111,9 @@ describe('OpenCode plugin', () => {
   });
 });
 
-async function loadToolPlugin(directory: string): Promise<ToolPlugin> {
+async function loadToolPlugin(directory: string, homeDir?: string): Promise<ToolPlugin> {
   return (await CCSafetyNetPlugin({
     directory,
+    homeDir,
   } as Parameters<typeof CCSafetyNetPlugin>[0])) as unknown as ToolPlugin;
 }

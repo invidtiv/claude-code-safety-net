@@ -1,5 +1,6 @@
-import type { Plugin } from '@opencode-ai/plugin';
+import type { Plugin, PluginInput } from '@opencode-ai/plugin';
 import { analyzeCommand, loadConfig } from '@/core/analyze';
+import { writeAuditLog } from '@/core/audit';
 import { getCCSafetyNetEnvModes } from '@/core/env';
 import { formatBlockedMessage } from '@/core/format';
 import { loadBuiltinCommands } from '@/opencode/builtin-commands/index';
@@ -7,7 +8,9 @@ import { loadBuiltinCommands } from '@/opencode/builtin-commands/index';
 const REASON_SAFETY_NET_FAILED_CLOSED =
   'CC Safety Net failed closed because command analysis failed unexpectedly.';
 
-export const CCSafetyNetPlugin: Plugin = async ({ directory }) => {
+type CCSafetyNetPluginInput = PluginInput & { homeDir?: string };
+
+export const CCSafetyNetPlugin = (async ({ directory, homeDir }: CCSafetyNetPluginInput) => {
   const modes = getCCSafetyNetEnvModes();
 
   return {
@@ -44,6 +47,11 @@ export const CCSafetyNetPlugin: Plugin = async ({ directory }) => {
           );
         }
         if (result) {
+          if (input.sessionID) {
+            writeAuditLog(input.sessionID, command, result.segment, result.reason, directory, {
+              homeDir,
+            });
+          }
           const message = formatBlockedMessage({
             reason: result.reason,
             command,
@@ -56,4 +64,4 @@ export const CCSafetyNetPlugin: Plugin = async ({ directory }) => {
       }
     },
   };
-};
+}) satisfies Plugin;
