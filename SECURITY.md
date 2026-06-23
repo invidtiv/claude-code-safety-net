@@ -24,20 +24,27 @@ Include as much detail as you can safely share:
 
 Please redact tokens, credentials, private repository names, and sensitive file paths before sending logs or command output.
 
+## The Boundary: Bug or Vulnerability?
+
+CC Safety Net's job is to stop agents from running destructive commands. A report that the tool failed to do that job is a **bug**, and it belongs in a public GitHub issue. The threat model already assumes an attacker (prompt injection, adversarial context) can emit any destructive command, so publishing "this command shape is not caught" does not hand the attacker a capability they did not already have — it just gets the gap fixed faster and lets users ship a custom rule as an immediate workaround.
+
+A report that the tool did something harmful it was never supposed to do — leak a secret, write a file outside its own directory, or ship a tampered package — is a **vulnerability**. The non-obvious construction is the secret, so it belongs in private disclosure.
+
+The dividing line is: **did the tool fail to stop a destructive command, or did the tool itself become the harmful vector?**
+
 ## What Counts as a Security Issue
 
-Examples of security issues include:
+Report these privately:
 
-- A bypass that allows a clearly destructive command to execute when CC Safety Net should block it
-- A parsing or wrapper-analysis flaw that makes documented protections ineffective
-- Leakage of secrets through block messages, audit logs, diagnostics, or debug output
-- A path traversal or filesystem issue in audit logging or configuration handling
-- A supply-chain or packaging issue that affects the published npm package or plugin distribution
+- Leakage of secrets through block messages, audit logs, diagnostics, or debug output, including a redaction bypass for a specific token format
+- A path traversal or filesystem issue in audit logging or configuration handling, where crafted input writes outside the intended directory
+- A supply-chain or packaging issue affecting the published npm package or plugin distribution, including rulebook integrity
 
 ## What Should Be Reported Publicly Instead
 
-Please use normal GitHub issues for:
+Use normal GitHub issues for:
 
+- Any bypass or fail-open that lets a destructive command execute — a coverage gap (a command the rules do not block yet), a parser, tokenizer, or wrapper-analysis edge case, or an analysis error that lets a command through instead of blocking it. Report the command *shape*, not a ready-to-paste weaponized prompt-injection payload.
 - False positives where a safe command is blocked
 - Missing convenience rules or new feature requests
 - Documentation bugs
