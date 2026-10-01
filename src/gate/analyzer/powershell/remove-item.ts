@@ -300,7 +300,7 @@ function isArraySeparator(token: PowerShellToken): boolean {
 
 function powerShellTargetForPolicy(target: string): string {
   const normalized = target.replace(/\\/g, '/');
-  const home = /^\$env:(?:userprofile|home)(?=$|\/)/i.exec(normalized);
+  const home = /^(?:\$env:(?:userprofile|home)|\$home|\$\{home\})(?=$|\/)/i.exec(normalized);
   return home ? `$HOME${normalized.slice(home[0].length)}` : normalized;
 }
 

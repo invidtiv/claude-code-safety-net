@@ -66,3 +66,13 @@ test('a PowerShell location change cannot relax deletion outside the initial wor
     }),
   ).toMatchObject({ kind: 'deny', ruleId: 'powershell.remove-item-recursive-force-outside-cwd' });
 });
+
+test.each([
+  "$home = 'D:\\temp'; Remove-Item -Recurse -Force $home",
+  "$home = Join-Path $env:TEMP 'isolated'\nWrite-Output $home\nRemove-Item -Recurse -Force $home",
+])('an assignment to the read-only $HOME leaves a deletion aimed at home: %s', (command) => {
+  expect(analyzeFromProject(command, { project: null })).toMatchObject({
+    kind: 'deny',
+    ruleId: 'powershell.remove-item-recursive-force-root-or-home',
+  });
+});

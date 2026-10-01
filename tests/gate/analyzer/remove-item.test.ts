@@ -182,6 +182,18 @@ describe('powershell Remove-Item', () => {
         id: 'powershell.remove-item-recursive-force-root-or-home',
       },
       {
+        source: 'Remove-Item -Recurse -Force $home',
+        id: 'powershell.remove-item-recursive-force-root-or-home',
+      },
+      {
+        source: 'Remove-Item -Recurse -Force $Home\\*',
+        id: 'powershell.remove-item-recursive-force-root-or-home',
+      },
+      {
+        source: 'Remove-Item -Recurse -Force ${home}',
+        id: 'powershell.remove-item-recursive-force-root-or-home',
+      },
+      {
         source: 'Remove-Item -Recurse -Force $env:USERPROFILE',
         id: 'powershell.remove-item-recursive-force-root-or-home',
       },
