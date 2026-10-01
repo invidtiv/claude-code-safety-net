@@ -167,10 +167,11 @@ export function planDeepSeekHarnessUninstall(
     ],
     ...(desktopLeftBehind
       ? {
-          message: [
-            `Removed ${PACKAGE_NAME} from the DeepSeek Harness web profile.`,
-            desktopNotFound('remove'),
-          ].join('\n'),
+          afterUninstall: () => {
+            throw new Error(
+              `Removed ${PACKAGE_NAME} from the DeepSeek Harness web profile, but ${desktopNotFound('remove')}`,
+            );
+          },
         }
       : {}),
   };

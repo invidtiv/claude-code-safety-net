@@ -133,7 +133,10 @@ type NativeInstallDefinition = {
       ) => NativeInstallPlan | Promise<NativeInstallPlan>);
   uninstallCommands?:
     | readonly NativeCommand[]
-    | ((environment: Environment) => Pick<NativeInstallPlan, 'commands' | 'message'>);
+    | ((environment: Environment) => {
+        commands: readonly NativeCommand[];
+        afterUninstall?: () => void;
+      });
   beforeInstall?: (environment: Environment) => void;
   postInstallMessage?: string;
 };
@@ -538,9 +541,8 @@ async function uninstallNativeTarget(
       ? definition.uninstallCommands(environment)
       : { commands: definition.uninstallCommands };
   await runNativeCommands(plan.commands);
-  return [`Uninstalled ${getIntegrationDisplayName(target)} integration`, plan.message]
-    .filter(Boolean)
-    .join('\n');
+  plan.afterUninstall?.();
+  return `Uninstalled ${getIntegrationDisplayName(target)} integration`;
 }
 
 function uninstallOpenCodeTarget(environment: Environment): string {

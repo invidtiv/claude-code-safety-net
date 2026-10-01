@@ -209,7 +209,7 @@ test('uninstall leaves profiles without the plugin alone, and says when no profi
   );
 });
 
-test('uninstall from a Desktop that is not in a default location still removes the web copy', () => {
+test('uninstall from a Desktop that is not in a default location removes the web copy, then fails', () => {
   const uninstall = (current: ReturnType<typeof machine>) => () =>
     planDeepSeekHarnessUninstall(current.environment, {
       platform: 'darwin',
@@ -218,14 +218,16 @@ test('uninstall from a Desktop that is not in a default location still removes t
   const desktopNotFound =
     'DeepSeek Harness Desktop is not in its default location, so remove cc-safety-net from its Plugins page.';
 
-  expect(
-    uninstall(machine({ [DESKTOP_MANIFEST]: manifest(true), [WEB_MANIFEST]: manifest(true) }))(),
-  ).toEqual({
-    commands: [[...NPX_DSH, 'plugin', '--profile', 'web', 'remove', 'cc-safety-net']],
-    message: ['Removed cc-safety-net from the DeepSeek Harness web profile.', desktopNotFound].join(
-      '\n',
-    ),
-  });
+  const partial = uninstall(
+    machine({ [DESKTOP_MANIFEST]: manifest(true), [WEB_MANIFEST]: manifest(true) }),
+  )();
+
+  expect(partial.commands).toEqual([
+    [...NPX_DSH, 'plugin', '--profile', 'web', 'remove', 'cc-safety-net'],
+  ]);
+  expect(() => partial.afterUninstall?.()).toThrow(
+    `Removed cc-safety-net from the DeepSeek Harness web profile, but ${desktopNotFound}`,
+  );
   expect(uninstall(machine({ [DESKTOP_MANIFEST]: manifest(true) }))).toThrow(desktopNotFound);
 });
 
