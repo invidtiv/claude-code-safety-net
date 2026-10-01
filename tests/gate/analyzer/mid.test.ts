@@ -329,7 +329,17 @@ describe('transparent wrappers', () => {
         childIndex: 1,
         alternatives: [2],
       },
-      { tokens: ['doas', 'nice', 'rm', '-rf', '/tmp/x'], policy: 'doas', childIndex: 2 },
+      {
+        tokens: ['doas', 'nice', 'rm', '-rf', '/tmp/x'],
+        policy: 'doas',
+        childIndex: 1,
+        alternatives: [2],
+      },
+      { tokens: ['nice', '-n', '5', 'rm', '-rf', '/tmp/x'], policy: 'none', childIndex: 3 },
+      { tokens: ['timeout', '-s', 'KILL', '5', 'git', 'clean'], policy: 'none', childIndex: 4 },
+      { tokens: ['nohup', 'custom-tool', 'wipe'], policy: 'custom', childIndex: 1 },
+      { tokens: ['nohup', 'custom-tool', 'wipe'], policy: 'none', childIndex: null },
+      { tokens: ['doas', 'dd', 'of=/dev/sda'], policy: 'doas', childIndex: 1 },
       {
         tokens: ['doas', 'nice', 'rm', '-rf', '/tmp/x'],
         policy: 'doasAndNice',

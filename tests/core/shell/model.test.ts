@@ -15,7 +15,7 @@ describe('core/shell/model', () => {
       { source: 'time git status', called: 'git' },
       { source: 'time -p git status', called: 'git' },
       { source: 'time -p -- git status', called: 'git' },
-      { source: '! git status', called: 'git' },
+      { source: 'time ! git status', called: 'git' },
       { source: '"git" status', called: 'git' },
       { source: '$(printf git) status', called: undefined },
       { source: 'A=1', called: undefined },

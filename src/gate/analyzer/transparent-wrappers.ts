@@ -5,8 +5,10 @@ import {
 import type { EffectivePolicy } from '@/core/policy/types';
 import { AWK_INTERPRETERS, DISPLAY_COMMANDS, SHELL_WRAPPERS } from '@/core/rules/constants';
 import { getBasename, normalizeCommandToken } from '@/core/shell/tokens';
+import { isDeviceCommand } from './device';
 
 const STANDARD_COMMAND_WRAPPERS = new Set(['sudo', 'env', 'command', 'builtin']);
+const EXEC_WRAPPERS = new Set(['exec', 'nice', 'nohup', 'setsid', 'stdbuf', 'time', 'timeout']);
 
 interface TransparentWrapperUnwrap {
   wrapper: string;
@@ -20,7 +22,7 @@ export function unwrapTransparentWrapper(
   policy: Pick<EffectivePolicy, 'rules' | 'transparentWrappers'>,
 ): TransparentWrapperUnwrap | null {
   const head = tokens[0];
-  if (!head || !policy.transparentWrappers.includes(getBasename(head))) {
+  if (!head || !isTransparentWrapper(getBasename(head), policy)) {
     return null;
   }
 
@@ -69,13 +71,21 @@ function isProtectableCommand(
     basename === 'busybox' ||
     isStandardCommandWrapper(token) ||
     BUILTIN_ANALYZED_COMMANDS.has(basename) ||
-    policy.transparentWrappers.includes(basename) ||
+    isDeviceCommand(normalized) ||
+    isTransparentWrapper(basename, policy) ||
     SHELL_WRAPPERS.has(normalized) ||
     token === '$SHELL' ||
     isInterpreterCommand(normalized) ||
     AWK_INTERPRETERS.has(normalized) ||
     policy.rules.some((rule) => rule.command === basename)
   );
+}
+
+function isTransparentWrapper(
+  command: string,
+  policy: Pick<EffectivePolicy, 'transparentWrappers'>,
+): boolean {
+  return EXEC_WRAPPERS.has(command) || policy.transparentWrappers.includes(command);
 }
 
 export function isStandardCommandWrapper(token: string): boolean {

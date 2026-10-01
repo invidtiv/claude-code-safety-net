@@ -142,7 +142,7 @@ export function applyShellGitContextEnvSegment(
     return;
   }
   tokens.slice(operandsStart).forEach((name) => {
-    if (COMPOUND_BODY_KEYWORDS.has(head)) {
+    if (state.bodyDepth > 0) {
       state.shellAssignments.set(name, '');
       return;
     }
