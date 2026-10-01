@@ -37,13 +37,14 @@ CC Safety Net supports the coding agent CLIs below on Windows, macOS, and Linux.
     <td align="center"><a href="https://ccsafetynet.com/docs/installation#cursor-installation"><picture><source media="(prefers-color-scheme: dark)" srcset="./.github/assets/cursor-dark.svg"><img alt="Cursor" src="./.github/assets/cursor-light.svg" height="32"></picture><br>Cursor</a></td>
   </tr>
   <tr>
+    <td align="center"><a href="https://ccsafetynet.com/docs/installation#deepseek-harness-installation"><img alt="DeepSeek Harness" src="./.github/assets/deepseek.svg" height="32"><br>DeepSeek Harness</a></td>
     <td align="center"><a href="https://ccsafetynet.com/docs/installation#gemini-cli-installation"><img alt="Gemini CLI" src="./.github/assets/gemini-cli.svg" height="32"><br>Gemini CLI</a></td>
     <td align="center"><a href="https://ccsafetynet.com/docs/installation#github-copilot-cli-installation"><picture><source media="(prefers-color-scheme: dark)" srcset="./.github/assets/copilot-cli-dark.svg"><img alt="GitHub Copilot CLI" src="./.github/assets/copilot-cli-light.svg" height="32"></picture><br>GitHub Copilot CLI</a></td>
     <td align="center"><a href="https://ccsafetynet.com/docs/installation#grok-build-installation"><picture><source media="(prefers-color-scheme: dark)" srcset="./.github/assets/grok-build-dark.svg"><img alt="Grok Build" src="./.github/assets/grok-build-light.svg" height="32"></picture><br>Grok Build</a></td>
     <td align="center"><a href="https://ccsafetynet.com/docs/installation#hermes-agent-installation"><img alt="Hermes Agent" src="./.github/assets/hermes.png" height="32"><br>Hermes Agent</a></td>
-    <td align="center"><a href="https://ccsafetynet.com/docs/installation#kimi-code-installation"><img alt="Kimi Code" src="./.github/assets/kimi-cli.png" height="32"><br>Kimi Code</a></td>
   </tr>
   <tr>
+    <td align="center"><a href="https://ccsafetynet.com/docs/installation#kimi-code-installation"><img alt="Kimi Code" src="./.github/assets/kimi-cli.png" height="32"><br>Kimi Code</a></td>
     <td align="center"><a href="https://ccsafetynet.com/docs/installation#openclaw-installation"><img alt="OpenClaw" src="./.github/assets/openclaw.png" height="32"><br>OpenClaw</a></td>
     <td align="center"><a href="https://ccsafetynet.com/docs/installation#opencode-installation"><picture><source media="(prefers-color-scheme: dark)" srcset="./.github/assets/opencode-dark.svg"><img alt="OpenCode" src="./.github/assets/opencode-light.svg" height="32"></picture><br>OpenCode</a></td>
     <td align="center"><a href="https://ccsafetynet.com/docs/installation#pi-installation"><picture><source media="(prefers-color-scheme: dark)" srcset="./.github/assets/pi-dark.svg"><img alt="Pi" src="./.github/assets/pi-light.svg" height="32"></picture><br>Pi</a></td>
@@ -88,6 +89,8 @@ npx -y cc-safety-net@latest update
 Keep the `@latest` qualifier. A bare `cc-safety-net` spec can run an older copy from the npx cache. To uninstall, run `npx -y cc-safety-net uninstall`. `npm install -g cc-safety-net` also installs the `ccsn` alias.
 
 OpenCode integration supports v1.18.29+ and v2.0.6+. Run `npx -y cc-safety-net@latest install --opencode`; the installer selects the host's plugin commands. See [OpenCode compatibility](docs/opencode-compatibility.md) for v2 shell configuration and host limitations.
+
+DeepSeek Harness integration installs as a profile plugin bundle into each DeepSeek Harness on the machine. `npx -y cc-safety-net@latest install --deepseek-harness` adds it to the Desktop app through Desktop's bundled `dsh` command; quit Desktop first, and open it once beforehand so it has a profile. It adds it to the web profile through `npx -y @deepseek-ai/dsh plugin --profile web add cc-safety-net`, which reuses the DeepSeek Harness that `npx @deepseek-ai/dsh web` or a global install runs and needs `pnpm` on your PATH. The installer looks for Desktop in its default location; if yours is elsewhere, add `cc-safety-net` from its Plugins page.
 
 OpenClaw integration requires OpenClaw 2026.8.1+. The installer accepts the plugin's declared capabilities for you, and older OpenClaw releases reject that option.
 

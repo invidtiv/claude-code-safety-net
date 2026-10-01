@@ -22,6 +22,14 @@ type IntegrationCatalogEntry = {
   install: InstallMetadata;
 };
 
+export const DEEPSEEK_HARNESS_NPM_PROBE = [
+  'npx',
+  '--offline',
+  '--no-install',
+  '@deepseek-ai/dsh',
+  '--version',
+] as const;
+
 const catalog = [
   {
     id: 'antigravity-cli',
@@ -79,7 +87,7 @@ const catalog = [
   {
     id: 'copilot-cli',
     displayName: 'GitHub Copilot CLI',
-    doctorOrder: 7,
+    doctorOrder: 8,
     runtime: {
       order: 6,
       flags: ['-cp', '--copilot-cli'],
@@ -87,7 +95,7 @@ const catalog = [
       legacyTopLevelFlags: ['-cp', '--copilot-cli'],
     },
     install: {
-      order: 7,
+      order: 8,
       flag: '--copilot-cli',
       artifactKind: 'plugin',
       probeCommand: ['copilot', '--binary-version'],
@@ -96,7 +104,7 @@ const catalog = [
   {
     id: 'gemini-cli',
     displayName: 'Gemini CLI',
-    doctorOrder: 6,
+    doctorOrder: 7,
     runtime: {
       order: 5,
       flags: ['-gc', '--gemini-cli'],
@@ -104,7 +112,7 @@ const catalog = [
       legacyTopLevelFlags: ['-gc', '--gemini-cli'],
     },
     install: {
-      order: 6,
+      order: 7,
       flag: '--gemini-cli',
       artifactKind: 'extension',
       probeCommand: ['gemini', '--version'],
@@ -113,7 +121,7 @@ const catalog = [
   {
     id: 'grok-build',
     displayName: 'Grok Build',
-    doctorOrder: 8,
+    doctorOrder: 9,
     runtime: {
       order: 7,
       flags: ['-gb', '--grok-build'],
@@ -121,7 +129,7 @@ const catalog = [
       legacyTopLevelFlags: [],
     },
     install: {
-      order: 8,
+      order: 9,
       flag: '--grok-build',
       artifactKind: 'hook config',
       probeCommand: ['grok', '--version'],
@@ -130,7 +138,7 @@ const catalog = [
   {
     id: 'hermes-agent',
     displayName: 'Hermes Agent',
-    doctorOrder: 9,
+    doctorOrder: 10,
     runtime: {
       order: 8,
       flags: ['-ha', '--hermes-agent'],
@@ -138,7 +146,7 @@ const catalog = [
       legacyTopLevelFlags: [],
     },
     install: {
-      order: 9,
+      order: 10,
       flag: '--hermes-agent',
       artifactKind: 'plugin',
       probeCommand: ['hermes', '--version'],
@@ -147,7 +155,7 @@ const catalog = [
   {
     id: 'kimi-code',
     displayName: 'Kimi Code',
-    doctorOrder: 10,
+    doctorOrder: 11,
     runtime: {
       order: 9,
       flags: ['-kc', '--kimi-code'],
@@ -155,7 +163,7 @@ const catalog = [
       legacyTopLevelFlags: [],
     },
     install: {
-      order: 10,
+      order: 11,
       flag: '--kimi-code',
       artifactKind: 'hook config',
       probeCommand: ['kimi', '--version'],
@@ -164,9 +172,9 @@ const catalog = [
   {
     id: 'openclaw',
     displayName: 'OpenClaw',
-    doctorOrder: 11,
+    doctorOrder: 12,
     install: {
-      order: 11,
+      order: 12,
       flag: '--openclaw',
       artifactKind: 'plugin',
       probeCommand: ['openclaw', '--version'],
@@ -175,9 +183,9 @@ const catalog = [
   {
     id: 'opencode',
     displayName: 'OpenCode',
-    doctorOrder: 12,
+    doctorOrder: 13,
     install: {
-      order: 12,
+      order: 13,
       flag: '--opencode',
       artifactKind: 'plugin',
       probeCommand: ['opencode', '--version'],
@@ -186,9 +194,9 @@ const catalog = [
   {
     id: 'pi',
     displayName: 'Pi',
-    doctorOrder: 13,
+    doctorOrder: 14,
     install: {
-      order: 13,
+      order: 14,
       flag: '--pi',
       artifactKind: 'package',
       probeCommand: ['pi', '--version'],
@@ -209,6 +217,17 @@ const catalog = [
       flag: '--cursor',
       artifactKind: 'hook config',
       probeCommand: ['cursor', '--version'],
+    },
+  },
+  {
+    id: 'deepseek-harness',
+    displayName: 'DeepSeek Harness',
+    doctorOrder: 6,
+    install: {
+      order: 6,
+      flag: '--deepseek-harness',
+      artifactKind: 'package',
+      probeCommand: DEEPSEEK_HARNESS_NPM_PROBE,
     },
   },
   {

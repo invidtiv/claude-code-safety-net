@@ -53,6 +53,8 @@ const CONFIGURED: TreeSpec = {
     '[[hooks]]\nevent = "PreToolUse"\ncommand = "npx -y cc-safety-net hook --kimi-code"\n',
   '.config/opencode/opencode.json': '{"plugin":["cc-safety-net"]}',
   '.pi/agent/settings.json': '{"packages":["npm:cc-safety-net"]}',
+  '.dsh/profiles/web/package.json':
+    '{"dependencies":{"cc-safety-net":"^2"},"dsh":{"profile":{"bundles":["cc-safety-net"]}}}',
 };
 
 const DISABLED: TreeSpec = {
@@ -68,6 +70,8 @@ const DISABLED: TreeSpec = {
     '{"cc-safety-net":{"enabled":false,"PreToolUse":[{"hooks":[{"command":"npx -y cc-safety-net hook --agy-cli"}]}]}}',
   '.pi/agent/settings.json':
     '{"packages":[{"source":"npm:cc-safety-net","extensions":["-cc-safety-net"]}]}',
+  '.dsh/profiles/web/package.json':
+    '{"dependencies":{"cc-safety-net":"^2"},"dsh":{"profile":{"bundles":[]}}}',
 };
 
 const UNREADABLE: TreeSpec = {
@@ -77,6 +81,7 @@ const UNREADABLE: TreeSpec = {
   ...geminiExtension,
   '.gemini/extensions/extension-enablement.json': null,
   '.pi/agent/settings.json': null,
+  '.dsh/profiles/web/package.json': null,
 };
 
 type Outputs = {
@@ -114,6 +119,7 @@ const PLATFORMS = [
   'antigravity-cli',
   'codex',
   'cursor',
+  'deepseek-harness',
   'gemini-cli',
   'copilot-cli',
   'grok-build',
@@ -135,7 +141,7 @@ test('an untouched home reports every host as not applicable, in doctor order', 
   );
 });
 
-test('a home with every host configured reports all thirteen as verified', async () => {
+test('a home with every host configured reports all fourteen as verified', async () => {
   const outcome = await all(CONFIGURED, {
     ampPluginListOutput: AMP_ACTIVE,
     codexPluginListOutput: codexRow('installed, enabled'),
@@ -160,6 +166,7 @@ test('a home where every host that can be switched off is switched off', async (
     'antigravity-cli detected inactive verified',
     'codex detected inactive verified',
     'cursor absent inactive not-applicable',
+    'deepseek-harness detected inactive verified',
     'gemini-cli detected inactive verified',
     'copilot-cli detected inactive verified',
     'grok-build absent inactive not-applicable',
@@ -180,6 +187,7 @@ test('a home whose state files cannot be read reports uninspected, never absent'
     'antigravity-cli absent inactive not-applicable',
     'codex absent inactive not-applicable',
     'cursor absent inactive not-applicable',
+    'deepseek-harness absent inactive not-inspected',
     'gemini-cli absent inactive not-inspected',
     'copilot-cli absent inactive not-inspected',
     'grok-build absent inactive not-applicable',

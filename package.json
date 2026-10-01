@@ -6,6 +6,7 @@
     "amp",
     "claude-code",
     "cursor",
+    "deepseek-harness",
     "grok",
     "grok-build",
     "opencode",
@@ -119,6 +120,11 @@
     "node": ">=18"
   },
   "packageManager": "bun@1.4.2",
+  "dsh": {
+    "bundle": {
+      "patch": "./dist/deepseek-harness/cordis.patch.yml"
+    }
+  },
   "pi": {
     "extensions": [
       "./dist/pi/index.js"

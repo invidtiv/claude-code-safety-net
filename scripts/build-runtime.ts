@@ -21,6 +21,14 @@ const aliasPlugin: BunPlugin = {
   },
 };
 
+export const DEEPSEEK_HARNESS_BUNDLE_PATCH = 'deepseek-harness/cordis.patch.yml';
+const DEEPSEEK_HARNESS_BUNDLE_PATCH_ROWS = [
+  '- insert:',
+  '    - id: cc-safety-net',
+  '      name: ./index.js',
+  '',
+].join('\n');
+
 export async function buildRuntimeBundles(outdir: string) {
   const result = await Bun.build({
     entrypoints: [
@@ -28,6 +36,7 @@ export async function buildRuntimeBundles(outdir: string) {
       'src/entries/api.ts',
       'src/entries/cli.ts',
       'src/entries/pi/index.ts',
+      'src/entries/deepseek-harness/index.ts',
     ],
     outdir,
     target: 'node',
@@ -43,6 +52,7 @@ export async function buildRuntimeBundles(outdir: string) {
     plugins: [aliasPlugin, await freezeGuiAssetsPlugin(), await freezeSkillTemplatePlugin()],
   });
   if (!result.success) return result;
+  await Bun.write(join(outdir, DEEPSEEK_HARNESS_BUNDLE_PATCH), DEEPSEEK_HARNESS_BUNDLE_PATCH_ROWS);
   const bin = await buildBinBundle(outdir);
   return bin.success ? result : bin;
 }

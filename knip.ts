@@ -8,6 +8,7 @@ const config: KnipConfig = {
     'src/entries/opencode-v2.ts!',
     'src/entries/api.ts!',
     'src/entries/pi/index.ts!',
+    'src/entries/deepseek-harness/index.ts!',
     'src/entries/amp.ts!',
     'src/entries/openclaw.ts!',
     'src/gui/frontend/main.ts!',

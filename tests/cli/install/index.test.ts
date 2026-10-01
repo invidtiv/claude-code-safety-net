@@ -12,7 +12,7 @@ import { createTempRoot, removeTempRoots } from '../../helpers/temp-home';
 const flow = async (spec: FlowSpec) => await runSide(spec);
 
 const TARGET_FLAGS =
-  '--amp, --agy-cli, --claude-code, --codex, --cursor, --gemini-cli, --copilot-cli, --grok-build, --hermes-agent, --kimi-code, --openclaw, --opencode, --pi';
+  '--amp, --agy-cli, --claude-code, --codex, --cursor, --deepseek-harness, --gemini-cli, --copilot-cli, --grok-build, --hermes-agent, --kimi-code, --openclaw, --opencode, --pi';
 
 afterEach(removeTempRoots);
 
@@ -483,6 +483,64 @@ test('Gemini CLI installs, updates, or updates and enables its extension', async
   expect(disabled.log).toEqual(
     [geminiCall('update gemini-safety-net'), geminiCall('enable gemini-safety-net')].sort(),
   );
+});
+
+const DSH_WEB_PROFILE = '.dsh/profiles/web/package.json';
+const dshManifest = (bundles: readonly string[]) =>
+  JSON.stringify({ dependencies: { 'cc-safety-net': '^2' }, dsh: { profile: { bundles } } });
+const dshWebAdd = (seedDir: string) => [
+  {
+    command: 'npx',
+    args: ['-y', '@deepseek-ai/dsh', 'plugin', '--profile', 'web', 'add', 'cc-safety-net'],
+    seedDir,
+    seedInto: '<home>/.dsh/profiles/web',
+  },
+];
+
+test('DeepSeek Harness without Desktop adds the bundle to the web profile through npx', async () => {
+  const installed = await flow({
+    invoke: 'install',
+    args: ['--deepseek-harness'],
+    seedTmp: { 'web-profile/package.json': dshManifest(['cc-safety-net']) },
+    script: dshWebAdd('<root>/tmp/web-profile'),
+  });
+  expect(installed).toMatchObject({
+    exitCode: 0,
+    lines: [
+      'Installed DeepSeek Harness integration',
+      'Added cc-safety-net to the DeepSeek Harness web profile.',
+      '',
+    ],
+    log: ['npx -y @deepseek-ai/dsh plugin --profile web add cc-safety-net\t<root>'],
+  });
+
+  const removed = await flow({
+    invoke: 'uninstall',
+    args: ['--deepseek-harness'],
+    script: [{ command: 'npx' }],
+    seed: { [DSH_WEB_PROFILE]: dshManifest(['cc-safety-net']) },
+  });
+  expect(removed).toMatchObject({
+    exitCode: 0,
+    lines: ['Uninstalled DeepSeek Harness integration', ''],
+    log: ['npx -y @deepseek-ai/dsh plugin --profile web remove cc-safety-net\t<root>'],
+  });
+});
+
+test('a DeepSeek Harness install that leaves the bundle off fails instead of claiming protection', async () => {
+  const installed = await flow({
+    invoke: 'install',
+    args: ['--deepseek-harness'],
+    seedTmp: { 'web-profile/package.json': dshManifest([]) },
+    script: dshWebAdd('<root>/tmp/web-profile'),
+  });
+
+  expect(installed).toMatchObject({
+    exitCode: 1,
+    errors: [
+      'DeepSeek Harness installed cc-safety-net in the web profile but did not enable it. Enable it from the Plugins page, or update cc-safety-net if your registry served a release without DeepSeek Harness support.',
+    ],
+  });
 });
 
 test('Pi drops the extensions filter its settings carried', async () => {

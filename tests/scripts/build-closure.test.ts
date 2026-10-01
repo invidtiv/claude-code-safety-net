@@ -76,6 +76,8 @@ describe('the build', () => {
       'bin/hook.js',
       'bin/package.json',
       'cli.js',
+      'deepseek-harness/cordis.patch.yml',
+      'deepseek-harness/index.js',
       'index.d.ts',
       'index.js',
       'openclaw/cc-safety-net/index.js',

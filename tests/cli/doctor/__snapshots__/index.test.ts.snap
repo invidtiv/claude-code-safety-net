@@ -36,6 +36,12 @@ exports[`doctor --json a fresh home reports no configured integration and exits 
       "configPath": "<root>/home/.cursor/hooks.json"
     },
     {
+      "platform": "deepseek-harness",
+      "detected": false,
+      "configured": false,
+      "inspectionStatus": "not-applicable"
+    },
+    {
       "platform": "gemini-cli",
       "detected": false,
       "configured": false,
@@ -277,6 +283,7 @@ exports[`doctor --json a fresh home reports no configured integration and exits 
       "claude-code": null,
       "codex": null,
       "cursor": null,
+      "deepseek-harness": null,
       "gemini-cli": null,
       "copilot-cli": null,
       "grok-build": null,
@@ -344,6 +351,12 @@ exports[`doctor --json an installed Cursor hook clears the none-configured findi
       "configPath": "<root>/home/.cursor/hooks.json"
     },
     {
+      "platform": "deepseek-harness",
+      "detected": false,
+      "configured": false,
+      "inspectionStatus": "not-applicable"
+    },
+    {
       "platform": "gemini-cli",
       "detected": false,
       "configured": false,
@@ -585,6 +598,7 @@ exports[`doctor --json an installed Cursor hook clears the none-configured findi
       "claude-code": null,
       "codex": null,
       "cursor": null,
+      "deepseek-harness": null,
       "gemini-cli": null,
       "copilot-cli": null,
       "grok-build": null,
@@ -641,6 +655,12 @@ exports[`doctor --json both scopes report their own invalid rule config: invalid
       "configured": false,
       "inspectionStatus": "not-applicable",
       "configPath": "<root>/home/.cursor/hooks.json"
+    },
+    {
+      "platform": "deepseek-harness",
+      "detected": false,
+      "configured": false,
+      "inspectionStatus": "not-applicable"
     },
     {
       "platform": "gemini-cli",
@@ -891,6 +911,7 @@ exports[`doctor --json both scopes report their own invalid rule config: invalid
       "claude-code": null,
       "codex": null,
       "cursor": null,
+      "deepseek-harness": null,
       "gemini-cli": null,
       "copilot-cli": null,
       "grok-build": null,
@@ -978,6 +999,12 @@ exports[`doctor --json a v2 lock and cache are reported once, naming both scopes
       "configured": false,
       "inspectionStatus": "not-applicable",
       "configPath": "<root>/home/.cursor/hooks.json"
+    },
+    {
+      "platform": "deepseek-harness",
+      "detected": false,
+      "configured": false,
+      "inspectionStatus": "not-applicable"
     },
     {
       "platform": "gemini-cli",
@@ -1225,6 +1252,7 @@ exports[`doctor --json a v2 lock and cache are reported once, naming both scopes
       "claude-code": null,
       "codex": null,
       "cursor": null,
+      "deepseek-harness": null,
       "gemini-cli": null,
       "copilot-cli": null,
       "grok-build": null,
@@ -1296,6 +1324,12 @@ exports[`doctor --json a regular file where the config directory belongs is an u
       "configured": false,
       "inspectionStatus": "not-applicable",
       "configPath": "<root>/home/.cursor/hooks.json"
+    },
+    {
+      "platform": "deepseek-harness",
+      "detected": false,
+      "configured": false,
+      "inspectionStatus": "not-applicable"
     },
     {
       "platform": "gemini-cli",
@@ -1545,6 +1579,7 @@ exports[`doctor --json a regular file where the config directory belongs is an u
       "claude-code": null,
       "codex": null,
       "cursor": null,
+      "deepseek-harness": null,
       "gemini-cli": null,
       "copilot-cli": null,
       "grok-build": null,
@@ -1632,6 +1667,12 @@ exports[`doctor --json a seeded audit tree is summarised over the denials alone:
       "configured": false,
       "inspectionStatus": "not-applicable",
       "configPath": "<root>/home/.cursor/hooks.json"
+    },
+    {
+      "platform": "deepseek-harness",
+      "detected": false,
+      "configured": false,
+      "inspectionStatus": "not-applicable"
     },
     {
       "platform": "gemini-cli",
@@ -1896,6 +1937,7 @@ exports[`doctor --json a seeded audit tree is summarised over the denials alone:
       "claude-code": null,
       "codex": null,
       "cursor": null,
+      "deepseek-harness": null,
       "gemini-cli": null,
       "copilot-cli": null,
       "grok-build": null,
@@ -1960,6 +2002,12 @@ exports[`doctor --json an invalid audit scope and a legacy flag are both reporte
       "configured": false,
       "inspectionStatus": "not-applicable",
       "configPath": "<root>/home/.cursor/hooks.json"
+    },
+    {
+      "platform": "deepseek-harness",
+      "detected": false,
+      "configured": false,
+      "inspectionStatus": "not-applicable"
     },
     {
       "platform": "gemini-cli",
@@ -2207,6 +2255,7 @@ exports[`doctor --json an invalid audit scope and a legacy flag are both reporte
       "claude-code": null,
       "codex": null,
       "cursor": null,
+      "deepseek-harness": null,
       "gemini-cli": null,
       "copilot-cli": null,
       "grok-build": null,
