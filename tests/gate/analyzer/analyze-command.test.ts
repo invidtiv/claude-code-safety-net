@@ -801,11 +801,17 @@ describe('analyzeCommand', () => {
       `if false\nthen\n  cd ${scratchPosix}\nfi\nrm -rf ./*`,
       `if false; then cd ${scratchPosix}; else rm -rf ./*; fi`,
       `while false; do cd ${scratchPosix}; done; rm -rf ./*`,
+      `! cd ${scratchPosix} && rm -rf ./*`,
+      `if ! cd ${scratchPosix}; then rm -rf ./*; fi`,
+      `while ! cd ${scratchPosix}; do rm -rf ./*; done`,
     ]) {
       expect(decisionAt(agentHome, command, standard)?.ruleId, command).toBe(
         'rm.recursive-force-root-or-home',
       );
     }
+    const homePosix = agentHome.split(sep).join('/');
+    const nested = `if true; then cd ${homePosix}; if false; then cd ${scratchPosix}; fi; rm -rf ./*; fi`;
+    expect(decision(nested, standard)?.ruleId, nested).toBe('rm.recursive-force-root-or-home');
     for (const command of [
       `if true; then cd ${scratchPosix}; rm -rf ./*; fi`,
       `if cd ${scratchPosix}; then rm -rf ./*; fi`,

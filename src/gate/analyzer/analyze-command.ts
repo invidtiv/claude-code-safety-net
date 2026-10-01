@@ -130,6 +130,7 @@ export function analyzeCommandInternal(
       literalHeredocFiles: new Map(options.literalHeredocFiles),
       functionDefinitions: new Map(options.functionDefinitions),
       createdDirectories: new Set(),
+      compoundBodyEntryCwds: [],
     },
   ]).result;
 }
@@ -140,7 +141,7 @@ type AnalysisState = {
   literalHeredocFiles: Map<string, string>;
   functionDefinitions: Map<string, CommandProgram>;
   createdDirectories: Set<string>;
-  compoundBodyEntry?: { readonly cwd: string | null | undefined };
+  compoundBodyEntryCwds: readonly (string | null | undefined)[];
 };
 
 type ProgramAnalysis = {
@@ -326,7 +327,12 @@ function analyzeProgram(
           : {
               result: null,
               states: forkForLoopStates(node, analyzedState).flatMap((loopState) =>
-                forkCompoundBodyStates(node, commandState, loopState),
+                forkUncertainCwdStates(
+                  node,
+                  commandState,
+                  loopState,
+                  isNegation(program.nodes[nodeIndex - 1]),
+                ),
               ),
             };
         if (functionAnalysis.result) return functionAnalysis;
@@ -1317,22 +1323,34 @@ function updateCwdAfterCommandView(
 
 const COMPOUND_BODY_BOUNDARIES = new Set(['else', 'elif', 'fi', 'done', 'esac']);
 
-function forkCompoundBodyStates(
+function isNegation(node: CommandProgram['nodes'][number] | undefined): boolean {
+  return node?.kind === 'command' && node.words.length === 1 && node.words[0]?.raw === '!';
+}
+
+function forkUncertainCwdStates(
   view: CommandView,
   before: AnalysisState,
   state: AnalysisState,
+  negated: boolean,
 ): AnalysisState[] {
-  if (before.shellGitContextState.bodyDepth === 0 && state.shellGitContextState.bodyDepth > 0) {
-    state.compoundBodyEntry = { cwd: before.effectiveCwd };
+  const outerDepth = before.shellGitContextState.bodyDepth;
+  const innerDepth = state.shellGitContextState.bodyDepth;
+  const entryCwds = state.compoundBodyEntryCwds;
+  if (innerDepth > outerDepth) {
+    state.compoundBodyEntryCwds = [...entryCwds.slice(0, outerDepth), before.effectiveCwd];
     return [state];
   }
-  const entry = state.compoundBodyEntry;
-  if (!entry || !COMPOUND_BODY_BOUNDARIES.has(view.words[0]?.text ?? '')) return [state];
-  if (state.shellGitContextState.bodyDepth === 0) state.compoundBodyEntry = undefined;
-  if (entry.cwd === state.effectiveCwd) return [state];
-  const bodySkipped = cloneAnalysisState(state);
-  bodySkipped.effectiveCwd = entry.cwd;
-  return [state, bodySkipped];
+  const closesBody = outerDepth > 0 && COMPOUND_BODY_BOUNDARIES.has(view.words[0]?.text ?? '');
+  if (closesBody) state.compoundBodyEntryCwds = entryCwds.slice(0, innerDepth);
+  const skippedCwd = closesBody
+    ? entryCwds[outerDepth - 1]
+    : negated
+      ? before.effectiveCwd
+      : state.effectiveCwd;
+  if (skippedCwd === state.effectiveCwd) return [state];
+  const skipped = cloneAnalysisState(state);
+  skipped.effectiveCwd = skippedCwd;
+  return [state, skipped];
 }
 
 const FOR_LOOP_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -1372,7 +1390,7 @@ function cloneAnalysisState(state: AnalysisState): AnalysisState {
     literalHeredocFiles: new Map(state.literalHeredocFiles),
     functionDefinitions: new Map(state.functionDefinitions),
     createdDirectories: new Set(state.createdDirectories),
-    compoundBodyEntry: state.compoundBodyEntry,
+    compoundBodyEntryCwds: state.compoundBodyEntryCwds,
   };
 }
 
@@ -1392,8 +1410,8 @@ function deduplicateAnalysisStates(states: readonly AnalysisState[]): AnalysisSt
 function analysisStatesEqual(left: AnalysisState, right: AnalysisState): boolean {
   return (
     left.effectiveCwd === right.effectiveCwd &&
-    left.compoundBodyEntry?.cwd === right.compoundBodyEntry?.cwd &&
-    !left.compoundBodyEntry === !right.compoundBodyEntry &&
+    left.compoundBodyEntryCwds.length === right.compoundBodyEntryCwds.length &&
+    left.compoundBodyEntryCwds.every((cwd, index) => cwd === right.compoundBodyEntryCwds[index]) &&
     optionalMapsEqual(left.shellGitContextState.env, right.shellGitContextState.env) &&
     optionalMapsEqual(left.literalHeredocFiles, right.literalHeredocFiles) &&
     optionalMapsEqual(left.functionDefinitions, right.functionDefinitions) &&
