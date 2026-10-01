@@ -108,7 +108,7 @@ h1 {
 
 .brand-logo {
   display: flex;
-  color: var(--ink);
+  color: light-dark(#17161b, #f5f4f0);
 }
 
 .brand-home {
