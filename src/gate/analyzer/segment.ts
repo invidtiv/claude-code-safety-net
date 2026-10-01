@@ -1031,8 +1031,8 @@ export function resolveCwdAfterCommandView(
   const targets = rest[0] === '--' ? rest.slice(1) : rest;
   if (targets.length > 1) return null;
   const rawTarget = targets[0];
-  if (rawTarget === undefined)
-    return resolveKnownCwdTarget(environment.home, cwd, environment.paths);
+  const home = shellAssignments.get('HOME') ?? environment.home;
+  if (rawTarget === undefined) return resolveKnownCwdTarget(home, cwd, environment.paths);
   const targetWord = commandView.words.find(
     (word) => word.provenance === 'variable' && word.text === rawTarget,
   );
@@ -1040,12 +1040,9 @@ export function resolveCwdAfterCommandView(
     (word) => word.text === rawTarget && /^~(?:\/|$)/.test(word.raw),
   );
   const target = targetWord
-    ? expandKnownVariableWord(
-        targetWord,
-        new Map([['HOME', environment.home], ...shellAssignments]),
-      )
+    ? expandKnownVariableWord(targetWord, new Map([['HOME', home], ...shellAssignments]))
     : tildeWord
-      ? `${environment.home}${rawTarget.slice(1)}`
+      ? `${home}${rawTarget.slice(1)}`
       : rawTarget;
   if (target === null) return null;
   if (

@@ -870,6 +870,12 @@ describe('analyzeCommand', () => {
       expect(followed?.kind, command).toBe(absolute?.kind);
       expect(followed?.ruleId, command).toBe(absolute?.ruleId);
     }
+    const scratchPosix = scratch.split(sep).join('/');
+    const reassigned = decision(`cd ${scratchPosix} && rm -rf ./*`, standard);
+    for (const operand of ['', ' ~', ' ~/', ' $HOME']) {
+      const command = `HOME=${scratchPosix}; cd${operand}; rm -rf ./*`;
+      expect(decision(command, standard)?.ruleId, command).toBe(reassigned?.ruleId);
+    }
   });
 
   test('a literal for list binds the loop variable in every forked state', () => {
