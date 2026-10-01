@@ -130,7 +130,7 @@ export function analyzeCommandInternal(
       literalHeredocFiles: new Map(options.literalHeredocFiles),
       functionDefinitions: new Map(options.functionDefinitions),
       createdDirectories: new Set(),
-      compoundBodyEntryCwds: [],
+      compoundBodies: [],
     },
   ]).result;
 }
@@ -141,7 +141,13 @@ type AnalysisState = {
   literalHeredocFiles: Map<string, string>;
   functionDefinitions: Map<string, CommandProgram>;
   createdDirectories: Set<string>;
-  compoundBodyEntryCwds: readonly (string | null | undefined)[];
+  compoundBodies: readonly CompoundBody[];
+};
+
+type CompoundBody = {
+  readonly entryCwd: string | null | undefined;
+  readonly branchCwds: readonly (string | null | undefined)[];
+  readonly hasElse: boolean;
 };
 
 type ProgramAnalysis = {
@@ -280,6 +286,7 @@ function analyzeProgram(
     }
     if (node.kind !== 'command') continue;
 
+    const negated = isNegation(program.nodes[nodeIndex - 1]);
     const segmentIndex = options.trace?.flattenNested
       ? options.trace.currentSegmentIndex
       : options.trace?.allocateSegment();
@@ -327,12 +334,7 @@ function analyzeProgram(
           : {
               result: null,
               states: forkForLoopStates(node, analyzedState).flatMap((loopState) =>
-                forkUncertainCwdStates(
-                  node,
-                  commandState,
-                  loopState,
-                  isNegation(program.nodes[nodeIndex - 1]),
-                ),
+                forkUncertainCwdStates(node, commandState, loopState, negated),
               ),
             };
         if (functionAnalysis.result) return functionAnalysis;
@@ -353,7 +355,7 @@ function analyzeProgram(
               ['<', '>', '>>', '>|'].includes(redirection.operator) &&
               redirection.target?.text === '/dev/null',
           );
-        if (tracksCommandOutcome && !enteredExistingDirectory) {
+        if (tracksCommandOutcome && (negated || !enteredExistingDirectory)) {
           failureStates.push(state);
           failureStates.push(
             ...functionAnalysis.states.map((functionState) =>
@@ -1321,7 +1323,7 @@ function updateCwdAfterCommandView(
   if (nextCwd !== undefined) state.effectiveCwd = nextCwd;
 }
 
-const COMPOUND_BODY_BOUNDARIES = new Set(['else', 'elif', 'fi', 'done', 'esac']);
+const COMPOUND_BODY_CLOSERS = new Set(['fi', 'done', 'esac']);
 
 function isNegation(node: CommandProgram['nodes'][number] | undefined): boolean {
   return node?.kind === 'command' && node.words.length === 1 && node.words[0]?.raw === '!';
@@ -1333,24 +1335,67 @@ function forkUncertainCwdStates(
   state: AnalysisState,
   negated: boolean,
 ): AnalysisState[] {
+  const head = view.words[0]?.text ?? '';
   const outerDepth = before.shellGitContextState.bodyDepth;
   const innerDepth = state.shellGitContextState.bodyDepth;
-  const entryCwds = state.compoundBodyEntryCwds;
+  const bodies = state.compoundBodies;
   if (innerDepth > outerDepth) {
-    state.compoundBodyEntryCwds = [...entryCwds.slice(0, outerDepth), before.effectiveCwd];
+    state.compoundBodies = [
+      ...bodies.slice(0, outerDepth),
+      {
+        entryCwd: before.effectiveCwd,
+        branchCwds: bodies[outerDepth]?.branchCwds ?? [],
+        hasElse: false,
+      },
+    ];
     return [state];
   }
-  const closesBody = outerDepth > 0 && COMPOUND_BODY_BOUNDARIES.has(view.words[0]?.text ?? '');
-  if (closesBody) state.compoundBodyEntryCwds = entryCwds.slice(0, innerDepth);
-  const skippedCwd = closesBody
-    ? entryCwds[outerDepth - 1]
-    : negated
-      ? before.effectiveCwd
-      : state.effectiveCwd;
-  if (skippedCwd === state.effectiveCwd) return [state];
-  const skipped = cloneAnalysisState(state);
-  skipped.effectiveCwd = skippedCwd;
-  return [state, skipped];
+  const body = outerDepth > 0 ? bodies[outerDepth - 1] : undefined;
+  if (body && (head === 'else' || head === 'elif')) {
+    state.compoundBodies = [
+      ...bodies.slice(0, outerDepth - 1),
+      {
+        entryCwd: body.entryCwd,
+        branchCwds: [...body.branchCwds, state.effectiveCwd],
+        hasElse: head === 'else',
+      },
+    ];
+    state.effectiveCwd = body.entryCwd;
+    return [state];
+  }
+  const closesBody = body !== undefined && COMPOUND_BODY_CLOSERS.has(head);
+  if (closesBody) state.compoundBodies = bodies.slice(0, innerDepth);
+  const possibleCwds = new Set([
+    state.effectiveCwd,
+    ...(closesBody ? body.branchCwds : []),
+    ...(closesBody && !body.hasElse ? [body.entryCwd] : []),
+    ...(negated ? [before.effectiveCwd] : []),
+  ]);
+  return [...possibleCwds].map((cwd) => {
+    if (cwd === state.effectiveCwd) return state;
+    const alternative = cloneAnalysisState(state);
+    alternative.effectiveCwd = cwd;
+    return alternative;
+  });
+}
+
+function compoundBodiesEqual(
+  left: readonly CompoundBody[],
+  right: readonly CompoundBody[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((body, index) => {
+      const other = right[index];
+      return (
+        other !== undefined &&
+        body.entryCwd === other.entryCwd &&
+        body.hasElse === other.hasElse &&
+        body.branchCwds.length === other.branchCwds.length &&
+        body.branchCwds.every((cwd, branch) => cwd === other.branchCwds[branch])
+      );
+    })
+  );
 }
 
 const FOR_LOOP_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -1390,7 +1435,7 @@ function cloneAnalysisState(state: AnalysisState): AnalysisState {
     literalHeredocFiles: new Map(state.literalHeredocFiles),
     functionDefinitions: new Map(state.functionDefinitions),
     createdDirectories: new Set(state.createdDirectories),
-    compoundBodyEntryCwds: state.compoundBodyEntryCwds,
+    compoundBodies: state.compoundBodies,
   };
 }
 
@@ -1410,8 +1455,7 @@ function deduplicateAnalysisStates(states: readonly AnalysisState[]): AnalysisSt
 function analysisStatesEqual(left: AnalysisState, right: AnalysisState): boolean {
   return (
     left.effectiveCwd === right.effectiveCwd &&
-    left.compoundBodyEntryCwds.length === right.compoundBodyEntryCwds.length &&
-    left.compoundBodyEntryCwds.every((cwd, index) => cwd === right.compoundBodyEntryCwds[index]) &&
+    compoundBodiesEqual(left.compoundBodies, right.compoundBodies) &&
     optionalMapsEqual(left.shellGitContextState.env, right.shellGitContextState.env) &&
     optionalMapsEqual(left.literalHeredocFiles, right.literalHeredocFiles) &&
     optionalMapsEqual(left.functionDefinitions, right.functionDefinitions) &&

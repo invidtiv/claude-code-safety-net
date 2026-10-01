@@ -810,11 +810,19 @@ describe('analyzeCommand', () => {
       );
     }
     const homePosix = agentHome.split(sep).join('/');
-    const nested = `if true; then cd ${homePosix}; if false; then cd ${scratchPosix}; fi; rm -rf ./*; fi`;
-    expect(decision(nested, standard)?.ruleId, nested).toBe('rm.recursive-force-root-or-home');
+    for (const command of [
+      `if true; then cd ${homePosix}; if false; then cd ${scratchPosix}; fi; rm -rf ./*; fi`,
+      `if true; then cd ${homePosix}; else cd ${scratchPosix}; fi; rm -rf ./*`,
+      `if a; then cd ${homePosix}; elif b; then cd ${scratchPosix}; else :; fi; rm -rf ./*`,
+      `! cd ${scratchPosix} || rm -rf ~`,
+    ]) {
+      expect(decision(command, standard)?.ruleId, command).toBe('rm.recursive-force-root-or-home');
+    }
     for (const command of [
       `if true; then cd ${scratchPosix}; rm -rf ./*; fi`,
       `if cd ${scratchPosix}; then rm -rf ./*; fi`,
+      `if test -f x; then cd ${scratchPosix}; else cd ${scratchPosix}; fi; rm -rf ./*`,
+      `if a; then cd ${scratchPosix}; elif b; then cd ${scratchPosix}; else cd ${scratchPosix}; fi; rm -rf ./*`,
     ]) {
       expect(decisionAt(agentHome, command, standard), command).toBeNull();
     }

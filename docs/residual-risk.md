@@ -171,11 +171,12 @@ literal `for` lists of at most eight words, explicit `cd` whose operand is liter
 those variables (a `cd` into a directory that exists at analysis time, or that an earlier `mkdir`
 in the same command created, with no redirection other than a plain `<`, `>`, `>>` or `>|` to
 `/dev/null`, is assumed to succeed, so an `||` fallback after it is never analyzed and a line after
-`cd X && A` runs in X; after a `cd` inside a `then`/`do`/`else`/`case` body, the next `else`,
-`elif`, `fi`, `done` or `esac` closing that body analyzes what follows from both the directory the
-body started in and the one it ended in, though a `;;` between `case` arms is not such a boundary;
-a command negated by `!` is likewise analyzed from both the directory before it and the one after
-it), and the
+`cd X && A` runs in X; a `cd` inside a compound body may not have run, so an `else` or `elif`
+branch starts from the directory the `then` body started in, and after `fi`, `done` or `esac`
+analysis continues from the directory each branch ended in, plus that starting directory unless an
+`else` made one branch certain; a `;;` between `case` arms is not such a boundary; a command
+negated by `!` is analyzed from both the directory before it and the one after it, on its success
+and failure paths alike), and the
 documented shell-state factors; the linear dangerous-text scans still
 catch recognizable destructive text regardless of surrounding structure.
 
