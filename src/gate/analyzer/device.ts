@@ -8,6 +8,10 @@ const REASON_MKFS_DEVICE =
 const REASON_SHRED_TARGET =
   'shred permanently destroys the given target. Use rm for ordinary deletes, or run shred manually.';
 
+export function isDeviceCommand(head: string): boolean {
+  return head === 'dd' || head === 'shred' || head === 'mkfs' || head.startsWith('mkfs.');
+}
+
 export function analyzeDeviceCommandMatch(
   head: string,
   tokens: readonly string[],

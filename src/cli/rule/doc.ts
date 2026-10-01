@@ -41,7 +41,7 @@ Legacy inline \`.safety-net.json\` and \`~/.cc-safety-net/config.json\` files ar
 - \`overrides\` values are either \`"off"\` to disable a rule or an object with a required \`reason\` (replacement block reason) and an optional \`intent\` (one of \`hard_stop\`, \`use_alternative\`, \`scope_down\`, \`manual_only\`, \`stop_and_explain\`).
 - A project override cannot target a user-scoped rule: only that override is ignored, the user rule keeps its configured state, and \`rule verify\` reports the diagnostic as a failure.
 - \`transparent_wrappers\`: Optional array of command names that transparently execute a visible child command.
-- Transparent wrappers have no built-in defaults. Configure only wrappers you intentionally trust, such as \`"rtk"\`.
+- \`exec\`, \`nice\`, \`nohup\`, \`setsid\`, \`stdbuf\`, \`time\`, and \`timeout\` are built-in transparent wrappers and need no configuration. Configure only other wrappers you intentionally trust, such as \`"rtk"\`.
 - Use \`cc-safety-net rule wrapper add rtk\` to configure RTK without manually editing \`rule.json\`.
 
 ## Rulebook Sources
