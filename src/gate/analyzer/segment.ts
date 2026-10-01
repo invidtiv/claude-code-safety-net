@@ -1029,12 +1029,24 @@ export function resolveCwdAfterCommandView(
   if (options.some((token) => !/^-[LP]+$/.test(token))) return null;
   const rest = optionEnd === -1 ? [] : operands.slice(optionEnd);
   const targets = rest[0] === '--' ? rest.slice(1) : rest;
-  if (targets.length !== 1) return null;
-  const rawTarget = targets[0] ?? '';
+  if (targets.length > 1) return null;
+  const rawTarget = targets[0];
+  if (rawTarget === undefined)
+    return resolveKnownCwdTarget(environment.home, cwd, environment.paths);
   const targetWord = commandView.words.find(
     (word) => word.provenance === 'variable' && word.text === rawTarget,
   );
-  const target = targetWord ? expandKnownVariableWord(targetWord, shellAssignments) : rawTarget;
+  const tildeWord = commandView.words.find(
+    (word) => word.text === rawTarget && /^~(?:\/|$)/.test(word.raw),
+  );
+  const target = targetWord
+    ? expandKnownVariableWord(
+        targetWord,
+        new Map([['HOME', environment.home], ...shellAssignments]),
+      )
+    : tildeWord
+      ? `${environment.home}${rawTarget.slice(1)}`
+      : rawTarget;
   if (target === null) return null;
   if (
     !/^(?:[./]|[A-Za-z]:[\\/])/.test(target) &&
