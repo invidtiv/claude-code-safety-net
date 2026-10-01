@@ -113,6 +113,26 @@ test('a Desktop alone gets the plugin only in its own profile', async () => {
   });
 });
 
+test('an existing web profile gets the plugin even when npx has no cached DeepSeek Harness', async () => {
+  const current = machine({
+    [DESKTOP_MANIFEST]: manifest(false),
+    [WEB_MANIFEST]: manifest(false),
+    [`Applications/${MAC_CLI}`]: '',
+  });
+
+  expect((await plan(current, false).planned).commands).toEqual([
+    [
+      join(current.home, 'Applications', MAC_CLI),
+      'plugin',
+      '--profile',
+      'desktop',
+      'add',
+      'cc-safety-net',
+    ],
+    [...NPX_DSH, 'plugin', '--profile', 'web', 'add', 'cc-safety-net'],
+  ]);
+});
+
 test('a Desktop profile whose app is not in a default location points at the Plugins page', async () => {
   expect(await plan(machine({ [DESKTOP_MANIFEST]: manifest(false) }), false).planned).toMatchObject(
     {
@@ -160,17 +180,19 @@ test('uninstall removes the plugin from each profile that has it', () => {
   });
   const location = { platform: 'darwin', systemApplications: current.systemApplications } as const;
 
-  expect(planDeepSeekHarnessUninstall(current.environment, location)).toEqual([
-    [
-      join(current.home, 'Applications', MAC_CLI),
-      'plugin',
-      '--profile',
-      'desktop',
-      'remove',
-      'cc-safety-net',
+  expect(planDeepSeekHarnessUninstall(current.environment, location)).toEqual({
+    commands: [
+      [
+        join(current.home, 'Applications', MAC_CLI),
+        'plugin',
+        '--profile',
+        'desktop',
+        'remove',
+        'cc-safety-net',
+      ],
+      [...NPX_DSH, 'plugin', '--profile', 'web', 'remove', 'cc-safety-net'],
     ],
-    [...NPX_DSH, 'plugin', '--profile', 'web', 'remove', 'cc-safety-net'],
-  ]);
+  });
   current.lock(process.pid);
   expect(() => planDeepSeekHarnessUninstall(current.environment, location)).toThrow(RUNNING);
 });
@@ -179,25 +201,32 @@ test('uninstall leaves profiles without the plugin alone, and says when no profi
   const webOnly = machine({ [DESKTOP_MANIFEST]: manifest(false), [WEB_MANIFEST]: manifest(true) });
   const location = { platform: 'darwin', systemApplications: webOnly.systemApplications } as const;
 
-  expect(planDeepSeekHarnessUninstall(webOnly.environment, location)).toEqual([
-    [...NPX_DSH, 'plugin', '--profile', 'web', 'remove', 'cc-safety-net'],
-  ]);
+  expect(planDeepSeekHarnessUninstall(webOnly.environment, location)).toEqual({
+    commands: [[...NPX_DSH, 'plugin', '--profile', 'web', 'remove', 'cc-safety-net']],
+  });
   expect(() => planDeepSeekHarnessUninstall(machine({}).environment, location)).toThrow(
     'cc-safety-net is not installed in the DeepSeek Harness web or Desktop profile',
   );
 });
 
-test('uninstall from a Desktop that is not in a default location points at the Plugins page', () => {
-  const current = machine({ [DESKTOP_MANIFEST]: manifest(true), [WEB_MANIFEST]: manifest(true) });
-
-  expect(() =>
+test('uninstall from a Desktop that is not in a default location still removes the web copy', () => {
+  const uninstall = (current: ReturnType<typeof machine>) => () =>
     planDeepSeekHarnessUninstall(current.environment, {
       platform: 'darwin',
       systemApplications: current.systemApplications,
-    }),
-  ).toThrow(
-    'DeepSeek Harness Desktop is not in its default location, so remove cc-safety-net from its Plugins page.',
-  );
+    });
+  const desktopNotFound =
+    'DeepSeek Harness Desktop is not in its default location, so remove cc-safety-net from its Plugins page.';
+
+  expect(
+    uninstall(machine({ [DESKTOP_MANIFEST]: manifest(true), [WEB_MANIFEST]: manifest(true) }))(),
+  ).toEqual({
+    commands: [[...NPX_DSH, 'plugin', '--profile', 'web', 'remove', 'cc-safety-net']],
+    message: ['Removed cc-safety-net from the DeepSeek Harness web profile.', desktopNotFound].join(
+      '\n',
+    ),
+  });
+  expect(uninstall(machine({ [DESKTOP_MANIFEST]: manifest(true) }))).toThrow(desktopNotFound);
 });
 
 test('the install picker offers DeepSeek Harness when only Desktop is present', () => {

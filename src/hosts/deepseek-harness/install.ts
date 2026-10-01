@@ -11,7 +11,6 @@ import {
   type InstallTargetProbe,
   probeInstallTarget,
 } from '@/hosts/install/choices';
-import type { NativeCommand } from '@/hosts/install/native';
 
 type DesktopLocation = { platform?: NodeJS.Platform; systemApplications?: string };
 
@@ -24,11 +23,12 @@ const DESKTOP_RUNNING =
 const desktopNotFound = (verb: 'add' | 'remove') =>
   `DeepSeek Harness Desktop is not in its default location, so ${verb} ${PACKAGE_NAME} from its Plugins page.`;
 
+const hasProfile = (environment: Environment, name: 'desktop' | 'web') =>
+  existsSync(join(getDeepSeekHarnessProfilesDir(environment), name, 'package.json'));
+
 function locateDesktop(environment: Environment, location: DesktopLocation) {
   const platform = location.platform ?? process.platform;
-  const profile = existsSync(
-    join(getDeepSeekHarnessProfilesDir(environment), 'desktop', 'package.json'),
-  );
+  const profile = hasProfile(environment, 'desktop');
   const candidates =
     platform === 'darwin'
       ? [
@@ -106,7 +106,9 @@ export async function planDeepSeekHarnessInstall(
     throw new Error(DESKTOP_RUNNING);
   }
   const web =
-    !desktop.cli || (await (options.probe ?? probeInstallTarget)(DEEPSEEK_HARNESS_NPM_PROBE));
+    !desktop.cli ||
+    hasProfile(environment, 'web') ||
+    (await (options.probe ?? probeInstallTarget)(DEEPSEEK_HARNESS_NPM_PROBE));
   const targets = [
     ...(desktop.cli ? [{ profile: 'desktop', label: 'Desktop', dsh: [desktop.cli] as const }] : []),
     ...(web ? [{ profile: 'web', label: 'web', dsh: NPX_DSH }] : []),
@@ -143,7 +145,7 @@ function describeProfiles(targets: readonly { label: string }[]): string {
 export function planDeepSeekHarnessUninstall(
   environment: Environment,
   location: DesktopLocation = {},
-): NativeCommand[] {
+) {
   const installed = new Set(
     listInstalledDeepSeekHarnessProfiles(environment).map((profile) => profile.name),
   );
@@ -153,14 +155,25 @@ export function planDeepSeekHarnessUninstall(
     );
   }
   const cli = installed.has('desktop') ? locateDesktop(environment, location).cli : undefined;
-  if (installed.has('desktop') && !cli) throw new Error(desktopNotFound('remove'));
+  const desktopLeftBehind = installed.has('desktop') && !cli;
+  if (desktopLeftBehind && !installed.has('web')) throw new Error(desktopNotFound('remove'));
   if (cli && isDesktopRunning(environment, location.platform)) throw new Error(DESKTOP_RUNNING);
-  return [
-    ...(cli ? [[cli, 'plugin', '--profile', 'desktop', 'remove', PACKAGE_NAME] as const] : []),
-    ...(installed.has('web')
-      ? [[...NPX_DSH, 'plugin', '--profile', 'web', 'remove', PACKAGE_NAME] as const]
-      : []),
-  ];
+  return {
+    commands: [
+      ...(cli ? [[cli, 'plugin', '--profile', 'desktop', 'remove', PACKAGE_NAME] as const] : []),
+      ...(installed.has('web')
+        ? [[...NPX_DSH, 'plugin', '--profile', 'web', 'remove', PACKAGE_NAME] as const]
+        : []),
+    ],
+    ...(desktopLeftBehind
+      ? {
+          message: [
+            `Removed ${PACKAGE_NAME} from the DeepSeek Harness web profile.`,
+            desktopNotFound('remove'),
+          ].join('\n'),
+        }
+      : {}),
+  };
 }
 
 export function markDeepSeekHarnessDesktopAvailable(
