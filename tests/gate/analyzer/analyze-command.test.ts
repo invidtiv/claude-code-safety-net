@@ -860,6 +860,9 @@ describe('analyzeCommand', () => {
       'cd -- && rm -rf ./*',
       'cd "$HOME" && rm -rf ./*',
       'cd ${HOME}; rm -rf *',
+      'unset HOME; cd ~ && rm -rf ./*',
+      'unset HOME; cd "$HOME" && rm -rf ./*',
+      'HOME=; cd && rm -rf ./*',
     ]) {
       expect(decision(command, standard)?.ruleId, command).toBe('rm.recursive-force-root-or-home');
     }
