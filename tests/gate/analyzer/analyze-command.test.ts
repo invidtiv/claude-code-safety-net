@@ -713,6 +713,69 @@ describe('analyzeCommand', () => {
     }
   });
 
+  test('a command behind a reserved word is analyzed as the command it is', () => {
+    const rows: readonly { readonly command: string; readonly ruleId: string }[] = [
+      { command: 'if helm uninstall r; then :; fi', ruleId: 'custom.helm-uninstall' },
+      { command: 'if true; then helm uninstall r; fi', ruleId: 'custom.helm-uninstall' },
+      { command: 'while helm uninstall r; do break; done', ruleId: 'custom.helm-uninstall' },
+      { command: 'until helm uninstall r; do break; done', ruleId: 'custom.helm-uninstall' },
+      { command: '! helm uninstall r', ruleId: 'custom.helm-uninstall' },
+      {
+        command: 'if a; then :; elif helm uninstall r; then :; fi',
+        ruleId: 'custom.helm-uninstall',
+      },
+      { command: 'if a; then :; else helm uninstall r; fi', ruleId: 'custom.helm-uninstall' },
+      { command: 'for i in 1; do helm uninstall r; done', ruleId: 'custom.helm-uninstall' },
+      {
+        command: 'if true; then terraform destroy -auto-approve; fi',
+        ruleId: 'custom.terraform-destroy',
+      },
+      { command: 'if true; then eval "rm -rf ~"; fi', ruleId: 'rm.recursive-force-root-or-home' },
+      { command: '! eval "rm -rf ~"', ruleId: 'rm.recursive-force-root-or-home' },
+      { command: 'if true; then (rm -rf ~); fi', ruleId: 'rm.recursive-force-root-or-home' },
+      {
+        command: 'if true; then python3 -c "import os; os.system(\'rm -rf /\')"; fi',
+        ruleId: 'interpreter.dangerous-command',
+      },
+      {
+        command: 'cleanup() { rm -rf ~; }; if cleanup; then :; fi',
+        ruleId: 'rm.recursive-force-root-or-home',
+      },
+      { command: 'if cd ..; then rm -rf build; fi', ruleId: 'rm.recursive-force-outside-cwd' },
+    ];
+    for (const analysis of [standard, strict]) {
+      for (const row of rows) {
+        expect(decision(row.command, analysis)?.ruleId, `${analysis.label}: ${row.command}`).toBe(
+          row.ruleId,
+        );
+      }
+    }
+    const loopExecutable = 'for runtime in a b; do "$runtime" -v; done';
+    expect(decision(loopExecutable, standard)).toBeNull();
+    expect(decision(loopExecutable, strict)?.ruleId).toBe('shell.dynamic-executable');
+  });
+
+  test('a cd inside a compound body is analyzed from both sides of the body', () => {
+    const scratchPosix = scratch.split(sep).join('/');
+    for (const command of [
+      `if false; then cd ${scratchPosix}; fi; rm -rf ./*`,
+      `if false; then :; cd ${scratchPosix}; fi; rm -rf ./*`,
+      `if false\nthen\n  cd ${scratchPosix}\nfi\nrm -rf ./*`,
+      `if false; then cd ${scratchPosix}; else rm -rf ./*; fi`,
+      `while false; do cd ${scratchPosix}; done; rm -rf ./*`,
+    ]) {
+      expect(decisionAt(agentHome, command, standard)?.ruleId, command).toBe(
+        'rm.recursive-force-root-or-home',
+      );
+    }
+    for (const command of [
+      `if true; then cd ${scratchPosix}; rm -rf ./*; fi`,
+      `if cd ${scratchPosix}; then rm -rf ./*; fi`,
+    ]) {
+      expect(decisionAt(agentHome, command, standard), command).toBeNull();
+    }
+  });
+
   test('a binding made inside a compound body is forgotten when the body closes', () => {
     const scratchPosix = scratch.split(sep).join('/');
     const workspacePosix = workspace.split(sep).join('/');

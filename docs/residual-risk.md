@@ -171,7 +171,9 @@ literal `for` lists of at most eight words, explicit `cd` whose operand is liter
 those variables (a `cd` into a directory that exists at analysis time, or that an earlier `mkdir`
 in the same command created, with no redirection other than a plain `<`, `>`, `>>` or `>|` to
 `/dev/null`, is assumed to succeed, so an `||` fallback after it is never analyzed and a line after
-`cd X && A` runs in X), and the
+`cd X && A` runs in X; after a `cd` inside a `then`/`do`/`else`/`case` body, the next `else`,
+`elif`, `fi`, `done` or `esac` analyzes what follows from both the directory the body started in
+and the one it ended in), and the
 documented shell-state factors; the linear dangerous-text scans still
 catch recognizable destructive text regardless of surrounding structure.
 

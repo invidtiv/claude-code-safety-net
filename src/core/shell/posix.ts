@@ -58,6 +58,16 @@ type LexicalScanState = {
 };
 
 const CONTINUATION_CONNECTORS = new Set(['&&', '||', '|', '|&']);
+const RESERVED_COMMAND_PREFIXES = new Set([
+  '!',
+  'do',
+  'elif',
+  'else',
+  'if',
+  'then',
+  'until',
+  'while',
+]);
 
 export function parsePosixCommand(source: string, limits: CommandParserLimits): CommandProgram {
   const span = { start: 0, end: source.length };
@@ -416,7 +426,8 @@ function scanSequence(
       continue;
     }
 
-    if (accumulator.start === -1) appendMissingConnectorIssue(nodes, issues);
+    const commandStart = accumulator.start === -1;
+    if (commandStart) appendMissingConnectorIssue(nodes, issues);
     const wordResult = readWord(source, i, end, limits, wordBudget, depth);
     issues.push(...wordResult.issues);
     if (wordResult.limited) {
@@ -454,6 +465,7 @@ function scanSequence(
     accumulator.start = accumulator.start === -1 ? i : accumulator.start;
     accumulator.end = wordResult.next;
     accumulator.nested.push(...wordResult.nested);
+    if (commandStart && isReservedCommandPrefix(wordResult.word)) flushCommand();
     i = wordResult.next > i ? wordResult.next : i + 1;
   }
 
@@ -1594,8 +1606,19 @@ function appendMissingCommandIssue(nodes: readonly CommandNode[], issues: Comman
   });
 }
 
+function isReservedCommandPrefix(word: CommandWord | undefined): boolean {
+  return (
+    word?.provenance === 'literal' &&
+    !word.quoted &&
+    word.raw === word.text &&
+    RESERVED_COMMAND_PREFIXES.has(word.text)
+  );
+}
+
 function appendMissingConnectorIssue(nodes: readonly CommandNode[], issues: CommandIssue[]): void {
-  if (!isExecutableNode(nodes.at(-1))) return;
+  const previous = nodes.at(-1);
+  if (!isExecutableNode(previous)) return;
+  if (previous?.kind === 'command' && isReservedCommandPrefix(previous.words[0])) return;
   issues.push({
     code: 'missing-command-connector',
     message: 'adjacent commands require a connector',

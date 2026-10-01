@@ -140,6 +140,7 @@ type AnalysisState = {
   literalHeredocFiles: Map<string, string>;
   functionDefinitions: Map<string, CommandProgram>;
   createdDirectories: Set<string>;
+  compoundBodyEntry?: { readonly cwd: string | null | undefined };
 };
 
 type ProgramAnalysis = {
@@ -322,7 +323,12 @@ function analyzeProgram(
           ? depth + 1 >= LIMITS.recursionDepth.cap
             ? recursionLimitAnalysis(node.displayText, options, [analyzedState])
             : analyzeProgram(functionBody, depth + 1, options, originalCwd, [analyzedState])
-          : { result: null, states: forkForLoopStates(node, analyzedState) };
+          : {
+              result: null,
+              states: forkForLoopStates(node, analyzedState).flatMap((loopState) =>
+                forkCompoundBodyStates(node, commandState, loopState),
+              ),
+            };
         if (functionAnalysis.result) return functionAnalysis;
         successStates.push(
           ...getSuccessfulAnalysisStates(
@@ -1309,6 +1315,26 @@ function updateCwdAfterCommandView(
   if (nextCwd !== undefined) state.effectiveCwd = nextCwd;
 }
 
+const COMPOUND_BODY_BOUNDARIES = new Set(['else', 'elif', 'fi', 'done', 'esac']);
+
+function forkCompoundBodyStates(
+  view: CommandView,
+  before: AnalysisState,
+  state: AnalysisState,
+): AnalysisState[] {
+  if (before.shellGitContextState.bodyDepth === 0 && state.shellGitContextState.bodyDepth > 0) {
+    state.compoundBodyEntry = { cwd: before.effectiveCwd };
+    return [state];
+  }
+  const entry = state.compoundBodyEntry;
+  if (!entry || !COMPOUND_BODY_BOUNDARIES.has(view.words[0]?.text ?? '')) return [state];
+  if (state.shellGitContextState.bodyDepth === 0) state.compoundBodyEntry = undefined;
+  if (entry.cwd === state.effectiveCwd) return [state];
+  const bodySkipped = cloneAnalysisState(state);
+  bodySkipped.effectiveCwd = entry.cwd;
+  return [state, bodySkipped];
+}
+
 const FOR_LOOP_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const FOR_LOOP_WORD_CAP = 8;
 
@@ -1346,6 +1372,7 @@ function cloneAnalysisState(state: AnalysisState): AnalysisState {
     literalHeredocFiles: new Map(state.literalHeredocFiles),
     functionDefinitions: new Map(state.functionDefinitions),
     createdDirectories: new Set(state.createdDirectories),
+    compoundBodyEntry: state.compoundBodyEntry,
   };
 }
 
@@ -1365,6 +1392,8 @@ function deduplicateAnalysisStates(states: readonly AnalysisState[]): AnalysisSt
 function analysisStatesEqual(left: AnalysisState, right: AnalysisState): boolean {
   return (
     left.effectiveCwd === right.effectiveCwd &&
+    left.compoundBodyEntry?.cwd === right.compoundBodyEntry?.cwd &&
+    !left.compoundBodyEntry === !right.compoundBodyEntry &&
     optionalMapsEqual(left.shellGitContextState.env, right.shellGitContextState.env) &&
     optionalMapsEqual(left.literalHeredocFiles, right.literalHeredocFiles) &&
     optionalMapsEqual(left.functionDefinitions, right.functionDefinitions) &&

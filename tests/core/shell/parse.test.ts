@@ -144,6 +144,66 @@ describe('core/shell/parse', () => {
     }
   });
 
+  test('a reserved word that starts a command is a command of its own', () => {
+    const rows: readonly { readonly source: string; readonly views: string[][] }[] = [
+      {
+        source: 'if vault read s; then :; fi',
+        views: [['if'], ['vault', 'read', 's'], ['then'], [':'], ['fi']],
+      },
+      { source: 'while true; do x; done', views: [['while'], ['true'], ['do'], ['x'], ['done']] },
+      { source: 'until x; do :; done', views: [['until'], ['x'], ['do'], [':'], ['done']] },
+      {
+        source: 'if ! x; then :; elif y; then :; else z; fi',
+        views: [
+          ['if'],
+          ['!'],
+          ['x'],
+          ['then'],
+          [':'],
+          ['elif'],
+          ['y'],
+          ['then'],
+          [':'],
+          ['else'],
+          ['z'],
+          ['fi'],
+        ],
+      },
+      { source: '! git status', views: [['!'], ['git', 'status']] },
+      {
+        source: '[ ! -f x ] && echo then',
+        views: [
+          ['[', '!', '-f', 'x', ']'],
+          ['echo', 'then'],
+        ],
+      },
+      { source: 'echo if then', views: [['echo', 'if', 'then']] },
+      { source: '"then" x', views: [['then', 'x']] },
+      { source: 'X=1 if', views: [['X=1', 'if']] },
+    ];
+    for (const row of rows) {
+      const program = parseCommand(row.source, 'posix');
+      expect(program.issues, row.source).toStrictEqual([]);
+      expect(
+        projectCommandViews(program).map((view) => view.words.map((word) => word.text)),
+        row.source,
+      ).toStrictEqual(row.views);
+    }
+    const grouped = parseCommand(
+      'if true; then (rm -rf /tmp/x); { git reset --hard; }; fi',
+      'posix',
+    );
+    expect(grouped.status).toBe('complete');
+    expect(
+      grouped.nodes.flatMap((node) => (node.kind === 'group' ? [node.style] : [])),
+    ).toStrictEqual(['subshell', 'brace']);
+    const defined = parseCommand('while true; do cleanup() { rm -rf build; }; done', 'posix');
+    expect(defined.status).toBe('complete');
+    expect(
+      defined.nodes.flatMap((node) => (node.kind === 'function' ? [node.name] : [])),
+    ).toStrictEqual(['cleanup']);
+  });
+
   test('reports what it could not close or read as an issue', () => {
     const unterminated = parseCommand('echo "unterminated', 'posix');
     expect(unterminated.status).toBe('partial');
