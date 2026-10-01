@@ -18,6 +18,7 @@ const project = join(workspace, 'checkout');
 const plain = join(workspace, 'plain');
 for (const directory of [
   agentHome,
+  join(agentHome, 'notes'),
   scratch,
   join(scratch, 'a'),
   join(scratch, 'b'),
@@ -847,6 +848,36 @@ describe('analyzeCommand', () => {
       `if a; then :; else R='${scratchPosix}'; fi; cd $R && rm -rf build`,
     ]) {
       expect(decision(command, standard)?.ruleId, command).toBe('rm.recursive-force-outside-cwd');
+    }
+  });
+
+  test('a cd to the home directory is followed into it', () => {
+    for (const command of [
+      'cd ~; rm -rf ./*',
+      'cd ~ && rm -rf *',
+      'cd ~/ && rm -rf ./*',
+      'cd && rm -rf ./*',
+      'cd -- && rm -rf ./*',
+      'cd "$HOME" && rm -rf ./*',
+      'cd ${HOME}; rm -rf *',
+      'unset HOME; cd ~ && rm -rf ./*',
+      'unset HOME; cd "$HOME" && rm -rf ./*',
+      'HOME=; cd && rm -rf ./*',
+    ]) {
+      expect(decision(command, standard)?.ruleId, command).toBe('rm.recursive-force-root-or-home');
+    }
+    const notes = `${agentHome.split(sep).join('/')}/notes`;
+    const absolute = decision(`cd ${notes} && rm -rf ./build`, standard);
+    for (const command of ['cd ~/notes && rm -rf ./build', 'cd $HOME/notes && rm -rf ./build']) {
+      const followed = decision(command, standard);
+      expect(followed?.kind, command).toBe(absolute?.kind);
+      expect(followed?.ruleId, command).toBe(absolute?.ruleId);
+    }
+    const scratchPosix = scratch.split(sep).join('/');
+    const reassigned = decision(`cd ${scratchPosix} && rm -rf ./*`, standard);
+    for (const operand of ['', ' ~', ' ~/', ' $HOME']) {
+      const command = `HOME=${scratchPosix}; cd${operand}; rm -rf ./*`;
+      expect(decision(command, standard)?.ruleId, command).toBe(reassigned?.ruleId);
     }
   });
 
