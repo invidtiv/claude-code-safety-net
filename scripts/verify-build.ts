@@ -9,6 +9,7 @@ import {
   OPENCLAW_PLUGIN_ID,
   OPENCLAW_PLUGIN_MANIFEST_FILE,
 } from '../src/hosts/openclaw/artifact';
+import { DEEPSEEK_HARNESS_BUNDLE_PATCH } from './build-runtime';
 
 function isBuildChunkArtifact(path: string): boolean {
   return /^dist\/chunks\/[A-Za-z0-9_-]+\.js$/.test(path);
@@ -73,6 +74,8 @@ export async function verifyBuildArtifacts(): Promise<string[]> {
     'dist/opencode-v2.d.ts',
     'dist/index.js',
     'dist/pi/index.js',
+    'dist/deepseek-harness/index.js',
+    `dist/${DEEPSEEK_HARNESS_BUNDLE_PATCH}`,
   ];
   const files = await listFiles(resolve('dist'));
   const unexpected = files.filter(

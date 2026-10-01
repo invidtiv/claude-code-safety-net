@@ -176,6 +176,12 @@ describe('the host catalog', () => {
         probeCommand: ['cursor', '--version'],
       },
       {
+        id: 'deepseek-harness',
+        flag: '--deepseek-harness',
+        artifactKind: 'package',
+        probeCommand: ['npx', '--offline', '--no-install', '@deepseek-ai/dsh', '--version'],
+      },
+      {
         id: 'gemini-cli',
         flag: '--gemini-cli',
         artifactKind: 'extension',
@@ -228,6 +234,7 @@ describe('the host catalog', () => {
       'antigravity-cli',
       'codex',
       'cursor',
+      'deepseek-harness',
       'gemini-cli',
       'copilot-cli',
       'grok-build',
@@ -250,6 +257,7 @@ describe('the host catalog', () => {
       codex: 'Codex',
       'copilot-cli': 'GitHub Copilot CLI',
       cursor: 'Cursor',
+      'deepseek-harness': 'DeepSeek Harness',
       'gemini-cli': 'Gemini CLI',
       'grok-build': 'Grok Build',
       'hermes-agent': 'Hermes Agent',

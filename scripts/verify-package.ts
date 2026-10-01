@@ -11,10 +11,15 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { AMP_PLUGIN_ENTRY } from '../src/hosts/amp/artifact';
-import { AMP_HOST_SCRIPT, OPENCODE_HOST_SCRIPT, PI_HOST_SCRIPT } from './integration-host-scripts';
+import {
+  AMP_HOST_SCRIPT,
+  DEEPSEEK_HARNESS_HOST_SCRIPT,
+  OPENCODE_HOST_SCRIPT,
+  PI_HOST_SCRIPT,
+} from './integration-host-scripts';
 import { OPENCODE_V2_HOST_SCRIPT } from './opencode-v2-host';
 import { verifyBuildArtifacts } from './verify-build';
 
@@ -155,6 +160,7 @@ export async function verifyPackage(): Promise<void> {
       directory,
       cli,
       pi: join(packageRoot, 'dist', 'pi', 'index.js'),
+      deepSeekHarness: deepSeekHarnessBundleModule(packageRoot),
       openCode: join(packageRoot, 'dist', 'index.js'),
       amp: join(packageRoot, 'dist', 'amp', AMP_PLUGIN_ENTRY),
       env: packageVerificationEnv,
@@ -431,6 +437,7 @@ function verifyInstalledProtectionJourneys(options: {
   directory: string;
   cli: string;
   pi: string;
+  deepSeekHarness: string;
   openCode: string;
   amp: string;
   env: Record<string, string | undefined>;
@@ -511,6 +518,26 @@ function verifyInstalledProtectionJourneys(options: {
     throw new Error('Packed Pi extension did not block git reset --hard');
   }
 
+  const deepSeekHarnessSafe = runPackedHost(
+    options,
+    options.deepSeekHarness,
+    DEEPSEEK_HARNESS_HOST_SCRIPT,
+    { command: 'git status', sessionId: 'package-dsh-safe' },
+  );
+  if (deepSeekHarnessSafe.guards !== 1 || deepSeekHarnessSafe.reason !== null) {
+    throw new Error('Packed DeepSeek Harness bundle did not allow git status through one guard');
+  }
+
+  const deepSeekHarnessReset = runPackedHost(
+    options,
+    options.deepSeekHarness,
+    DEEPSEEK_HARNESS_HOST_SCRIPT,
+    { command: 'git reset --hard', sessionId: 'package-dsh-reset' },
+  );
+  if (!String(deepSeekHarnessReset.reason).includes('git.reset-hard')) {
+    throw new Error('Packed DeepSeek Harness bundle did not block git reset --hard');
+  }
+
   const openCodeSafe = runPackedHost(
     options,
     options.openCode,
@@ -539,6 +566,22 @@ function verifyInstalledProtectionJourneys(options: {
   ) {
     throw new Error('Packed Amp plugin did not block git reset --hard');
   }
+}
+
+function deepSeekHarnessBundleModule(packageRoot: string): string {
+  const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as {
+    dsh?: { bundle?: { patch?: string } };
+  };
+  const patch = join(packageRoot, manifest.dsh?.bundle?.patch ?? 'missing-dsh-bundle-patch');
+  const rows = Bun.YAML.parse(readFileSync(patch, 'utf8')) as {
+    insert?: { id?: string; name?: string }[];
+  }[];
+  const row = rows
+    .flatMap((layer) => layer.insert ?? [])
+    .find((entry) => entry.id === 'cc-safety-net');
+  if (!row?.name)
+    throw new Error(`Packed DeepSeek Harness bundle patch ${patch} has no cc-safety-net row`);
+  return resolve(dirname(patch), row.name);
 }
 
 function runPackedAmpHost(

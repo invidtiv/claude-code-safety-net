@@ -25,6 +25,7 @@ function writeBuildFixture(directory: string) {
   mkdirSync(join(directory, 'dist', 'bin'), { recursive: true });
   mkdirSync(join(directory, 'dist', 'chunks'), { recursive: true });
   mkdirSync(join(directory, 'dist', 'pi'), { recursive: true });
+  mkdirSync(join(directory, 'dist', 'deepseek-harness'), { recursive: true });
   mkdirSync(join(directory, 'dist', 'amp', 'cc-safety-net'), { recursive: true });
   mkdirSync(join(directory, 'dist', 'openclaw', 'cc-safety-net'), { recursive: true });
   writeFileSync(
@@ -42,6 +43,8 @@ function writeBuildFixture(directory: string) {
   writeFileSync(join(directory, 'dist', 'opencode-v2.d.ts'), 'export {};\n');
   writeFileSync(join(directory, 'dist', 'index.js'), 'import "./chunks/index-fixture.js";\n');
   writeFileSync(join(directory, 'dist', 'pi', 'index.js'), 'export {};\n');
+  writeFileSync(join(directory, 'dist', 'deepseek-harness', 'index.js'), 'export {};\n');
+  writeFileSync(join(directory, 'dist', 'deepseek-harness', 'cordis.patch.yml'), '[]\n');
   writeFileSync(
     join(directory, 'dist', 'amp', 'cc-safety-net', 'index.ts'),
     `${buildAmpArtifactHeader(pkg.version)}export {};\n`,

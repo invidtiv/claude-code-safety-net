@@ -45,6 +45,30 @@ for (const request of requests) {
 process.stdout.write(JSON.stringify(Array.isArray(parsed) ? { results } : results[0]));
 `;
 
+export const DEEPSEEK_HARNESS_HOST_SCRIPT = `
+import { pathToFileURL } from 'node:url';
+
+let input = '';
+for await (const chunk of process.stdin) input += chunk;
+const request = JSON.parse(input);
+const plugin = (await import(pathToFileURL(process.argv[1]).href)).default;
+const guards = [];
+plugin.apply({
+  tools: {
+    guard(guard) {
+      guards.push(guard);
+      return () => {};
+    },
+  },
+});
+const reason = guards[0]({
+  name: 'bash',
+  arguments: { command: request.command },
+  agent: { session: { header: { id: request.sessionId, cwd: process.cwd() } } },
+});
+process.stdout.write(JSON.stringify({ guards: guards.length, reason: reason ?? null }));
+`;
+
 export const AMP_HOST_SCRIPT = `
 import { pathToFileURL, fileURLToPath } from 'node:url';
 

@@ -32,6 +32,12 @@ describe('install targets', () => {
         probeCommand: ['cursor', '--version'],
       },
       {
+        target: 'deepseek-harness',
+        label: 'DeepSeek Harness',
+        flag: '--deepseek-harness',
+        probeCommand: ['npx', '--offline', '--no-install', '@deepseek-ai/dsh', '--version'],
+      },
+      {
         target: 'gemini-cli',
         label: 'Gemini CLI',
         flag: '--gemini-cli',

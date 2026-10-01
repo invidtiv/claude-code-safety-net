@@ -32,6 +32,11 @@ import {
   hasCopilotSafetyNetPlugin,
 } from '@/hosts/copilot-cli/plugin-id';
 import { installCursor, uninstallCursor } from '@/hosts/cursor/install';
+import {
+  markDeepSeekHarnessDesktopAvailable,
+  planDeepSeekHarnessInstall,
+  planDeepSeekHarnessUninstall,
+} from '@/hosts/deepseek-harness/install';
 import { detectAllHooks } from '@/hosts/detect/index';
 import type { UpdateInfo } from '@/hosts/doctor-types';
 import { detectGeminiCLI } from '@/hosts/gemini-cli/detect';
@@ -88,6 +93,7 @@ type ManagedArtifactTarget = Extract<InstallTarget, 'amp' | 'hermes-agent'>;
 type NativeInstallTarget = Exclude<InstallTarget, ConfigInstallTarget | ManagedArtifactTarget>;
 type NativeInstallPlan = {
   commands: readonly NativeCommand[];
+  message?: string;
 
   cleanupCommands?: readonly NativeCommand[];
   afterInstall?: () => Promise<void>;
@@ -125,7 +131,12 @@ type NativeInstallDefinition = {
         environment: Environment,
         codexPluginListOutput?: string | null,
       ) => NativeInstallPlan | Promise<NativeInstallPlan>);
-  uninstallCommands?: readonly NativeCommand[];
+  uninstallCommands?:
+    | readonly NativeCommand[]
+    | ((environment: Environment) => {
+        commands: readonly NativeCommand[];
+        afterUninstall?: () => void;
+      });
   beforeInstall?: (environment: Environment) => void;
   postInstallMessage?: string;
 };
@@ -316,6 +327,10 @@ const NATIVE_INSTALLS: Record<NativeInstallTarget, NativeInstallDefinition> = {
     installCommands: [['pi', 'install', 'npm:cc-safety-net']],
     uninstallCommands: [['pi', 'uninstall', 'npm:cc-safety-net']],
   },
+  'deepseek-harness': {
+    installCommands: (environment) => planDeepSeekHarnessInstall(environment),
+    uninstallCommands: (environment) => planDeepSeekHarnessUninstall(environment),
+  },
 };
 
 function parseJsonSettings(
@@ -462,7 +477,9 @@ function startResolveInstallTargets(
     options.detectConfiguredTargets ??
     (() => detectConfiguredInstallTargets(environment, action, options.fetchVersion));
   const ready = Promise.all([
-    buildInstallTargetChoicesAsync(options.probeTargets),
+    buildInstallTargetChoicesAsync(options.probeTargets).then((choices) =>
+      markDeepSeekHarnessDesktopAvailable(choices, environment),
+    ),
     detectConfiguredTargets(),
   ]);
 
@@ -505,7 +522,7 @@ async function installNativeTarget(
   await plan.afterInstall?.();
   return [
     `${plan.update || updating ? 'Updated' : 'Installed'} ${getIntegrationDisplayName(target)} integration`,
-    definition.postInstallMessage,
+    plan.message ?? definition.postInstallMessage,
   ]
     .filter(Boolean)
     .join('\n');
@@ -513,12 +530,18 @@ async function installNativeTarget(
 
 async function uninstallNativeTarget(
   target: Exclude<NativeInstallTarget, 'opencode'>,
+  environment: Environment,
 ): Promise<string> {
   const definition = NATIVE_INSTALLS[target];
   if (!definition.uninstallCommands)
     throw new Error(`${getIntegrationDisplayName(target)} uninstall is not supported`);
 
-  await runNativeCommands(definition.uninstallCommands);
+  const plan =
+    typeof definition.uninstallCommands === 'function'
+      ? definition.uninstallCommands(environment)
+      : { commands: definition.uninstallCommands };
+  await runNativeCommands(plan.commands);
+  plan.afterUninstall?.();
   return `Uninstalled ${getIntegrationDisplayName(target)} integration`;
 }
 
@@ -742,7 +765,7 @@ async function runSingleInstallTarget(
   if (action === 'uninstall')
     return target === 'opencode'
       ? uninstallOpenCodeTarget(environment)
-      : uninstallNativeTarget(target);
+      : uninstallNativeTarget(target, environment);
 
   return [
     await installNativeTarget(target, environment, updating, codexPluginListOutput),

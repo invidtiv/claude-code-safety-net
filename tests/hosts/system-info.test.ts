@@ -84,7 +84,7 @@ describe('the system report', () => {
     const record = async (report: typeof getSystemInfo) => {
       const calls: { args: string[]; timeoutMs: number | undefined }[] = [];
       const info = await report(
-        () => true,
+        () => false,
         async (args, timeoutMs) => {
           calls.push({ args, timeoutMs });
           return FETCHED_OUTPUTS[calls.length % FETCHED_OUTPUTS.length] ?? null;
