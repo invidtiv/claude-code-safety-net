@@ -1,4 +1,4 @@
-import { findMatchingBracket, getLineIndent, removeArrayRangeItem, type TextRange } from './jsonc';
+import { findMatchingBracket, getLineIndent, type TextRange } from './jsonc';
 
 function skipTomlComment(content: string, index: number) {
   if (content[index] !== '#') return index;
@@ -43,7 +43,7 @@ export function removeTomlArrayItem(content: string, array: TextRange, item: str
   const itemStart = content.indexOf(item, array.start);
   if (itemStart === -1 || itemStart > array.end) return content;
 
-  return removeArrayRangeItem(content, { start: itemStart, end: itemStart + item.length });
+  return `${content.slice(0, itemStart)}${content.slice(itemStart + item.length).replace(/^\s*,/, '')}`;
 }
 
 export function removeTopLevelEmptyTomlArray(content: string, key: string): string {

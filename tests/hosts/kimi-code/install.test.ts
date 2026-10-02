@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { detect as detectKimi } from '@/hosts/kimi-code/detect';
 import { installKimiCode, uninstallKimiCode } from '@/hosts/kimi-code/install';
-import { expectRow, fileAt, hostRunner } from '../../helpers/host-differential';
+import { differential, expectRow, fileAt, hostRunner } from '../../helpers/host-differential';
 import { removeTempRoots } from '../../helpers/temp-home';
 
 const TOML = '.kimi-code/config.toml';
@@ -9,7 +9,8 @@ const MANAGED = 'npx -y cc-safety-net hook --kimi-code';
 const HOOK_BLOCK = `[[hooks]]\nevent = "PreToolUse"\ncommand = "${MANAGED}"`;
 const INLINE_HOOK = `{ event = "PreToolUse", command = "${MANAGED}" }`;
 const COMMENTED = '# top comment\nmodel = "x" # trailing\n\n[model]\nname = "y"\n';
-const INLINE_SEED = 'hooks = [\n  { event = "PostToolUse", command = "echo" }, # keep\n]\n';
+const INLINE_SEED =
+  'name = "before"\nhooks = [\n  { event = "PostToolUse", command = "echo" }, # keep\n]\nmodel = "kimi-k2"\n';
 
 const CONFIGURED = {
   platform: 'kimi-code',
@@ -48,12 +49,136 @@ describe('the Kimi Code hook config differential', () => {
   });
 
   test('joins an inline hooks array as one more item, and takes only that item back out', async () => {
-    expectRow((await row({ [TOML]: INLINE_SEED })).steps, {
+    const { steps } = await row({ [TOML]: INLINE_SEED });
+    expect(Bun.TOML.parse(fileAt(steps?.uninstall.tree, TOML) ?? '')).toEqual({
+      name: 'before',
+      model: 'kimi-k2',
+      hooks: [{ event: 'PostToolUse', command: 'echo' }],
+    });
+    expectRow(steps, {
       file: TOML,
       alreadyInstalled: false,
-      wrote: `hooks = [\n  { event = "PostToolUse", command = "echo" }, # keep,\n     ${INLINE_HOOK}]\n`,
+      wrote: `name = "before"\nhooks = [\n  { event = "PostToolUse", command = "echo" }, # keep,\n     ${INLINE_HOOK}]\nmodel = "kimi-k2"\n`,
       detected: CONFIGURED,
-      left: 'hooks = [\n  { event = "PostToolUse", command = "echo" }, # keep]\n',
+      left: 'name = "before"\nhooks = [\n  { event = "PostToolUse", command = "echo" }, # keep,\n     ]\nmodel = "kimi-k2"\n',
+    });
+  });
+
+  test.each([
+    ['an empty file', '', {}, {}],
+    ['blank lines', '\n\n', {}, {}],
+    [
+      'a key without a final newline',
+      'model = "kimi-k2"',
+      { model: 'kimi-k2' },
+      { model: 'kimi-k2' },
+    ],
+    [
+      'an empty array with a comment',
+      'hooks = [ ] # empty\nmodel = "kimi-k2"\n',
+      { model: 'kimi-k2' },
+      { model: 'kimi-k2' },
+    ],
+    [
+      'a hooks key inside a table',
+      '[agent]\nhooks = ["keep"]\n',
+      { agent: { hooks: ['keep'] } },
+      { agent: { hooks: ['keep'] } },
+    ],
+    [
+      'a hooks key inside a comment',
+      '# hooks = []\nmodel = "kimi-k2"\n',
+      { model: 'kimi-k2' },
+      { model: 'kimi-k2' },
+    ],
+    ['a comments-only inline array', 'hooks = [\n # keep\n]\n', {}, { hooks: [] }],
+  ])('round-trips %s through the config installer', async (_case, seed, userConfig, left) => {
+    const { steps } = await row({ [TOML]: seed });
+    expect(steps?.install.result).toMatchObject({ ok: true, value: { alreadyInstalled: false } });
+    expect(Bun.TOML.parse(fileAt(steps?.install.tree, TOML) ?? '')).toEqual({
+      ...userConfig,
+      hooks: [{ event: 'PreToolUse', command: MANAGED }],
+    });
+    expect(steps?.reinstall.tree).toEqual(steps?.install.tree);
+    expect(Bun.TOML.parse(fileAt(steps?.uninstall.tree, TOML) ?? '')).toEqual(left);
+    expect(steps?.finalUninstall).toMatchObject({ ok: true, value: { alreadyInstalled: false } });
+    if (seed.includes('# keep')) expect(fileAt(steps?.uninstall.tree, TOML)).toContain('# keep');
+  });
+
+  test.each([
+    [
+      'a single line without a final newline',
+      'hooks = [{ event = "Stop", command = "keep" }]',
+      'keep',
+    ],
+    ['a trailing comma', 'hooks = [\n { event = "Stop", command = "keep" },\n]\n', 'keep'],
+    ['CRLF line endings', 'hooks = [\r\n { event = "Stop", command = "keep" }\r\n]\r\n', 'keep'],
+    ['tab indentation', '\thooks = [\n\t\t{ event = "Stop", command = "keep" }\n\t]\n', 'keep'],
+    [
+      'escaped quotes and brackets',
+      'hooks = [{ event = "Stop", command = "echo ] \\" }" }]\n',
+      'echo ] " }',
+    ],
+  ])('preserves the foreign hook in %s', async (_case, seed, command) => {
+    const { steps } = await row({ [TOML]: seed });
+    expect(steps?.install.result).toMatchObject({ ok: true, value: { alreadyInstalled: false } });
+    expect(Bun.TOML.parse(fileAt(steps?.install.tree, TOML) ?? '')).toEqual({
+      hooks: [
+        { event: 'Stop', command },
+        { event: 'PreToolUse', command: MANAGED },
+      ],
+    });
+    expect(steps?.reinstall.tree).toEqual(steps?.install.tree);
+    expect(Bun.TOML.parse(fileAt(steps?.uninstall.tree, TOML) ?? '')).toEqual({
+      hooks: [{ event: 'Stop', command }],
+    });
+    expect(steps?.finalUninstall).toMatchObject({ ok: true, value: { alreadyInstalled: false } });
+    if (seed.endsWith('\r\n')) expect(fileAt(steps?.uninstall.tree, TOML)).toEndWith('\r\n');
+    if (!seed.endsWith('\n')) expect(fileAt(steps?.uninstall.tree, TOML)).toEndWith(']');
+  });
+
+  test.each([
+    [
+      'first inline item',
+      `hooks = [${INLINE_HOOK}, { event = "Stop", command = "keep" }]\n`,
+      { hooks: [{ event: 'Stop', command: 'keep' }] },
+    ],
+    [
+      'last inline item',
+      `hooks = [{ event = "Stop", command = "keep" }, ${INLINE_HOOK}]\n`,
+      { hooks: [{ event: 'Stop', command: 'keep' }] },
+    ],
+    ['only inline item', `hooks = [${INLINE_HOOK}]\n`, { hooks: [] }],
+    [
+      'last hook table',
+      `[[hooks]]\nevent = "Stop"\ncommand = "keep"\n${HOOK_BLOCK}\n`,
+      { hooks: [{ event: 'Stop', command: 'keep' }] },
+    ],
+    [
+      'middle hook table',
+      `[[hooks]]\nevent = "Stop"\ncommand = "keep"\n${HOOK_BLOCK}\n[[hooks]]\nevent = "Stop"\ncommand = "also keep"\n`,
+      {
+        hooks: [
+          { event: 'Stop', command: 'keep' },
+          { event: 'Stop', command: 'also keep' },
+        ],
+      },
+    ],
+  ])('removes the managed %s without changing the other hooks', async (_case, seed, expected) => {
+    const { steps } = await row({ [TOML]: seed });
+    expect(fileAt(steps?.install.tree, TOML)).toBe(seed);
+    expect(Bun.TOML.parse(fileAt(steps?.uninstall.tree, TOML) ?? '')).toEqual(expected);
+    expect(steps?.finalUninstall).toMatchObject({ ok: true, value: { alreadyInstalled: false } });
+  });
+
+  test('leaves a command mentioned outside the hook array untouched', async () => {
+    const seed = `hooks = [{ event = "Stop", command = "keep" }]\n[notes]\ntext = '${INLINE_HOOK}'\n`;
+    const result = await differential({ seed: { [TOML]: seed } }, uninstallKimiCode);
+    expect(result.outcome.kind).toBe('returned');
+    expect(fileAt(result.tree, TOML)).toBe(seed);
+    expect(Bun.TOML.parse(fileAt(result.tree, TOML) ?? '')).toEqual({
+      hooks: [{ event: 'Stop', command: 'keep' }],
+      notes: { text: INLINE_HOOK },
     });
   });
 
@@ -64,16 +189,6 @@ describe('the Kimi Code hook config differential', () => {
       wrote: `[model]\nname = "y"\n\n${HOOK_BLOCK}\n`,
       detected: CONFIGURED,
       left: '[model]\nname = "y"\n',
-    });
-  });
-
-  test('reports a config that already runs the hook without touching it', async () => {
-    expectRow((await row({ [TOML]: `${HOOK_BLOCK}\n` })).steps, {
-      file: TOML,
-      alreadyInstalled: true,
-      wrote: `${HOOK_BLOCK}\n`,
-      detected: CONFIGURED,
-      left: '\n',
     });
   });
 
@@ -118,13 +233,6 @@ describe('the Kimi Code hook config differential', () => {
 });
 
 describe('the Kimi Code detector differential', () => {
-  test('finds the managed hook', async () => {
-    expect(await detection({ [TOML]: `${HOOK_BLOCK}\n` })).toEqual({
-      kind: 'returned',
-      value: CONFIGURED,
-    });
-  });
-
   test('says nothing is installed for a foreign or absent config', async () => {
     const absent = {
       kind: 'returned',
