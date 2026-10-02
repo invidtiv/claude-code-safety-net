@@ -491,7 +491,7 @@ const dshManifest = (bundles: readonly string[]) =>
 const dshWebAdd = (seedDir: string) => [
   {
     command: 'npx',
-    args: ['-y', '@deepseek-ai/dsh', 'plugin', '--profile', 'web', 'add', 'cc-safety-net'],
+    args: ['-y', '@deepseek-ai/dsh', 'plugin', '--profile', 'web', 'add', 'cc-safety-net@dev'],
     seedDir,
     seedInto: '<home>/.dsh/profiles/web',
   },
@@ -511,7 +511,7 @@ test('DeepSeek Harness without Desktop adds the bundle to the web profile throug
       'Added cc-safety-net to the DeepSeek Harness web profile.',
       '',
     ],
-    log: ['npx -y @deepseek-ai/dsh plugin --profile web add cc-safety-net\t<root>'],
+    log: ['npx -y @deepseek-ai/dsh plugin --profile web add cc-safety-net@dev\t<root>'],
   });
 
   const removed = await flow({
@@ -538,7 +538,7 @@ test('a DeepSeek Harness install that leaves the bundle off fails instead of cla
   expect(installed).toMatchObject({
     exitCode: 1,
     errors: [
-      'DeepSeek Harness installed cc-safety-net in the web profile but did not enable it. Enable it from the Plugins page, or update cc-safety-net if your registry served a release without DeepSeek Harness support.',
+      'DeepSeek Harness installed cc-safety-net in the web profile but did not enable it. Enable it from the Plugins page.',
     ],
   });
 });

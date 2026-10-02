@@ -11,6 +11,7 @@ import {
   type InstallTargetProbe,
   probeInstallTarget,
 } from '@/hosts/install/choices';
+import { getPackageVersion } from '@/hosts/system-info';
 
 type DesktopLocation = { platform?: NodeJS.Platform; systemApplications?: string };
 
@@ -116,7 +117,14 @@ export async function planDeepSeekHarnessInstall(
   return {
     commands: targets.map(
       (target) =>
-        [...target.dsh, 'plugin', '--profile', target.profile, 'add', PACKAGE_NAME] as const,
+        [
+          ...target.dsh,
+          'plugin',
+          '--profile',
+          target.profile,
+          'add',
+          `${PACKAGE_NAME}@${getPackageVersion()}`,
+        ] as const,
     ),
     afterInstall: async () => {
       const enabled = new Set(
@@ -127,7 +135,7 @@ export async function planDeepSeekHarnessInstall(
       const disabled = targets.filter((target) => !enabled.has(target.profile));
       if (disabled.length > 0) {
         throw new Error(
-          `DeepSeek Harness installed ${PACKAGE_NAME} in the ${describeProfiles(disabled)} but did not enable it. Enable it from the Plugins page, or update ${PACKAGE_NAME} if your registry served a release without DeepSeek Harness support.`,
+          `DeepSeek Harness installed ${PACKAGE_NAME} in the ${describeProfiles(disabled)} but did not enable it. Enable it from the Plugins page.`,
         );
       }
     },
