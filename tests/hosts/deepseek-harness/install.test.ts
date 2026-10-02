@@ -7,6 +7,7 @@ import {
   planDeepSeekHarnessUninstall,
 } from '@/hosts/deepseek-harness/install';
 import type { InstallTargetChoice } from '@/hosts/install/choices';
+import { getPackageVersion } from '@/hosts/system-info';
 import { type TreeSpec, writeTree } from '../../helpers/fixture-tree';
 import { createTempRoot, environmentFor, removeTempRoots } from '../../helpers/temp-home';
 
@@ -16,6 +17,7 @@ const MAC_CLI = 'DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh';
 const WINDOWS_CLI = 'AppData/Local/Programs/DeepSeek Harness/resources/runtime/cli/bin/dsh.cmd';
 const MAC_LOCK = 'Library/Application Support/@deepseek-ai/dsh-desktop/SingletonLock';
 const NPX_DSH = ['npx', '-y', '@deepseek-ai/dsh'] as const;
+const PINNED = `cc-safety-net@${getPackageVersion()}` as const;
 const RUNNING =
   'Quit DeepSeek Harness Desktop, then run this command again: Desktop plugins can only change while it is closed.';
 
@@ -65,7 +67,7 @@ test('without a Desktop profile the plugin goes to the web profile through npx',
   const run = plan(machine({}), false);
 
   expect(await run.planned).toMatchObject({
-    commands: [[...NPX_DSH, 'plugin', '--profile', 'web', 'add', 'cc-safety-net']],
+    commands: [[...NPX_DSH, 'plugin', '--profile', 'web', 'add', PINNED]],
     message: 'Added cc-safety-net to the DeepSeek Harness web profile.',
   });
   expect(run.probed).toEqual([]);
@@ -83,9 +85,9 @@ test('a Desktop with an npm DeepSeek Harness beside it gets the plugin in both p
         '--profile',
         'desktop',
         'add',
-        'cc-safety-net',
+        PINNED,
       ],
-      [...NPX_DSH, 'plugin', '--profile', 'web', 'add', 'cc-safety-net'],
+      [...NPX_DSH, 'plugin', '--profile', 'web', 'add', PINNED],
     ],
     message: 'Added cc-safety-net to the DeepSeek Harness Desktop and web profiles.',
   });
@@ -100,14 +102,7 @@ test('a Desktop alone gets the plugin only in its own profile', async () => {
 
   expect(await plan(current, false).planned).toMatchObject({
     commands: [
-      [
-        join(current.systemApplications, MAC_CLI),
-        'plugin',
-        '--profile',
-        'desktop',
-        'add',
-        'cc-safety-net',
-      ],
+      [join(current.systemApplications, MAC_CLI), 'plugin', '--profile', 'desktop', 'add', PINNED],
     ],
     message: 'Added cc-safety-net to the DeepSeek Harness Desktop profile.',
   });
@@ -121,22 +116,15 @@ test('an existing web profile gets the plugin even when npx has no cached DeepSe
   });
 
   expect((await plan(current, false).planned).commands).toEqual([
-    [
-      join(current.home, 'Applications', MAC_CLI),
-      'plugin',
-      '--profile',
-      'desktop',
-      'add',
-      'cc-safety-net',
-    ],
-    [...NPX_DSH, 'plugin', '--profile', 'web', 'add', 'cc-safety-net'],
+    [join(current.home, 'Applications', MAC_CLI), 'plugin', '--profile', 'desktop', 'add', PINNED],
+    [...NPX_DSH, 'plugin', '--profile', 'web', 'add', PINNED],
   ]);
 });
 
 test('a Desktop profile whose app is not in a default location points at the Plugins page', async () => {
   expect(await plan(machine({ [DESKTOP_MANIFEST]: manifest(false) }), false).planned).toMatchObject(
     {
-      commands: [[...NPX_DSH, 'plugin', '--profile', 'web', 'add', 'cc-safety-net']],
+      commands: [[...NPX_DSH, 'plugin', '--profile', 'web', 'add', PINNED]],
       message: [
         'Added cc-safety-net to the DeepSeek Harness web profile.',
         'DeepSeek Harness Desktop is not in its default location, so add cc-safety-net from its Plugins page.',
@@ -165,7 +153,7 @@ test('Windows finds Desktop in the per-user Programs folder and its lockfile whi
   const current = machine({ [DESKTOP_MANIFEST]: manifest(false), [WINDOWS_CLI]: '' });
 
   expect((await plan(current, false, 'win32').planned).commands).toEqual([
-    [join(current.home, WINDOWS_CLI), 'plugin', '--profile', 'desktop', 'add', 'cc-safety-net'],
+    [join(current.home, WINDOWS_CLI), 'plugin', '--profile', 'desktop', 'add', PINNED],
   ]);
 
   writeTree(current.home, { 'AppData/Roaming/@deepseek-ai/dsh-desktop/lockfile': '' });
@@ -277,6 +265,6 @@ test('install checks afterwards that DeepSeek Harness enabled the bundle in ever
     }),
   });
   await expect(planned.afterInstall()).rejects.toThrow(
-    'DeepSeek Harness installed cc-safety-net in the web profile but did not enable it. Enable it from the Plugins page, or update cc-safety-net if your registry served a release without DeepSeek Harness support.',
+    'DeepSeek Harness installed cc-safety-net in the web profile but did not enable it. Enable it from the Plugins page.',
   );
 });
