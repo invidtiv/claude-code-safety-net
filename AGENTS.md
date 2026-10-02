@@ -12,6 +12,19 @@
   When `gh stack rebase` stops, resolve and `git add` the source files, never hand-merge `dist/`:
   run `bun run build && git add -A dist`, then `gh stack rebase --continue`.
 
+## README
+
+- `README.md` is the GitHub and npm landing page. It holds only what a newcomer needs before
+  installing; everything else belongs to the docs site (`kenryu42/cc-safety-net-docs`), whose
+  `docs-sync` skill documents each source commit after every release.
+- Do not touch the README for a fix, behavior change, new option, version minimum, per-CLI
+  install step, config key, or limitation. Docs-sync picks it up from the commit; a README
+  paragraph duplicates it and goes stale.
+- Edit the README only when something it already lists changes: a supported CLI (one table cell
+  linking its Installation anchor), a headline capability (one Features bullet plus a docs link),
+  the install/update/uninstall commands, the preset names, the diagnostics commands, or the
+  `checkCommand` snippet.
+
 ## Testing
 
 - A behavior change lands as a failing expectation first — a contract corpus row or a stated

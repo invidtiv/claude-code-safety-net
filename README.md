@@ -67,130 +67,62 @@ Amp documents macOS, Linux, and WSL, but not native Windows.
 
 ## Features
 
-- **Blocks destructive commands.** `git reset --hard`, `git push --force`, `rm -rf` on dangerous targets, `find -delete`, and PowerShell `Remove-Item`. The hook still blocks the same command inside `bash -c` or `python -c`. A sandbox still allows `git reset --hard` inside your project. See [vs Sandboxing](https://ccsafetynet.com/docs/guides/vs-sandboxing).
-- **Blocks secret access.** SSH keys, `.env` files, `~/.aws`, and the credential files coding CLIs keep. The rules cover the shell and the agent's read, edit, write, and search tools. Blocking a CLI's own settings files is optional. It stays off until you turn it on.
-- **Customize the rules in a GUI.** Run `npx cc-safety-net gui` and open Policy. Turn individual block and secret rules off. Add paths to allow or deny. You cannot turn off the rules that catch wiping `/` or `~`.
-- **Adds blocks through rulebooks.** Official packs for Terraform, AWS, gcloud, and Azure, or JSON you write yourself. A rulebook can only add blocks. It cannot turn built-in protection off. The packs live in [cc-safety-net/rulebooks](https://github.com/cc-safety-net/rulebooks). Install a pack with:
-
-  ```bash
-  npx -y cc-safety-net rule add --only terraform aws --global
-  ```
-
-  See [Official Rulebooks](https://ccsafetynet.com/docs/configuration/rulebooks).
-- **Shares policy through git.** Commit `.cc-safety-net/` so clones and cloud sessions pick up the same rules. If a project file tries to loosen a member's stricter settings, `status` and `doctor` report it. `policy apply` asks for confirmation in a terminal. Copying the folder is not enough. The hook still has to be installed. See [Team Setup](https://ccsafetynet.com/docs/guides/team-setup) and [Cloud Environments](https://ccsafetynet.com/docs/guides/cloud-environments).
-- **Embeds in your own tools.** Install the npm package and call `checkCommand` to get allow or deny from your own code. No hook required. See [Library API](#library-api).
-
-Full rule catalogs: [Blocked Commands](https://ccsafetynet.com/docs/reference/blocked-commands) · [Allowed Commands](https://ccsafetynet.com/docs/reference/allowed-commands) · [Secret Protection](https://ccsafetynet.com/docs/reference/secret-protection).
+- **Blocks destructive commands** such as `git reset --hard`, `git push --force`, and `rm -rf` on dangerous targets, even inside `bash -c` or `python -c`. See [Blocked Commands](https://ccsafetynet.com/docs/reference/blocked-commands) and [vs Sandboxing](https://ccsafetynet.com/docs/guides/vs-sandboxing).
+- **Blocks secret access** to SSH keys, `.env` files, `~/.aws`, and coding-CLI credentials, from the shell and from the agent's file tools. See [Secret Protection](https://ccsafetynet.com/docs/reference/secret-protection).
+- **Customizes the rules in a GUI.** Run `npx cc-safety-net gui` and open Policy. See [Policy](https://ccsafetynet.com/docs/configuration/policy).
+- **Adds blocks through rulebooks**: official packs for Terraform, AWS, gcloud, and Azure, or your own JSON. See [Official Rulebooks](https://ccsafetynet.com/docs/configuration/rulebooks).
+- **Shares policy through git.** Commit `.cc-safety-net/` so clones and cloud sessions get the same rules. See [Team Setup](https://ccsafetynet.com/docs/guides/team-setup).
+- **Embeds in your own tools** through the [Library API](#library-api).
 
 ## Quick start
 
-You need Node.js 18 or higher.
-
-To install into the coding CLIs on this machine, run:
+You need Node.js 18 or higher. Install into the coding CLIs on this machine:
 
 ```bash
 npx -y cc-safety-net@latest install
 ```
 
-To update every installed integration:
+Update every installed integration with `npx -y cc-safety-net@latest update`, and uninstall with `npx -y cc-safety-net uninstall`. Keep the `@latest` qualifier: a bare `cc-safety-net` spec can run an older copy from the npx cache.
 
-```bash
-npx -y cc-safety-net@latest update
-```
+Per-CLI requirements and options are in [Installation](https://ccsafetynet.com/docs/installation).
 
-Keep the `@latest` qualifier. A bare `cc-safety-net` spec can run an older copy from the npx cache. To uninstall, run `npx -y cc-safety-net uninstall`. `npm install -g cc-safety-net` also installs the `ccsn` alias.
-
-OpenCode integration supports v1.18.29+ and v2.0.6+. Run `npx -y cc-safety-net@latest install --opencode`; the installer selects the host's plugin commands. See [OpenCode compatibility](docs/opencode-compatibility.md) for v2 shell configuration and host limitations.
-
-DeepSeek Harness integration installs as a profile plugin bundle into each DeepSeek Harness on the machine. `npx -y cc-safety-net@latest install --deepseek-harness` adds it to the Desktop app through Desktop's bundled `dsh` command; quit Desktop first, and open it once beforehand so it has a profile. Both profiles get the installer's own version, so pnpm's minimum release age cannot hold a new release back to an older one. It adds it to the web profile through `npx -y @deepseek-ai/dsh plugin --profile web add cc-safety-net@<version>`, which reuses the DeepSeek Harness that `npx @deepseek-ai/dsh web` or a global install runs and needs `pnpm` on your PATH. The installer looks for Desktop in its default location; if yours is elsewhere, add `cc-safety-net` from its Plugins page.
-
-OpenClaw integration requires OpenClaw 2026.8.1+. The installer accepts the plugin's declared capabilities for you, and older OpenClaw releases reject that option.
+> [!WARNING]
+> Upgrading from a legacy inline config such as `.safety-net.json` or `~/.cc-safety-net/config.json`? Those files are no longer loaded, so their rules enforce nothing. Run `npx -y cc-safety-net rule migrate`, then confirm `npx -y cc-safety-net doctor` reports `ready`. See the [migration guide](https://ccsafetynet.com/docs/configuration/custom-rules#migrate-legacy-configuration).
 
 ## Safety presets
 
-To set a preset, run `npx cc-safety-net gui` and open Policy.
+Set a preset in `npx cc-safety-net gui` under Policy.
 
 | Preset | Effect |
 |---|---|
-| Standard | Blocks recognizable destructive Git and filesystem commands. Allows metadata-only checks of built-in sensitive paths while continuing to block content access. Recommended for normal coding. |
-| Strict | Standard, plus blocks dynamic or unparseable commands the analyzer cannot verify safely. Also blocks metadata-only discovery of built-in sensitive paths. Occasional false positives on advanced shell. |
-| Paranoid | Strict, plus blocks `rm -rf` inside your project and interpreter one-liners. Expect friction; for untrusted agents or high-stakes repos. |
+| Standard | Blocks recognizable destructive Git and filesystem commands. Recommended for normal coding. |
+| Strict | Standard, plus blocks dynamic or unparseable commands the analyzer cannot verify safely. |
+| Paranoid | Strict, plus blocks `rm -rf` inside your project and interpreter one-liners. For untrusted agents or high-stakes repos. |
 
-Linked-worktree mode relaxes only local discard. Git discards inside a temp-root repository unrelated to the workspace are allowed like temp deletes (local discards only when that repository is a linked worktree), as is `git worktree remove --force` of an existing temp-root directory unrelated to the workspace. See [Modes](https://ccsafetynet.com/docs/configuration/modes).
-
-To allow one file name you manage at any depth under a folder, add an entry such as `"~/code/**/.env.local"` to `secret_protection.allow_paths` in your user policy. Other env variants stay blocked. The folder before `**/` is required and cannot be your home directory or a folder above it, so home credentials such as `~/.ssh` and `~/.npmrc` stay protected. Only a folder, `**/`, and an exact file name are supported; configured deny paths and Coding CLI protections still win. Many frameworks keep local secrets in `.env.local`, so allow it only if that matches how you use it.
+See [Modes](https://ccsafetynet.com/docs/configuration/modes).
 
 ## Diagnostics
 
 ```bash
-# Summarize what is being enforced right now
-npx cc-safety-net status
-# Verify your installation and run a self-test
-npx cc-safety-net doctor
-# Trace how a command is analyzed step-by-step
-npx cc-safety-net explain "git reset --hard"
-# Browse recorded denials from the audit trail (add --all to include allowed commands)
-npx cc-safety-net logs
-# Review what was blocked and edit your policy in a local web GUI
-npx cc-safety-net gui
+npx cc-safety-net status                       # what is being enforced right now
+npx cc-safety-net doctor                       # verify the installation and run a self-test
+npx cc-safety-net explain "git reset --hard"   # trace how a command is analyzed
+npx cc-safety-net logs                         # recorded denials from the local audit trail
 ```
 
-`doctor`, `explain`, and `logs` support `--json` for machine-readable output. The audit trail stays on your machine. It records command decisions, but it does not record command output or prompts.
-
-Details: [CLI Commands](https://ccsafetynet.com/docs/reference/cli-commands) · [Explain Trace](https://ccsafetynet.com/docs/reference/explain-trace) · [Audit Log](https://ccsafetynet.com/docs/reference/audit-log) · [Dashboard](https://ccsafetynet.com/docs/guides/dashboard) · [Configuration Recovery](https://ccsafetynet.com/docs/configuration/recovery).
-
-## Limitations
-
-CC Safety Net denies a tool call before it runs. It does not set filesystem permissions, watch network egress, or contain a process.
-
-The policy and secret-path extractors are mostly POSIX. For PowerShell they resolve a home prefix (`$HOME`, `$env:USERPROFILE`, `$env:HOME`, or `~`) joined to a literal suffix with `\` or `/`. The same check applies to `Get-Content`, `Set-Content`, `Add-Content`, `Copy-Item`, `Move-Item`, `Remove-Item`, and their aliases. `Get-Content $HOME\.ssh\id_rsa` is denied. A path built by concatenation, a subexpression, or `Join-Path` is not.
-
-Policy-file protection matches exact paths. It does not emulate commands. Use OS permissions or a sandbox when you need that.
-
-Codex has two integration-specific limits. Its unified exec path is the default shell path. It sends a hook payload when a command starts a session, but it sends none for `write_stdin`. CC Safety Net can inspect and audit the command that opens the session. It cannot inspect or audit text that the model types into the running session. Codex emits no event for that call, so an adapter change cannot close this gap. The `exec_command` payload also omits the call's `workdir`: it carries only `{command}`, and its `cwd` is the turn directory. Codex runs the command in `workdir`, but CC Safety Net analyzes it in the turn directory, so relative paths and outside-directory rules can be judged against the wrong directory.
-
-[SECURITY.md](SECURITY.md) contains the full residual-risk registry. [Known Limitations](https://ccsafetynet.com/docs/guides/known-limitations) explains what those risks mean in practice.
-
-## Upgrading from an older version
-
-Run the `update` command from [Quick start](#quick-start) to upgrade every installed integration to the current release.
-
-If you installed rulebooks from GitHub on version 2.2 or earlier, run `npx -y cc-safety-net rule sync` once per scope after upgrading. Add `--global` for user-scope sources. Rulebooks are now live files in your config. The command copies each cached rulebook into that location and removes the leftovers. Until you run it, those GitHub-sourced rules are inactive. `status` and `doctor` report the degraded sources.
-
-> [!WARNING]
-> If you defined custom rules in a legacy inline config such as `.safety-net.json` or `~/.cc-safety-net/config.json`, CC Safety Net no longer loads those files at runtime. Their rules enforce nothing. Normal use does not show this failure because the commands now run. Run `npx -y cc-safety-net rule migrate` to convert the rules to the rulebook layout. Then run `npx -y cc-safety-net doctor` and confirm that the runtime is `ready`. See the [migration guide](https://ccsafetynet.com/docs/configuration/custom-rules#migrate-legacy-configuration).
-
-## Full documentation
-
-The **[ccsafetynet.com/docs](https://ccsafetynet.com/docs)** site contains the full documentation:
-
-| Area | Pages |
-|---|---|
-| Get started | [Introduction](https://ccsafetynet.com/docs/introduction) · [Installation](https://ccsafetynet.com/docs/installation) · [Quickstart](https://ccsafetynet.com/docs/quickstart) · [Team Setup](https://ccsafetynet.com/docs/guides/team-setup) · [Cloud Environments](https://ccsafetynet.com/docs/guides/cloud-environments) · [How It Works](https://ccsafetynet.com/docs/guides/how-it-works) · [Dashboard](https://ccsafetynet.com/docs/guides/dashboard) |
-| Configuration | [Modes](https://ccsafetynet.com/docs/configuration/modes) · [Policy](https://ccsafetynet.com/docs/configuration/policy) · [Environment](https://ccsafetynet.com/docs/configuration/environment) · [Custom Rules](https://ccsafetynet.com/docs/configuration/custom-rules) · [Official Rulebooks](https://ccsafetynet.com/docs/configuration/rulebooks) · [Status Line](https://ccsafetynet.com/docs/configuration/status-line) · [Configuration Recovery](https://ccsafetynet.com/docs/configuration/recovery) |
-| Reference | [Blocked Commands](https://ccsafetynet.com/docs/reference/blocked-commands) · [Allowed Commands](https://ccsafetynet.com/docs/reference/allowed-commands) · [Secret Protection](https://ccsafetynet.com/docs/reference/secret-protection) · [Audit Log](https://ccsafetynet.com/docs/reference/audit-log) · [CLI Commands](https://ccsafetynet.com/docs/reference/cli-commands) · [Explain Trace](https://ccsafetynet.com/docs/reference/explain-trace) · [Glossary](https://ccsafetynet.com/docs/reference/glossary) |
-| Guides | [Architecture](https://ccsafetynet.com/docs/guides/architecture) · [Analysis Engine](https://ccsafetynet.com/docs/guides/analysis-engine) · [Design Principles](https://ccsafetynet.com/docs/guides/design-principles) · [Security Model](https://ccsafetynet.com/docs/guides/security-model) · [vs Sandboxing](https://ccsafetynet.com/docs/guides/vs-sandboxing) · [Integration Architecture](https://ccsafetynet.com/docs/guides/integration-architecture) · [Embedding](https://ccsafetynet.com/docs/guides/embedding) · [Known Limitations](https://ccsafetynet.com/docs/guides/known-limitations) · [Troubleshooting](https://ccsafetynet.com/docs/guides/troubleshooting) |
-| Project | [Contributing](https://ccsafetynet.com/docs/contributing) · [Security Policy](https://ccsafetynet.com/docs/security) |
+See [CLI Commands](https://ccsafetynet.com/docs/reference/cli-commands) and [Troubleshooting](https://ccsafetynet.com/docs/guides/troubleshooting).
 
 ## The cc-safety-net skill
 
-The skill is the operating manual for CC Safety Net. Ask it anything about the tool: why a command was blocked, whether a block was wrong, how to write or migrate custom rules, how to change the policy or safety level, how to install or remove an integration, or whether protection is working at all. When the CLI output cannot settle a question, it reads the source of the installed version and answers from that.
+Ask the skill anything about the tool: why a command was blocked, how to write a rule, or whether protection is working. It ships with the Claude Code and Codex plugins and is built into the OpenCode and Pi integrations.
 
 ```text
 /cc-safety-net why was my last git command blocked
-/cc-safety-net block terraform destroy in this repo
-/cc-safety-net is secret protection active in Codex?
 ```
-
-The command ships with the Claude Code and Codex plugins and is built into the OpenCode and Pi integrations. The skill loads only when you invoke it, so it takes no context-window space until you type the command. The agent cannot trigger it on its own.
 
 ## Library API
 
 To check a command from Node.js without installing the hook:
-
-```bash
-npm install cc-safety-net
-```
 
 ```ts
 import { checkCommand } from 'cc-safety-net/api';
@@ -201,9 +133,23 @@ if (result.kind !== 'allow') {
 }
 ```
 
-`cwd` must be an absolute directory path. If `checkCommand` throws, do not run the command.
+`cwd` must be an absolute directory path. If `checkCommand` throws, do not run the command. See [Embedding](https://ccsafetynet.com/docs/guides/embedding).
 
-A full example is in [Embedding](https://ccsafetynet.com/docs/guides/embedding).
+## Limitations
+
+CC Safety Net denies a tool call before it runs. It is not a sandbox: it does not set filesystem permissions, watch network egress, or contain a process. See [Known Limitations](https://ccsafetynet.com/docs/guides/known-limitations) and the residual-risk registry in [SECURITY.md](SECURITY.md).
+
+## Documentation
+
+The **[ccsafetynet.com/docs](https://ccsafetynet.com/docs)** site contains the full documentation:
+
+| Area | Pages |
+|---|---|
+| Get started | [Introduction](https://ccsafetynet.com/docs/introduction) · [Installation](https://ccsafetynet.com/docs/installation) · [Quickstart](https://ccsafetynet.com/docs/quickstart) · [Team Setup](https://ccsafetynet.com/docs/guides/team-setup) · [Cloud Environments](https://ccsafetynet.com/docs/guides/cloud-environments) · [How It Works](https://ccsafetynet.com/docs/guides/how-it-works) · [Dashboard](https://ccsafetynet.com/docs/guides/dashboard) |
+| Configuration | [Modes](https://ccsafetynet.com/docs/configuration/modes) · [Policy](https://ccsafetynet.com/docs/configuration/policy) · [Environment](https://ccsafetynet.com/docs/configuration/environment) · [Custom Rules](https://ccsafetynet.com/docs/configuration/custom-rules) · [Official Rulebooks](https://ccsafetynet.com/docs/configuration/rulebooks) · [Status Line](https://ccsafetynet.com/docs/configuration/status-line) · [Configuration Recovery](https://ccsafetynet.com/docs/configuration/recovery) |
+| Reference | [Blocked Commands](https://ccsafetynet.com/docs/reference/blocked-commands) · [Allowed Commands](https://ccsafetynet.com/docs/reference/allowed-commands) · [Secret Protection](https://ccsafetynet.com/docs/reference/secret-protection) · [Audit Log](https://ccsafetynet.com/docs/reference/audit-log) · [CLI Commands](https://ccsafetynet.com/docs/reference/cli-commands) · [Explain Trace](https://ccsafetynet.com/docs/reference/explain-trace) · [Glossary](https://ccsafetynet.com/docs/reference/glossary) |
+| Guides | [Architecture](https://ccsafetynet.com/docs/guides/architecture) · [Analysis Engine](https://ccsafetynet.com/docs/guides/analysis-engine) · [Design Principles](https://ccsafetynet.com/docs/guides/design-principles) · [Security Model](https://ccsafetynet.com/docs/guides/security-model) · [vs Sandboxing](https://ccsafetynet.com/docs/guides/vs-sandboxing) · [Integration Architecture](https://ccsafetynet.com/docs/guides/integration-architecture) · [Embedding](https://ccsafetynet.com/docs/guides/embedding) · [Known Limitations](https://ccsafetynet.com/docs/guides/known-limitations) · [Troubleshooting](https://ccsafetynet.com/docs/guides/troubleshooting) |
+| Project | [Contributing](https://ccsafetynet.com/docs/contributing) · [Security Policy](https://ccsafetynet.com/docs/security) |
 
 ## Development
 
