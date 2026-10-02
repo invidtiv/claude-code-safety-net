@@ -22,8 +22,7 @@
   paragraph duplicates it and goes stale.
 - Edit the README only when something it already lists changes: a supported CLI (one table cell
   linking its Installation anchor), a headline capability (one Features bullet plus a docs link),
-  the install/update/uninstall commands, the preset names, the diagnostics commands, or the
-  `checkCommand` snippet.
+  or the Quick start commands.
 
 ## Testing
 
