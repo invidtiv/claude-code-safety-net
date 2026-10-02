@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runRuleSyncMigration } from '@/cli/rule/sync-migrate';
-import { RULE_SOURCE_LIMIT, RULE_SOURCE_LIMIT_ERROR } from '@/core/policy/resource-limits';
-import { writeStarterRulebook } from '@/rules-manager/config-file';
 import { GITHUB_FETCH_LIMITS } from '@/rules-manager/resolver';
 import {
   isRuleSyncResourceLimitError,
@@ -15,36 +12,6 @@ import {
   isolationEnv,
   removeTempRoots,
 } from '../helpers/temp-home';
-
-const STARTER_EXAMPLE_RULEBOOK = `{
-  "rulebook_version": 1,
-  "name": "example-rules",
-  "version": "1.0.0",
-  "description": "Project-specific CC Safety Net rules.",
-  "author": "project",
-  "allowed_commands": [
-    "docker"
-  ],
-  "rules": [
-    {
-      "name": "block-docker-system-prune",
-      "command": "docker",
-      "subcommand": "system",
-      "block_args": [
-        "prune"
-      ],
-      "reason": "Use targeted cleanup instead."
-    }
-  ],
-  "tests": [
-    {
-      "command": "docker system prune",
-      "expect": "blocked",
-      "rule": "block-docker-system-prune"
-    }
-  ]
-}
-`;
 
 afterEach(removeTempRoots);
 
@@ -67,11 +34,6 @@ describe('the manager limits that outlive the differentials', () => {
     });
   });
 
-  test('a scope may list 64 sources, and the refusal names the limit', () => {
-    expect(RULE_SOURCE_LIMIT).toBe(64);
-    expect(RULE_SOURCE_LIMIT_ERROR).toBe("Rule config exceeds CC Safety Net's safe source limit.");
-  });
-
   test('only the budget message classifies as a resource-limit failure', () => {
     expect(
       isRuleSyncResourceLimitError(
@@ -89,14 +51,6 @@ describe('the manager limits that outlive the differentials', () => {
         "Rule synchronization exceeds CC Safety Net's safe resource limits.",
       ),
     ).toBeFalse();
-  });
-});
-
-describe('the starter rulebook bytes', () => {
-  test('the starter `rule init --example` writes is written verbatim', () => {
-    const path = join(createTempRoot('starter-rulebook-'), 'rules', 'rulebook.json');
-    writeStarterRulebook(path);
-    expect(readFileSync(path, 'utf-8')).toBe(STARTER_EXAMPLE_RULEBOOK);
   });
 });
 

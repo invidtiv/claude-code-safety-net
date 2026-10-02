@@ -52,32 +52,6 @@ describe('the Cursor hook config differential', () => {
     });
   });
 
-  test('loses the formatting the user wrote, because the document is re-serialized', async () => {
-    const seed = `${JSON.stringify({ version: 1, hooks: { preToolUse: [FOREIGN] } })}\n`;
-    const { steps } = await row({ [CONFIG]: seed });
-
-    expect(fileAt(steps?.uninstall.tree, CONFIG)).not.toBe(seed);
-    expectRow(steps, {
-      file: CONFIG,
-      alreadyInstalled: false,
-      wrote: cursorConfig([FOREIGN, CANONICAL]),
-      detected: CONFIGURED,
-      left: cursorConfig([FOREIGN]),
-    });
-  });
-
-  test('reports an install that is already canonical without touching the file', async () => {
-    const seed = cursorConfig([CANONICAL]);
-
-    expectRow((await row({ [CONFIG]: seed })).steps, {
-      file: CONFIG,
-      alreadyInstalled: true,
-      wrote: seed,
-      detected: CONFIGURED,
-      left: cursorConfig([]),
-    });
-  });
-
   test('collapses a drifted entry and its duplicate into one canonical entry', async () => {
     expectRow((await row({ [CONFIG]: cursorConfig([DRIFTED, CANONICAL, FOREIGN]) })).steps, {
       file: CONFIG,
@@ -129,13 +103,6 @@ describe('the Cursor hook config differential', () => {
 });
 
 describe('the Cursor detector differential', () => {
-  test('finds the managed entry', async () => {
-    expect(await detection({ [CONFIG]: cursorConfig([CANONICAL]) })).toEqual({
-      kind: 'returned',
-      value: CONFIGURED,
-    });
-  });
-
   test('names every drift a reinstall would repair', async () => {
     expect(await detection({ [CONFIG]: cursorConfig([DRIFTED, CANONICAL, FOREIGN]) })).toEqual({
       kind: 'returned',

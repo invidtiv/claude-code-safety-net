@@ -1,11 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { buildHermesAgentPluginFiles } from '@/hosts/hermes-agent/artifact';
 import { detect as detectHermes } from '@/hosts/hermes-agent/detect';
-import {
-  installHermesAgent,
-  readOwnedHermesAgentFiles,
-  uninstallHermesAgent,
-} from '@/hosts/hermes-agent/install';
+import { installHermesAgent, uninstallHermesAgent } from '@/hosts/hermes-agent/install';
 import { describeOutcome, type TreeEntry, type TreeSpec } from '../../helpers/fixture-tree';
 import { differential, hostRunner } from '../../helpers/host-differential';
 import { removeTempRoots } from '../../helpers/temp-home';
@@ -79,13 +75,6 @@ afterEach(removeTempRoots);
 describe('the Hermes Agent plugin directory differential', () => {
   test('writes the shim and its manifest into a home that has neither', async () => {
     expectHermesRow((await row({})).steps, { dir: DIR, alreadyInstalled: false });
-  });
-
-  test('reports an identical install without rewriting it', async () => {
-    expectHermesRow((await row(managedFiles(DIR, 'dev'))).steps, {
-      dir: DIR,
-      alreadyInstalled: true,
-    });
   });
 
   test('replaces files stamped with an older version', async () => {
@@ -210,6 +199,14 @@ describe('refusing a managed path that is not ours', () => {
       [`Unmanaged __init__.py occupies ${DIR_PATH}/__init__.py; move or remove it`],
     ],
     [
+      'a manifest someone else wrote',
+      { ...managedFiles(DIR, 'dev'), [`${DIR}/plugin.yaml`]: 'name: theirs\n' },
+      { [DIR]: 'directory', ...managedFiles(DIR, 'dev'), [`${DIR}/plugin.yaml`]: 'name: theirs\n' },
+      `Refusing to overwrite unmanaged file at ${DIR_PATH}/plugin.yaml. Move or remove it.`,
+      `Refusing to remove unmanaged file at ${DIR_PATH}/plugin.yaml. Move or remove it.`,
+      [`Unmanaged plugin.yaml occupies ${DIR_PATH}/plugin.yaml; move or remove it`],
+    ],
+    [
       'a manifest that is a symlink',
       {
         ...managedFiles(DIR, 'dev'),
@@ -269,54 +266,6 @@ describe('removing the Hermes Agent plugin', () => {
     expect(entriesUnder(removal.tree, DIR)).toEqual({
       [DIR]: 'directory',
       [`${DIR}/notes.txt`]: 'mine',
-    });
-  });
-
-  test('reports nothing to remove for a home that never had the plugin', async () => {
-    const removal = await uninstallOnly({});
-
-    expect(removal.outcome).toEqual({
-      kind: 'returned',
-      value: { ok: true, value: { path: DIR_PATH, alreadyInstalled: false } },
-    });
-    expect(entriesUnder(removal.tree, DIR)).toEqual({});
-  });
-});
-
-describe('reading the owned Hermes Agent files', () => {
-  const owned = async (seed: TreeSpec) =>
-    (
-      await differential(
-        {
-          seed,
-        },
-        (environment) => describeOutcome(() => readOwnedHermesAgentFiles(environment)),
-      )
-    ).outcome;
-
-  test('names the managed files a removal would delete, and nothing else', async () => {
-    expect(await owned(managedFiles(DIR, 'dev'))).toEqual({
-      kind: 'returned',
-      value: { ok: true, value: buildHermesAgentPluginFiles('dev') },
-    });
-  });
-
-  test('finds nothing in a home without the plugin directory', async () => {
-    expect(await owned({})).toEqual({ kind: 'returned', value: { ok: true, value: [] } });
-  });
-
-  test('refuses the whole removal when one managed path is not ours', async () => {
-    expect(
-      await owned({ ...managedFiles(DIR, 'dev'), [`${DIR}/plugin.yaml`]: 'name: theirs\n' }),
-    ).toEqual({
-      kind: 'returned',
-      value: {
-        ok: false,
-        error: {
-          name: 'Error',
-          message: `Refusing to remove unmanaged file at ${DIR_PATH}/plugin.yaml. Move or remove it.`,
-        },
-      },
     });
   });
 });

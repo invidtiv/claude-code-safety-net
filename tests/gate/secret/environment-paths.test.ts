@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { findSensitivePathTarget } from '@/gate/secret/secret-protection';
+import { pathTarget } from './path-target';
 import { writeTree } from '../../helpers/fixture-tree';
 import {
   createTempRoot,
@@ -17,14 +17,14 @@ test.each([
 ])('protects credential backup %s while allowing an unrelated filename', (target, ruleId) => {
   const home = createTempRoot('secret-variant-');
   const environment = environmentFor(home, isolationEnv(home));
-  expect(findSensitivePathTarget([target], home, environment)).toEqual({ target, ruleId });
+  expect(pathTarget([target], home, environment)).toEqual({ target, ruleId });
   expect(
-    findSensitivePathTarget([target], home, environment, {
+    pathTarget([target], home, environment, {
       denyPaths: [],
       disabledRules: [ruleId],
     }),
   ).toBeNull();
-  expect(findSensitivePathTarget(['release-notes.old'], home, environment)).toBeNull();
+  expect(pathTarget(['release-notes.old'], home, environment)).toBeNull();
 });
 
 test('protects a custom OpenCode config filename while allowing a neighboring file', () => {
@@ -37,11 +37,11 @@ test('protects a custom OpenCode config filename while allowing a neighboring fi
       OPENCODE_CONFIG: 'custom/settings.json',
     }),
   );
-  expect(findSensitivePathTarget(['custom/settings.json'], home, environment)).toEqual({
+  expect(pathTarget(['custom/settings.json'], home, environment)).toEqual({
     target: 'custom/settings.json',
     ruleId: 'secret.cli.opencode.config',
   });
-  expect(findSensitivePathTarget(['neighbor/settings.json'], home, environment)).toBeNull();
+  expect(pathTarget(['neighbor/settings.json'], home, environment)).toBeNull();
 });
 
 test.each([
@@ -55,12 +55,12 @@ test.each([
   });
   const environment = environmentFor(home, isolationEnv(home, overrides));
   const target = join(home, configHome, 'opencode', 'config.json');
-  expect(findSensitivePathTarget([target], home, environment)).toEqual({
+  expect(pathTarget([target], home, environment)).toEqual({
     target,
     ruleId: 'secret.cli.opencode.config',
   });
   expect(
-    findSensitivePathTarget([join(home, configHome, 'other', 'config.json')], home, environment),
+    pathTarget([join(home, configHome, 'other', 'config.json')], home, environment),
   ).toBeNull();
 });
 
@@ -69,7 +69,7 @@ test('keeps the OpenCode v1 global opencode.json protected under a custom config
   writeTree(home, { '.config/opencode/opencode.json': '{}' });
   const environment = environmentFor(home, isolationEnv(home, { OPENCODE_CONFIG_DIR: 'custom' }));
   const target = join(home, '.config', 'opencode', 'opencode.json');
-  expect(findSensitivePathTarget([target], home, environment)).toEqual({
+  expect(pathTarget([target], home, environment)).toEqual({
     target,
     ruleId: 'secret.cli.opencode.config',
   });
@@ -83,11 +83,11 @@ test.each(['', '-wal', '-shm'])('protects a relocated OpenCode database%s', (suf
     isolationEnv(home, { OPENCODE_DB: 'storage/session.sqlite' }),
   );
   const target = `storage/session.sqlite${suffix}`;
-  expect(findSensitivePathTarget([target], home, environment)).toEqual({
+  expect(pathTarget([target], home, environment)).toEqual({
     target,
     ruleId: 'secret.cli.opencode',
   });
-  expect(findSensitivePathTarget([`${target}.backup`], home, environment)).toBeNull();
+  expect(pathTarget([`${target}.backup`], home, environment)).toBeNull();
 });
 
 test('protects Gemini system settings under the configured ProgramData directory', () => {
@@ -98,16 +98,12 @@ test('protects Gemini system settings under the configured ProgramData directory
     home,
     isolationEnv(home, { ProgramData: join(home, 'system') }),
   );
-  expect(findSensitivePathTarget([target], home, environment)).toEqual({
+  expect(pathTarget([target], home, environment)).toEqual({
     target,
     ruleId: 'secret.cli.gemini.config',
   });
   expect(
-    findSensitivePathTarget(
-      [join(home, 'other', 'gemini-cli', 'settings.json')],
-      home,
-      environment,
-    ),
+    pathTarget([join(home, 'other', 'gemini-cli', 'settings.json')], home, environment),
   ).toBeNull();
 });
 
@@ -119,9 +115,9 @@ test('a secret allow path cannot exempt a relocated safety-net home', () => {
     isolationEnv(home, { CC_SAFETY_NET_HOME: join(home, 'guard') }),
   );
   const config = { denyPaths: [], allowPaths: [join(home, 'guard'), join(home, 'fixtures')] };
-  expect(findSensitivePathTarget(['guard/id_rsa'], home, environment, config)).toEqual({
+  expect(pathTarget(['guard/id_rsa'], home, environment, config)).toEqual({
     target: 'guard/id_rsa',
     ruleId: 'secret.basename.id-rsa',
   });
-  expect(findSensitivePathTarget(['fixtures/id_rsa'], home, environment, config)).toBeNull();
+  expect(pathTarget(['fixtures/id_rsa'], home, environment, config)).toBeNull();
 });

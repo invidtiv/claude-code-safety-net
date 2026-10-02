@@ -1,20 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { RULE_SOURCE_LIMIT, RULE_SOURCE_LIMIT_ERROR } from '@/core/policy/resource-limits';
-import {
-  isRulebookWithinAcceptanceLimits,
-  RULEBOOK_LIMIT_ERROR,
-  RULEBOOK_LIMITS,
-  RULEBOOK_VALIDATION_TRUNCATED,
-} from '@/core/policy/rulebook-limits';
+import { RULE_SOURCE_LIMIT } from '@/core/policy/resource-limits';
+import { isRulebookWithinAcceptanceLimits, RULEBOOK_LIMITS } from '@/core/policy/rulebook-limits';
 import {
   assertBareRulebookName,
-  GITHUB_RULEBOOK_PATH_RE,
-  getRepositoryRulebookPath,
   getRulebookSourceSyntaxError,
   isGitHubRef,
   isGitHubRepositorySource,
   isGitHubRulebookSource,
-  NAME_PATTERN,
   parseGitHubSource,
 } from '@/core/policy/source-syntax';
 import {
@@ -35,6 +27,7 @@ const SPECS: readonly {
   readonly behavior: string;
   readonly spec: string;
   readonly syntaxError: string | null;
+  readonly isBareName: boolean;
   readonly isRulebookSource: boolean;
   readonly isRepositorySource: boolean;
   readonly isRef: boolean;
@@ -43,6 +36,7 @@ const SPECS: readonly {
   {
     behavior: 'a bare local name is a usable source',
     spec: 'team-rules',
+    isBareName: true,
     syntaxError: null,
     isRulebookSource: false,
     isRepositorySource: false,
@@ -52,6 +46,7 @@ const SPECS: readonly {
   {
     behavior: 'a single letter is the shortest usable local name',
     spec: 'a',
+    isBareName: true,
     syntaxError: null,
     isRulebookSource: false,
     isRepositorySource: false,
@@ -61,6 +56,7 @@ const SPECS: readonly {
   {
     behavior: 'a 64-character local name is at the length cap',
     spec: 'x'.repeat(64),
+    isBareName: true,
     syntaxError: null,
     isRulebookSource: false,
     isRepositorySource: false,
@@ -70,6 +66,7 @@ const SPECS: readonly {
   {
     behavior: 'a 65-character local name is over the cap',
     spec: 'x'.repeat(65),
+    isBareName: false,
     syntaxError: bareNameError('x'.repeat(65)),
     isRulebookSource: false,
     isRepositorySource: false,
@@ -79,6 +76,7 @@ const SPECS: readonly {
   {
     behavior: 'a local name may not open with a digit',
     spec: '1bad',
+    isBareName: false,
     syntaxError: bareNameError('1bad'),
     isRulebookSource: false,
     isRepositorySource: false,
@@ -88,6 +86,7 @@ const SPECS: readonly {
   {
     behavior: 'a local name may not carry a space or punctuation',
     spec: 'bad source!',
+    isBareName: false,
     syntaxError: bareNameError('bad source!'),
     isRulebookSource: false,
     isRepositorySource: false,
@@ -97,6 +96,7 @@ const SPECS: readonly {
   {
     behavior: 'the empty source is rejected as a local name',
     spec: '',
+    isBareName: false,
     syntaxError: bareNameError(''),
     isRulebookSource: false,
     isRepositorySource: false,
@@ -106,6 +106,7 @@ const SPECS: readonly {
   {
     behavior: 'a blank source is rejected as a local name',
     spec: ' ',
+    isBareName: false,
     syntaxError: bareNameError(' '),
     isRulebookSource: false,
     isRepositorySource: false,
@@ -115,6 +116,7 @@ const SPECS: readonly {
   {
     behavior: 'owner/repo#ref/name is the vendored GitHub form',
     spec: 'owner/repo#main/team',
+    isBareName: false,
     syntaxError: null,
     isRulebookSource: true,
     isRepositorySource: false,
@@ -128,8 +130,25 @@ const SPECS: readonly {
     },
   },
   {
+    behavior: 'a hyphenated GitHub rulebook name determines its vendored path',
+    spec: 'owner/repo#main/team-rules',
+    isBareName: false,
+    syntaxError: null,
+    isRulebookSource: true,
+    isRepositorySource: false,
+    isRef: false,
+    parsed: {
+      owner: 'owner',
+      repo: 'repo',
+      ref: 'main',
+      name: 'team-rules',
+      path: '.cc-safety-net/rules/team-rules/rulebook.json',
+    },
+  },
+  {
     behavior: 'a ref may carry slashes, and the last segment is the rulebook name',
     spec: 'owner/repo#release/v1/team',
+    isBareName: false,
     syntaxError: null,
     isRulebookSource: true,
     isRepositorySource: false,
@@ -145,6 +164,7 @@ const SPECS: readonly {
   {
     behavior: 'only the last segment is the name, so extra segments extend the ref',
     spec: 'owner/repo#main/team/extra',
+    isBareName: false,
     syntaxError: null,
     isRulebookSource: true,
     isRepositorySource: false,
@@ -160,6 +180,7 @@ const SPECS: readonly {
   {
     behavior: 'the rulebook name in a GitHub source obeys the local name pattern',
     spec: 'owner/repo#main/1bad',
+    isBareName: false,
     syntaxError: `GitHub rulebook sources must be ${FORMAT}: owner/repo#main/1bad`,
     isRulebookSource: true,
     isRepositorySource: false,
@@ -169,6 +190,7 @@ const SPECS: readonly {
   {
     behavior: 'a GitHub source with a ref but no rulebook name is rejected',
     spec: 'owner/repo#main',
+    isBareName: false,
     syntaxError: `GitHub rulebook sources must be ${FORMAT}: owner/repo#main`,
     isRulebookSource: true,
     isRepositorySource: false,
@@ -178,6 +200,7 @@ const SPECS: readonly {
   {
     behavior: 'a GitHub source with an empty ref is rejected',
     spec: 'owner/repo#/team',
+    isBareName: false,
     syntaxError: `GitHub rulebook sources must be ${FORMAT}: owner/repo#/team`,
     isRulebookSource: true,
     isRepositorySource: false,
@@ -187,6 +210,7 @@ const SPECS: readonly {
   {
     behavior: 'a ref that is not a path segment is rejected by its own message',
     spec: 'owner/repo#bad ref/team',
+    isBareName: false,
     syntaxError: 'GitHub rulebook refs must use valid path segments: owner/repo#bad ref/team',
     isRulebookSource: true,
     isRepositorySource: false,
@@ -196,6 +220,7 @@ const SPECS: readonly {
   {
     behavior: 'a github: scheme prefix is not a supported spelling',
     spec: 'github:owner/repo#main/team',
+    isBareName: false,
     syntaxError: bareNameError('github:owner/repo#main/team'),
     isRulebookSource: false,
     isRepositorySource: false,
@@ -205,6 +230,7 @@ const SPECS: readonly {
   {
     behavior: 'a gh: shorthand is not a supported spelling',
     spec: 'gh:x',
+    isBareName: false,
     syntaxError: bareNameError('gh:x'),
     isRulebookSource: false,
     isRepositorySource: false,
@@ -214,6 +240,7 @@ const SPECS: readonly {
   {
     behavior: 'owner/repo alone is a repository, not a rulebook source',
     spec: 'owner/repo',
+    isBareName: false,
     syntaxError: bareNameError('owner/repo'),
     isRulebookSource: false,
     isRepositorySource: true,
@@ -223,6 +250,7 @@ const SPECS: readonly {
   {
     behavior: 'a clone URL is neither a repository nor a rulebook source',
     spec: 'https://github.com/o/r',
+    isBareName: false,
     syntaxError: bareNameError('https://github.com/o/r'),
     isRulebookSource: false,
     isRepositorySource: false,
@@ -244,34 +272,16 @@ describe('rulebook source syntax', () => {
     );
   });
 
-  test.each(SPECS.map((row) => [row.behavior, row.spec] as const))(
-    'assertBareRulebookName rejects exactly the names the local pattern rejects (%s)',
-    (_behavior, spec) => {
-      expect(describeOutcome(() => assertBareRulebookName(spec))).toEqual(
-        NAME_PATTERN.test(spec)
+  test.each(SPECS.map((row) => [row.behavior, row] as const))(
+    'bare local name acceptance: %s',
+    (_behavior, row) => {
+      expect(describeOutcome(() => assertBareRulebookName(row.spec))).toEqual(
+        row.isBareName
           ? { ok: true, value: undefined }
-          : { ok: false, error: { name: 'Error', message: bareNameError(spec) } },
+          : { ok: false, error: { name: 'Error', message: bareNameError(row.spec) } },
       );
     },
   );
-
-  test('the vendored path a name resolves to is the path the vendored-path pattern accepts', () => {
-    expect(getRepositoryRulebookPath('team-rules')).toBe(
-      '.cc-safety-net/rules/team-rules/rulebook.json',
-    );
-    for (const row of SPECS) {
-      expect(GITHUB_RULEBOOK_PATH_RE.test(getRepositoryRulebookPath(row.spec))).toBe(
-        NAME_PATTERN.test(row.spec),
-      );
-    }
-  });
-
-  test('the vendored-path pattern captures the rulebook name', () => {
-    expect(
-      '.cc-safety-net/rules/team-rules/rulebook.json'.match(GITHUB_RULEBOOK_PATH_RE)?.[1],
-    ).toBe('team-rules');
-    expect(GITHUB_RULEBOOK_PATH_RE.flags).toBe('');
-  });
 });
 
 const WRAPPER_COMMANDS: readonly {
@@ -476,13 +486,5 @@ describe('rulebook acceptance limits', () => {
       maxValidationErrors: 64,
     });
     expect(RULE_SOURCE_LIMIT).toBe(64);
-  });
-
-  test('the refusal messages name the limit that was exceeded', () => {
-    expect(RULEBOOK_LIMIT_ERROR).toBe("Rulebook exceeds CC Safety Net's safe validation limits.");
-    expect(RULE_SOURCE_LIMIT_ERROR).toBe("Rule config exceeds CC Safety Net's safe source limit.");
-    expect(RULEBOOK_VALIDATION_TRUNCATED).toBe(
-      'Additional rulebook validation errors were omitted.',
-    );
   });
 });

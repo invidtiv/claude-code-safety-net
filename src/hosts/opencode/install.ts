@@ -32,8 +32,7 @@ function getOpenCodeXdgConfigDir(environment: Environment) {
   );
 }
 
-/** @internal */
-export function getOpenCodeConfigDir(environment: Environment) {
+function getOpenCodeConfigDir(environment: Environment) {
   return environment.env.get('OPENCODE_CONFIG_DIR') || getOpenCodeXdgConfigDir(environment);
 }
 
@@ -56,8 +55,7 @@ function getOpenCodeCachePath(environment: Environment) {
   );
 }
 
-/** @internal */
-export function clearOpenCodeCache(environment: Environment): void {
+function clearOpenCodeCache(environment: Environment): void {
   rmSync(getOpenCodeCachePath(environment), { recursive: true, force: true });
 }
 
@@ -181,8 +179,7 @@ async function waitForOpenCodePluginRow(attempt = 1): Promise<string> {
   return waitForOpenCodePluginRow(attempt + 1);
 }
 
-/** @internal */
-export async function verifyOpenCodePluginRuntime(environment: Environment): Promise<void> {
+async function verifyOpenCodePluginRuntime(environment: Environment): Promise<void> {
   const packageDir = join(getOpenCodeCachePath(environment), 'node_modules', OPENCODE_PACKAGE);
   const packageJsonPath = join(packageDir, 'package.json');
   if (!existsSync(packageJsonPath)) {

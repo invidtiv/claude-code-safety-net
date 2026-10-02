@@ -2,15 +2,14 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
+import { createBudget } from '@/core/budget';
 import { createProcessEnvironment, type Environment } from '@/core/environment';
 import type { SecretProtectionConfig } from '@/core/policy/types';
 import { SECRET_DEFAULT_OFF_RULE_ID_SET, SECRET_PROTECTION_RULE_ID_SET } from '@/core/rules/secret';
-import type { ToolRoute } from '@/gate/invocation';
-import {
-  findSensitivePathTarget,
-  findSensitiveTargetInCommand,
-  findSensitiveTargetInToolInput,
-} from '@/gate/secret/secret-protection';
+import { createSemanticFacts } from '@/gate/guards/semantic-facts';
+import { createToolInvocation, type ToolRoute } from '@/gate/invocation';
+import { findSensitiveTargetInSemanticFacts } from '@/gate/secret/secret-protection';
+import { pathTarget } from './path-target';
 import { describeOutcome, writeTree } from '../../helpers/fixture-tree';
 import {
   corpusCommands,
@@ -143,7 +142,25 @@ type CarrierCase = {
 const shellPath = (...parts: string[]) => join(...parts).replaceAll(sep, '/');
 
 function secretIn(command: string, mode: Mode, config?: SecretProtectionConfig): Verdict {
-  return findSensitiveTargetInCommand(command, repo, environment, config, mode);
+  return toolSecret({ command }, { kind: 'command', shell: 'posix' }, command, mode, config);
+}
+
+function toolSecret(
+  input: unknown,
+  route: ToolRoute,
+  command: string | null = null,
+  mode: Mode = {},
+  config?: SecretProtectionConfig,
+): Verdict {
+  return findSensitiveTargetInSemanticFacts(
+    createSemanticFacts(
+      createToolInvocation('', input, route, { executionCwd: repo, configCwd: repo }, command),
+    ),
+    config,
+    environment,
+    createBudget(),
+    mode,
+  );
 }
 
 function checkCarriers(cases: readonly CarrierCase[]): void {
@@ -650,11 +667,6 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
       {
-        name: 'the -c form of the same opened literal',
-        command: 'python3 -c "open(\'.env\')"',
-        expected: env('.env'),
-      },
-      {
         name: 'a python heredoc whose literal is inert command text in standard mode',
         command: "python3 - <<'EOF'\nx = 'cat .env'\nEOF",
         expected: env('.env'),
@@ -663,12 +675,6 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
       {
         name: 'the pipe form of the same inert literal',
         command: 'echo "x = \'cat .env\'" | python3 -',
-        expected: env('.env'),
-        relaxedInStandard: true,
-      },
-      {
-        name: 'the -c form of the same inert literal',
-        command: 'python3 -c "x = \'cat .env\'"',
         expected: env('.env'),
         relaxedInStandard: true,
       },
@@ -1849,8 +1855,7 @@ describe('a gh or git text flag value is text, not a file operand', () => {
 });
 
 describe('secret protection through tool inputs', () => {
-  const routeVerdict = (input: unknown, route: ToolRoute): Verdict =>
-    findSensitiveTargetInToolInput(input, route, repo, environment);
+  const routeVerdict = (input: unknown, route: ToolRoute): Verdict => toolSecret(input, route);
 
   test('every route hands the matcher the paths its payload carries', () => {
     const cases: readonly { name: string; input: unknown; route: ToolRoute; expected: Verdict }[] =
@@ -2016,7 +2021,7 @@ describe('secret protection through tool inputs', () => {
 
 describe('the policy layer over the built-in catalog', () => {
   const targetVerdict = (targets: readonly string[], config?: SecretProtectionConfig): Verdict =>
-    findSensitivePathTarget(targets, repo, environment, config);
+    pathTarget(targets, repo, environment, config);
 
   test('a deny path blocks any descendant and is never relaxed by an allow entry', () => {
     expect(targetVerdict(['private/notes.txt'])).toBeNull();
@@ -2309,9 +2314,7 @@ describe('invariants over the corpus and the seeded fuzz', () => {
   test('every corpus tool input decides on both routes without inventing a rule id', () => {
     for (const row of corpusToolInputs()) {
       for (const route of [{ kind: 'unknown' }, { kind: 'path' }] as const) {
-        const outcome = describeOutcome(() =>
-          findSensitiveTargetInToolInput(row.input, route, repo, environment),
-        );
+        const outcome = describeOutcome(() => toolSecret(row.input, route));
         const ruleId = outcome.ok && outcome.value ? outcome.value.ruleId : null;
         expect(
           ruleId === null ||
@@ -2329,7 +2332,7 @@ describe('invariants over the corpus and the seeded fuzz', () => {
     );
     expect(words.length).toBeGreaterThan(0);
     for (const word of words) {
-      const verdict = findSensitivePathTarget([word], repo, environment);
+      const verdict = pathTarget([word], repo, environment);
       expect(
         verdict === null || SECRET_PROTECTION_RULE_ID_SET.has(verdict.ruleId),
         `${word} -> ${verdict?.ruleId}`,

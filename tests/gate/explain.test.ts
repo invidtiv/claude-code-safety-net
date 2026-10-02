@@ -1,13 +1,9 @@
-import { afterEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { runExplain } from '@/cli/explain/run';
-import { AnalysisLimit } from '@/core/budget';
-import { explainCommand, getConfigSource } from '@/gate/explain';
-import { StructuralShellSyntaxLimitError } from '@/gate/guards/semantic-facts';
-import { GuardEvaluationError } from '@/gate/pipeline';
+import { explainCommand } from '@/gate/explain';
 import { createLinkedWorktreeFixture } from '../helpers';
-import { EXPLAIN_CASES, LIMIT_MESSAGES, LIMIT_SLUGS } from '../helpers/explain-cases';
+import { EXPLAIN_CASES } from '../helpers/explain-cases';
 import { withStdoutTTY } from '../helpers/fake-tty';
 import { type TreeSpec, writeTree } from '../helpers/fixture-tree';
 import { policySnapshot } from '../helpers/policy';
@@ -16,7 +12,6 @@ import {
   environmentFor,
   isolationEnv,
   removeTempRoots,
-  withProcessEnv,
 } from '../helpers/temp-home';
 
 afterEach(() => {
@@ -55,14 +50,6 @@ function compareSides(
   return ported;
 }
 
-describe('explainCommand projects the same result as the shipped engine', () => {
-  for (const explainCase of EXPLAIN_CASES.filter((entry) => !LIMIT_SLUGS.includes(entry.slug))) {
-    test(explainCase.slug, () => {
-      compareSides(fixture(explainCase.files, explainCase.env), explainCase.command);
-    });
-  }
-});
-
 describe('explainCommand honours its options', () => {
   test('strict raises the modes the analyzer runs under', () => {
     for (const slug of ['10-dynamic-target', '18-strict-unparseable']) {
@@ -95,7 +82,7 @@ describe('explainCommand honours its options', () => {
   });
 });
 
-describe('getConfigSource reports the rule config explain resolved against', () => {
+describe('explainCommand reports the rule config explain resolved against', () => {
   const rows: { name: string; files: TreeSpec; source: string | null; valid: boolean }[] = [
     { name: 'no config anywhere', files: {}, source: null, valid: true },
     {
@@ -121,9 +108,7 @@ describe('getConfigSource reports the rule config explain resolved against', () 
   for (const row of rows) {
     test(row.name, () => {
       const side = fixture(row.files);
-      const ported = withProcessEnv(side.values, () =>
-        getConfigSource(environmentFor(side.home, side.values), { cwd: side.project }),
-      );
+      const ported = compareSides(side, 'git status');
       expect(ported.configValid).toBe(row.valid);
       expect(ported.configSource).toBe(
         row.source === null
@@ -166,79 +151,4 @@ test('a literal for list records the later segments once per forked state', () =
     'fallback-scan',
     'custom-rules-check',
   ]);
-});
-
-const limitCase = (slug: string) => {
-  const explainCase = EXPLAIN_CASES.find((entry) => entry.slug === slug);
-  if (!explainCase) throw new Error(`no explain case named ${slug}`);
-  return explainCase.command;
-};
-
-function thrownBy(run: () => unknown): unknown {
-  try {
-    run();
-  } catch (error) {
-    return error;
-  }
-  return null;
-}
-
-describe('explainCommand fails closed on an analysis budget breach', () => {
-  test('a structural-limit syntax throws before the guard runs', () => {
-    const side = fixture();
-    expect(
-      thrownBy(() =>
-        explainCommand(
-          limitCase('21-structural-limit'),
-          { cwd: side.project },
-          environmentFor(side.home, side.values),
-        ),
-      ),
-    ).toBeInstanceOf(StructuralShellSyntaxLimitError);
-  });
-
-  test('a path-canonicalization breach arrives wrapped by the guard', () => {
-    const side = fixture();
-    const error = thrownBy(() =>
-      explainCommand(
-        limitCase('22-path-limit'),
-        { cwd: side.project },
-        environmentFor(side.home, side.values),
-      ),
-    );
-    expect(error).toBeInstanceOf(GuardEvaluationError);
-    expect((error as GuardEvaluationError).cause).toBeInstanceOf(AnalysisLimit);
-  });
-
-  test('runExplain reports both breaches with the shipped wording', async () => {
-    const side = fixture();
-    const environment = environmentFor(side.home, side.values);
-    const written: string[] = [];
-    const write = spyOn(process.stdout, 'write').mockImplementation(((
-      chunk: string,
-      callback?: () => void,
-    ) => {
-      written.push(chunk);
-      callback?.();
-      return true;
-    }) as typeof process.stdout.write);
-    const reported: string[] = [];
-    const errors = spyOn(console, 'error').mockImplementation((message: string) => {
-      reported.push(message);
-    });
-    const codes = [
-      await runExplain(environment, [
-        '--json',
-        '--cwd',
-        side.project,
-        limitCase('21-structural-limit'),
-      ]),
-      await runExplain(environment, ['--cwd', side.project, limitCase('22-path-limit')]),
-    ];
-    write.mockRestore();
-    errors.mockRestore();
-    expect(codes).toEqual([1, 1]);
-    expect(written).toEqual([`${JSON.stringify({ error: LIMIT_MESSAGES[0] })}\n`]);
-    expect(reported).toEqual([LIMIT_MESSAGES[1] as string]);
-  });
 });

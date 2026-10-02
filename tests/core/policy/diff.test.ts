@@ -42,67 +42,16 @@ const PARANOID = normalizeGuiPolicy(
 );
 const POLICIES = [DEFAULTS, STRICT, PARANOID];
 
-describe('flattening a policy into displayed rows', () => {
-  test('the default policy flattens to one row per section with an empty list spelled (none)', () => {
-    expect(ported.flattenPolicy(DEFAULTS, true)).toEqual({
-      'safety.level': 'standard',
-      'workflow.worktree_mode': 'false',
-      'destructive_command_protection.enabled': 'true',
-      'destructive_command_protection.allow_paths': '(none)',
-      'secret_protection.enabled': 'true',
-      'secret_protection.deny_paths': '(none)',
-      'secret_protection.allow_paths': '(none)',
-      'audit.retention_days': '30',
-    });
-  });
-
-  test('a configured policy adds one row per set override and joins path lists with commas', () => {
-    expect(ported.flattenPolicy(STRICT, true)).toEqual({
-      'safety.level': 'strict',
-      'safety.overrides.fail_closed': 'true',
-      'safety.overrides.paranoid_rm': 'false',
-      'workflow.worktree_mode': 'true',
-      'destructive_command_protection.enabled': 'true',
-      'destructive_command_protection.overrides.git.reset-hard': 'off',
-      'destructive_command_protection.allow_paths': '/srv/scratch, /srv/build',
-      'secret_protection.enabled': 'false',
-      'secret_protection.overrides.secret.basename.env': 'off',
-      'secret_protection.deny_paths': '/srv/vault',
-      'secret_protection.allow_paths': '/srv/public',
-      'audit.retention_days': '5',
-    });
-  });
-
-  test('an unset override contributes no row at all', () => {
-    expect(ported.flattenPolicy(PARANOID, true)).toEqual({
-      'safety.level': 'paranoid',
-      'safety.overrides.paranoid_interpreters': 'true',
-      'workflow.worktree_mode': 'false',
-      'destructive_command_protection.enabled': 'false',
-      'destructive_command_protection.allow_paths': '(none)',
-      'secret_protection.enabled': 'true',
-      'secret_protection.deny_paths': '(none)',
-      'secret_protection.allow_paths': '(none)',
-      'audit.retention_days': '90',
-    });
-  });
-
-  test.each([
-    ['the default policy', DEFAULTS],
-    ['a strict policy', STRICT],
-    ['a paranoid policy', PARANOID],
-  ])('audit is user scope only, so %s drops it from a project comparison', (_label, policy) => {
-    expect(ported.flattenPolicy(policy, false)).toEqual(
-      Object.fromEntries(
-        Object.entries(ported.flattenPolicy(policy, true)).filter(
-          ([field]) => field !== 'audit.retention_days',
-        ),
-      ),
-    );
-  });
-});
-
 describe('the changed rows between two policies', () => {
+  test('raising the default policy to paranoid reports every field that moved', () => {
+    expect(ported.diffPolicyRows(DEFAULTS, PARANOID, true)).toEqual([
+      { field: 'safety.level', before: 'standard', after: 'paranoid' },
+      { field: 'destructive_command_protection.enabled', before: 'true', after: 'false' },
+      { field: 'audit.retention_days', before: '30', after: '90' },
+      { field: 'safety.overrides.paranoid_interpreters', before: undefined, after: 'true' },
+    ]);
+  });
+
   test('raising the default policy to strict reports every field that moved', () => {
     expect(ported.diffPolicyRows(DEFAULTS, STRICT, true)).toEqual([
       { field: 'safety.level', before: 'standard', after: 'strict' },

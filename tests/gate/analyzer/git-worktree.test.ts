@@ -27,38 +27,6 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-const TOKEN_ROWS: readonly (readonly string[])[] = [
-  ['git', 'status'],
-  ['git'],
-  ['git', '-C', 'sub', 'status'],
-  ['git', '-C', 'sub', '-C', 'deep', 'status'],
-  ['git', '-Csub', 'status'],
-  ['git', '-C', 'link', 'status'],
-  ['git', '-C', 'missing', 'status'],
-  ['git', '-C', 'file.txt', 'status'],
-  ['git', '-C', '..', 'status'],
-  ['git', '-C', ''],
-  ['git', '-C'],
-  ['git', '-C', 'sub', '-C', '..', 'status'],
-  ['git', '--git-dir', '.git', 'status'],
-  ['git', '--git-dir=.git', 'status'],
-  ['git', '--work-tree', '.', 'status'],
-  ['git', '--work-tree=.', 'status'],
-  ['git', '-C', 'sub', '--git-dir', 'x', 'status'],
-  ['git', '--git-dir', 'x', '-C', 'sub', 'status'],
-  ['git', '-c', 'core.hooksPath=/tmp/hooks', 'status'],
-  ['git', '-ccore.hooksPath=/tmp/hooks', 'status'],
-  ['git', '--namespace', 'ns', '-C', 'sub', 'status'],
-  ['git', '--super-prefix', 'p/', '-C', 'sub', 'status'],
-  ['git', '--config-env', 'K=V', '-C', 'sub', 'status'],
-  ['git', '--no-pager', '-C', 'sub', 'status'],
-  ['git', '--', '-C', 'sub'],
-  ['git', 'status', '-C', 'sub'],
-  ['git', '-C', 'sub', '--', '-C', 'deep'],
-  ['git', '-C', 'sub/deep', 'status'],
-  ['git', '-C', 'sub', '-C', 'deep', '-C', '../..', 'status'],
-];
-
 describe('gate/analyzer/git/worktree', () => {
   test('the global-option table names every option that consumes the next token', () => {
     expect([...GIT_GLOBAL_OPTS_WITH_VALUE].sort()).toStrictEqual([
@@ -185,15 +153,6 @@ describe('gate/analyzer/git/worktree', () => {
         row.tokens.join(' '),
       ).toStrictEqual(row.context());
     }
-  });
-
-  test('the table reaches a resolved directory and an explicit context', () => {
-    const contexts = TOKEN_ROWS.map((tokens) =>
-      getGitExecutionContext(tokens, paths.repo, processPathResolver),
-    );
-    expect(contexts.filter((context) => context.gitCwd === paths.sub).length).toBeGreaterThan(2);
-    expect(contexts.filter((context) => context.gitCwd === null).length).toBeGreaterThan(2);
-    expect(contexts.filter((context) => context.hasExplicitGitContext).length).toBeGreaterThan(3);
   });
 
   test('a Git context environment override is read from the environment or the assignments', () => {

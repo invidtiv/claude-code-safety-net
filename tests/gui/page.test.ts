@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { guiDocument } from '@/gui/assets';
 import { renderPolicyGuiHtml } from '@/gui/page';
-import { normalizePage } from '../helpers/gui-page';
 
 const FRONTEND = join(import.meta.dir, '..', '..', 'src', 'gui', 'frontend');
 const asset = (name: string) => readFileSync(join(FRONTEND, name), 'utf-8');
@@ -20,11 +19,7 @@ describe('the served GUI page', () => {
     const rendered = renderPolicyGuiHtml(TOKEN);
 
     expect(rendered.replace(`{"token":"${TOKEN}"}`, '')).toBe(guiDocument);
-    const ported = normalizePage(rendered, TOKEN);
-    expect(ported.modules).toHaveLength(7);
-    expect(ported.head).toContain(
-      '<script id="ccsn-data" type="application/json">{"token":"<token>"}</script>',
-    );
+    expect(dataPayload(rendered)).toStrictEqual({ token: TOKEN });
   });
 
   test('a token that closes the data tag parses back to itself on both sides', () => {

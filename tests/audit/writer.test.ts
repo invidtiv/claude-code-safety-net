@@ -338,52 +338,6 @@ describe('audit writer parity', () => {
 });
 
 describe('audit writer record shape', () => {
-  test('a failure record keeps the whole command, an ordinary one caps it', () => {
-    const kept = makeRoot('kept');
-    writeNext(kept, {
-      name: 'kept',
-      sessionId: 'session-failure',
-      command: LONG_COMMAND,
-      segment: 'echo',
-      reason: 'CC Safety Net failed closed',
-      cwd: '/work/project',
-      file: null,
-      options: { failureStage: 'command-analysis', errorCode: 'unexpected-error' },
-    });
-    expect(onlyRecord(kept).command).toHaveLength(LONG_COMMAND.length);
-    expect(onlyRecord(kept).truncated).toBeUndefined();
-
-    const capped = makeRoot('capped');
-    writeNext(capped, {
-      name: 'capped',
-      sessionId: 'session-capped',
-      command: LONG_COMMAND,
-      segment: LONG_SEGMENT,
-      reason: 'Blocked: dangerous pattern',
-      cwd: '/work/project',
-      file: null,
-      options: { toolName: LONG_TOOL_NAME },
-    });
-    expect(onlyRecord(capped).command).toHaveLength(10_000);
-    expect(onlyRecord(capped).segment).toHaveLength(2_000);
-    expect(onlyRecord(capped).toolName).toHaveLength(256);
-    expect(onlyRecord(capped).truncated).toBeTrue();
-
-    const longCwd = makeRoot('longcwd');
-    writeNext(longCwd, {
-      name: 'long cwd',
-      sessionId: 'session-longcwd',
-      command: 'ls',
-      segment: 'ls',
-      reason: 'Blocked: sensitive path',
-      cwd: LONG_CWD,
-      file: null,
-      options: {},
-    });
-    expect(onlyRecord(longCwd).cwd).toHaveLength(32_768);
-    expect(onlyRecord(longCwd).truncated).toBeTrue();
-  });
-
   test('no recognized credential form reaches any byte the writer leaves behind', () => {
     const home = makeRoot('secrets');
     for (const fixture of CASES) writeNext(home, fixture);

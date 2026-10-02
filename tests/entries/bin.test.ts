@@ -1,9 +1,8 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { findHookIntegrationByFlag, type HookIntegration } from '@/entries/hook-integrations';
 import { createSpawnEnv } from '../helpers';
-import { captureHookRun, clearAuditLogs, readAuditEntries } from '../helpers/hook-capture';
+import { clearAuditLogs, readAuditEntries } from '../helpers/hook-capture';
 import {
   createHookFixture,
   HOOK_HOSTS,
@@ -49,26 +48,11 @@ function runEntry(argv: readonly string[], row: HookRow) {
   };
 }
 
-async function runInProcess(flag: string, row: HookRow) {
-  clearAuditLogs(auditHome);
-  const integration = findHookIntegrationByFlag([flag]);
-  expect(integration).toBeDefined();
-  const captured = await captureHookRun(
-    row.stdin,
-    { ...hostEnv(fixture, auditHome), ...row.env },
-    () => (integration as HookIntegration).run(),
-  );
-  return { ...captured, audit: readAuditEntries(auditHome), exitCode: 0 };
-}
-
 const denialRow = (HOOK_HOSTS.find((host) => host.id === 'claude-code') as HookHost)
   .rows(fixture)
   .find((row) => row.name === CLAUDE_DENIAL) as HookRow;
 
-function expectOutcome(
-  ported: Awaited<ReturnType<typeof runInProcess>> | ReturnType<typeof runEntry>,
-  expected: HookRow['expected'],
-): void {
+function expectOutcome(ported: ReturnType<typeof runEntry>, expected: HookRow['expected']): void {
   expect(ported.exitCode).toBe(0);
   expect(ported.stderr).toHaveLength(expected.stderr ?? 0);
   expect(ported.audit.map((line) => line.entry.decision)).toEqual(
@@ -87,16 +71,11 @@ function expectOutcome(
 
 for (const host of HOOK_HOSTS) {
   describe(`hook ${host.flag}`, () => {
-    for (const row of host.rows(fixture)) {
+    for (const row of host.rows(fixture).filter((row) => SPAWNED.has(row.name))) {
       test(
         row.name,
-        async () => {
-          expectOutcome(
-            SPAWNED.has(row.name)
-              ? runEntry(['hook', host.flag], row)
-              : await runInProcess(host.flag, row),
-            row.expected,
-          );
+        () => {
+          expectOutcome(runEntry(['hook', host.flag], row), row.expected);
         },
         60_000,
       );

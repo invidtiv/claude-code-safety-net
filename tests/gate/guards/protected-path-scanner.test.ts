@@ -80,62 +80,6 @@ function completedWalk(outcome: Outcome<Walk>): Walk {
   return outcome.value;
 }
 
-const CD_SOURCES: readonly string[] = [
-  `cd ${MARKER}`,
-  'cd /nowhere && rm -rf x',
-  'cd - && rm -rf x',
-  'cd ..; rm -rf x',
-  'cd ~ ; rm -rf x',
-  'cd "$HOME" ; rm -rf x',
-  'cd $DIR ; rm -rf x',
-  'DIR=policy; cd $DIR; rm -rf x',
-  'DIR=policy && cd ${DIR} && rm -rf x',
-  'DIR=policy; cd ${OTHER:-$DIR}; rm -rf x',
-  'DIR=policy; cd ${DIR:+alt}; rm -rf x',
-  'EMPTY=; cd ${EMPTY:-policy}; rm -rf x',
-  'EMPTY=; cd ${EMPTY-policy}; rm -rf x',
-  'A=policy B=$A; cd $B; rm -rf x',
-  'A=policy; B=$A; cd $B; rm -rf x',
-  'cd policy | cd link | rm -rf x',
-  'cd policy & cd link & rm -rf x',
-  'cd policy || cd link || rm -rf x',
-  'sudo cd policy && rm -rf x',
-  'env -i cd policy && rm -rf x',
-  'command cd policy && rm -rf x',
-  'FOO=1 cd policy && rm -rf x',
-  'cd link && rm -rf x',
-  'cd policy/nested && rm -rf x',
-  'cd /absolute/missing && rm -rf x',
-  '(cd policy && rm -rf x)',
-  'cd; rm -rf x',
-  'cd ""; rm -rf x',
-  './cd policy && rm -rf x',
-  '/usr/bin/cd policy && rm -rf x',
-];
-
-const SEGMENT_SOURCES: readonly string[] = [
-  `rm -rf ${MARKER}`,
-  `rm -rf policy/${MARKER} && echo done`,
-  `mv ${MARKER} /tmp/elsewhere`,
-  `mv -t /tmp ${MARKER}`,
-  `echo hi > ${MARKER}`,
-  `echo hi >> policy/${MARKER}`,
-  `echo hi 2> ${MARKER}`,
-  `echo hi >| ${MARKER}`,
-  `cat < ${MARKER}`,
-  `cat <<EOF > ${MARKER}\nbody\nEOF`,
-  `DEST=${MARKER}; echo hi > $DEST`,
-  'DEST=policy.json; echo hi > ${DEST}',
-  'DEST=policy.json echo hi > $DEST',
-  `find . -name '*.json' -delete`,
-  `find policy -delete`,
-  `echo "unclosed > ${MARKER}`,
-  `echo hi > ${MARKER}; echo second > other`,
-  `A=1 B=2`,
-  `A=1 B=2; rm -rf ${MARKER}`,
-  `rm -rf x && echo hi > ${MARKER}`,
-];
-
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'next-protected-path-'));
   home = join(root, 'home');
@@ -171,6 +115,10 @@ describe('protected path scanner walk', () => {
         cwd: () => canonical(workspace, 'policy', 'nested'),
       },
       { source: 'cd ..; rm -rf x', cwd: () => canonical(root) },
+      {
+        source: `cd ${join(root, 'link').split(sep).join('/')} && rm -rf x`,
+        cwd: () => canonical(root, 'policy'),
+      },
       { source: 'cd ~ ; rm -rf x', cwd: () => canonical(home) },
       { source: 'cd "$HOME" ; rm -rf x', cwd: () => canonical(home) },
       { source: 'DIR=policy; cd $DIR; rm -rf x', cwd: () => canonical(workspace, 'policy') },
@@ -225,31 +173,6 @@ describe('protected path scanner walk', () => {
     }
   });
 
-  test('the fixed table moves the tracked cwd and returns targets', () => {
-    const trackedCwds = new Set(
-      CD_SOURCES.flatMap((source) =>
-        completedWalk(walkPair(source, workspace, null)).observations.flatMap(
-          (observation) => observation.match(/cwd=(\S+)/)?.[1] ?? [],
-        ),
-      ),
-    );
-    expect(trackedCwds).toContain(canonical(workspace, 'policy'));
-    expect(trackedCwds).toContain(canonical(home));
-    expect(trackedCwds).toContain(canonical(root));
-    expect(
-      completedWalk(
-        walkPair(`cd ${join(root, 'link').split(sep).join('/')} && rm -rf x`, workspace, null),
-      ).observations.some((observation) =>
-        observation.includes(`cwd=${canonical(root, 'policy')}`),
-      ),
-    ).toBeTrue();
-    expect(
-      SEGMENT_SOURCES.map(
-        (source) => completedWalk(walkPair(source, workspace, MARKER)).result,
-      ).filter((result) => result !== null).length,
-    ).toBeGreaterThan(5);
-  });
-
   test('a structural-limit read throws, an incomplete one is malformed', () => {
     const observations: Observation[] = [];
     const facts = {
@@ -282,6 +205,8 @@ describe('tracked shell variable expansion', () => {
       readonly variables: readonly (readonly [string, string])[];
       readonly expanded: string;
     }[] = [
+      { text: '$A', variables: [], expanded: '$A' },
+      { text: '$A', variables: [['A', 'x']], expanded: 'x' },
       { text: '$A/$B', variables: [['A', '/one']], expanded: '/one/$B' },
       { text: '${A}/${B}', variables: [['A', '/one']], expanded: '/one/${B}' },
       { text: '$A$A$A', variables: [['A', 'x']], expanded: 'xxx' },
@@ -311,11 +236,6 @@ describe('tracked shell variable expansion', () => {
         `${row.text} ${JSON.stringify(row.variables)}`,
       ).toBe(row.expanded);
     }
-  });
-
-  test('an unset name is left as written and a set one is substituted', () => {
-    expect(expandTrackedShellVariables('$A', new Map())).toBe('$A');
-    expect(expandTrackedShellVariables('$A', new Map([['A', 'x']]))).toBe('x');
   });
 });
 

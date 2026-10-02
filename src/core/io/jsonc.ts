@@ -231,31 +231,3 @@ export function findJsonArrayProperty(
 
   return undefined;
 }
-
-/** @internal */
-export function findJsonStringItems(
-  content: string,
-  array: TextRange,
-  stringError: string,
-): Array<{ range: TextRange; value: string }> {
-  const items: Array<{ range: TextRange; value: string }> = [];
-  let index = array.start + 1;
-
-  while (index < array.end) {
-    const next = skipJsonComment(content, index);
-    if (next !== index) {
-      index = next;
-      continue;
-    }
-    if (content[index] === '"') {
-      const end = findJsonStringEnd(content, index, stringError);
-      const value: unknown = JSON.parse(content.slice(index, end));
-      if (typeof value === 'string') items.push({ range: { start: index, end }, value });
-      index = end;
-      continue;
-    }
-    index++;
-  }
-
-  return items;
-}

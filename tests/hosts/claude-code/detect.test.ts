@@ -84,13 +84,6 @@ describe('asking whether a specific plugin id is installed', () => {
       )
     ).outcome;
 
-  test('finds the pre-rename id the install flow cleans up after', async () => {
-    expect(await legacyInstalled({ [INSTALLED]: installedPlugins(LEGACY_ID, PLUGIN_ID) })).toEqual({
-      kind: 'returned',
-      value: true,
-    });
-  });
-
   test.each([
     ['only the current id is recorded', OURS],
     ['nothing was ever installed', {} as TreeSpec],
@@ -128,15 +121,5 @@ describe('with CLAUDE_CONFIG_DIR naming another directory', () => {
       kind: 'returned',
       value: ABSENT,
     });
-  });
-
-  test('finds a specific plugin id in the relocated install record', async () => {
-    expect(
-      (
-        await differential({ seed: relocatedInstall(true), env: RELOCATED }, (environment) =>
-          hasClaudeInstalledPlugin(environment, PLUGIN_ID),
-        )
-      ).outcome,
-    ).toEqual({ kind: 'returned', value: true });
   });
 });

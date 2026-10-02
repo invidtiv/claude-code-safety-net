@@ -104,10 +104,6 @@ export function analyzePowerShellCommandViewMatch(
   command: CommandView,
   hasPipelineInput: boolean,
   options: AnalyzePowerShellRemoveItemOptions,
-  ctx: RecursiveDeleteTargetContext = createRecursiveDeleteTargetContext({
-    ...options,
-    allowPaths: options.policy?.destructiveCommandAllowPaths,
-  }),
 ): DestructiveCommandRuleMatch | null {
   return analyzePowerShellSegment(
     command.words.map((word) => ({
@@ -116,7 +112,10 @@ export function analyzePowerShellCommandViewMatch(
       dynamic: word.provenance !== 'literal',
     })),
     hasPipelineInput,
-    ctx,
+    createRecursiveDeleteTargetContext({
+      ...options,
+      allowPaths: options.policy?.destructiveCommandAllowPaths,
+    }),
     options.policy,
   );
 }

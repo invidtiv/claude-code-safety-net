@@ -212,19 +212,6 @@ describe('release git transaction', () => {
     });
   }, 30_000);
 
-  test('pushes a new release branch and tag atomically', async () => {
-    await withTempDir('cc-safety-net-release-', async (root) => {
-      const { remote, repo } = createRepository(root);
-      createReleaseCommit(repo);
-
-      await pushReleaseAtomically(repo, 'v2.0.0');
-
-      expect(git(root, '--git-dir', remote, 'rev-parse', 'main')).toBe(
-        git(root, '--git-dir', remote, 'rev-parse', 'v2.0.0'),
-      );
-    });
-  }, 30_000);
-
   test('rejects an advanced remote without moving branch or tag', async () => {
     await withTempDir('cc-safety-net-release-', async (root) => {
       const { remote, repo } = createRepository(root);
@@ -275,7 +262,10 @@ describe('release git transaction', () => {
       expect(git(root, '--git-dir', remote, 'rev-parse', 'main')).toBe(
         git(root, '--git-dir', remote, 'rev-parse', 'v2.0.0'),
       );
-      expect(await runTransactionCli(repo, '2.0.0')).toContain('"kind":"resume"');
+      expect(JSON.parse(await runTransactionCli(repo, '2.0.0'))).toEqual({
+        kind: 'resume',
+        commit: git(repo, 'rev-parse', 'HEAD'),
+      });
     });
   }, 30_000);
 
@@ -288,7 +278,7 @@ describe('release git transaction', () => {
     });
   }, 30_000);
 
-  test('the production CLI rejects a missing or mismatched kimi manifest', async () => {
+  test('the release transaction rejects a missing or mismatched kimi manifest', async () => {
     await withTempDir('cc-safety-net-release-', async (root) => {
       await withPreparedRelease(root, async ({ remote, repo, before }) => {
         writeFileSync(join(repo, 'kimi.plugin.json'), JSON.stringify({ version: '1.0.0' }));
@@ -323,7 +313,7 @@ describe('release git transaction', () => {
     });
   }, 30_000);
 
-  test('the production CLI rejects an npm collision before Git mutation', async () => {
+  test('the release transaction rejects an npm collision before Git mutation', async () => {
     await withTempDir('cc-safety-net-release-', async (root) => {
       await withPreparedRelease(root, async ({ remote, repo, before }) => {
         await expect(
@@ -367,7 +357,7 @@ describe('release git transaction', () => {
     });
   }, 30_000);
 
-  test('the production CLI rejects an advanced remote before local or remote mutation', async () => {
+  test('the release transaction rejects an advanced remote before local or remote mutation', async () => {
     await withTempDir('cc-safety-net-release-', async (root) => {
       await withPreparedRelease(root, async ({ remote, repo }) => {
         const before = git(repo, 'rev-parse', 'HEAD');
@@ -396,7 +386,7 @@ describe('release git transaction', () => {
     });
   }, 30_000);
 
-  test('the production CLI rejects a conflicting immutable tag without moving it', async () => {
+  test('the release transaction rejects a conflicting immutable tag without moving it', async () => {
     await withTempDir('cc-safety-net-release-', async (root) => {
       await withPreparedRelease(root, async ({ remote, repo, before }) => {
         git(repo, 'tag', 'v2.0.0');

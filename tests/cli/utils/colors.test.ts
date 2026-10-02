@@ -1,33 +1,25 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  colorizeToken as portedColorizeToken,
-  colors as portedColors,
-  generateDistinctColor as portedGenerateDistinctColor,
-  shouldUseColor as portedShouldUseColor,
-} from '@/cli/utils/colors';
+import { colorizeToken, colors } from '@/cli/utils/colors';
 import { withStdoutTTY } from '../../helpers/fake-tty';
 import { withProcessEnv } from '../../helpers/temp-home';
 
 const NAMES = ['red', 'green', 'dim', 'bold', 'yellow'] as const;
 
-const portedSample = () => ({
-  named: NAMES.map((name) => portedColors[name]('x')),
-  distinct: Array.from({ length: 8 }, (_value, index) => portedGenerateDistinctColor(index, 3)),
-  token: portedColorizeToken('tok', 2, 3),
+const renderSample = () => ({
+  named: NAMES.map((name) => colors[name]('x')),
+  tokens: Array.from({ length: 8 }, (_value, index) => colorizeToken('tok', index, 3)),
 });
 
 const PLAIN = {
   named: ['x', 'x', 'x', 'x', 'x'],
-  distinct: ['', '', '', '', '', '', '', ''],
-  token: '"tok"',
+  tokens: ['"tok"', '"tok"', '"tok"', '"tok"', '"tok"', '"tok"', '"tok"', '"tok"'],
 };
 
 describe('cli/utils/colors', () => {
-  test('a TTY without NO_COLOR colors both implementations identically', () => {
+  test('a TTY colors named text and tokens with the seeded palette', () => {
     withStdoutTTY(true, () =>
       withProcessEnv({ NO_COLOR: undefined }, () => {
-        expect(portedShouldUseColor()).toBe(true);
-        expect(portedSample()).toEqual({
+        expect(renderSample()).toEqual({
           named: [
             '\x1b[31mx\x1b[0m',
             '\x1b[32mx\x1b[0m',
@@ -35,17 +27,16 @@ describe('cli/utils/colors', () => {
             '\x1b[1mx\x1b[0m',
             '\x1b[33mx\x1b[0m',
           ],
-          distinct: [
-            '\x1b[38;5;202m',
-            '\x1b[38;5;63m',
-            '\x1b[38;5;51m',
-            '\x1b[38;5;208m',
-            '\x1b[38;5;200m',
-            '\x1b[38;5;49m',
-            '\x1b[38;5;123m',
-            '\x1b[38;5;190m',
+          tokens: [
+            '\x1b[38;5;202m"tok"\x1b[0m',
+            '\x1b[38;5;63m"tok"\x1b[0m',
+            '\x1b[38;5;51m"tok"\x1b[0m',
+            '\x1b[38;5;208m"tok"\x1b[0m',
+            '\x1b[38;5;200m"tok"\x1b[0m',
+            '\x1b[38;5;49m"tok"\x1b[0m',
+            '\x1b[38;5;123m"tok"\x1b[0m',
+            '\x1b[38;5;190m"tok"\x1b[0m',
           ],
-          token: '\x1b[38;5;51m"tok"\x1b[0m',
         });
       }),
     );
@@ -55,11 +46,10 @@ describe('cli/utils/colors', () => {
     { label: 'NO_COLOR wins over the TTY', isTTY: true, noColor: '1' },
     { label: 'a pipe stays plain', isTTY: false, noColor: undefined },
   ]) {
-    test(`${terminal.label} on both implementations`, () => {
+    test(terminal.label, () => {
       withStdoutTTY(terminal.isTTY, () =>
         withProcessEnv({ NO_COLOR: terminal.noColor }, () => {
-          expect(portedShouldUseColor()).toBe(false);
-          expect(portedSample()).toEqual(PLAIN);
+          expect(renderSample()).toEqual(PLAIN);
         }),
       );
     });

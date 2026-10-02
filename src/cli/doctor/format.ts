@@ -134,8 +134,7 @@ export function formatEngineSelfTestSection(selfTest: SelfTestSummary): string {
   return lines.join('\n');
 }
 
-/** @internal */
-export function formatRulesTable(rules: EffectiveRule[]): string {
+function formatRulesTable(rules: EffectiveRule[]): string {
   if (rules.length === 0) {
     return '   (no custom rules)';
   }

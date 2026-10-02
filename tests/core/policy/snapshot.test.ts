@@ -390,6 +390,9 @@ const ROWS: readonly Row[] = [
     },
     check: (snapshot) => {
       const reason = reasonOf(snapshot);
+      expect(reason).toContain(DROPPED_SOURCE_ADVICE);
+      expect(reason).toContain('unknown override key');
+      expect(reason).toContain('invalid policy config:');
       expect(reason.indexOf(DROPPED_SOURCE_ADVICE)).toBeLessThan(
         reason.indexOf('unknown override key'),
       );

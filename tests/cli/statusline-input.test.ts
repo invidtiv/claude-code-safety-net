@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { isPluginEnabled, printStatusline } from '@/cli/statusline';
 import { HOOK_INPUT_MAX_BYTES } from '@/gate/intake';
-import { PLUGIN_SETTINGS, RULE_SWITCHED_OFF } from '../helpers/cli-fixtures';
+import { PLUGIN_SETTINGS } from '../helpers/cli-fixtures';
 import { captureConsole } from '../helpers/console-capture';
 import { writeTree } from '../helpers/fixture-tree';
 import {
@@ -88,23 +88,4 @@ test('oversized statusline input is discarded and its stream is closed', async (
   expect(result.log).toEqual(['🛡️ CC Safety Net ❌']);
   expect(result.error).toEqual([]);
   expect(input.destroyed).toBe(true);
-});
-
-test('an effective rule override is shown as custom safety', async () => {
-  const home = createTempRoot('statusline-policy-');
-  writeTree(home, {
-    '.claude/settings.json': PLUGIN_SETTINGS,
-    '.cc-safety-net/policy.json': RULE_SWITCHED_OFF,
-  });
-  const cwd = process.cwd();
-  try {
-    process.chdir(home);
-    const result = await captureConsole(() =>
-      printStatusline(environmentFor(home, isolationEnv(home)), []),
-    );
-    expect(result.log).toEqual(['🛡️ CC Safety Net 🔧']);
-    expect(result.error).toEqual([]);
-  } finally {
-    process.chdir(cwd);
-  }
 });

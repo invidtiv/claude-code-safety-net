@@ -3,33 +3,19 @@ import * as budgetModule from '@/core/budget';
 import { AnalysisLimit, LIMITS, type LimitKind } from '@/core/budget';
 import { createProcessEnvironment } from '@/core/environment';
 import { resolveProtectedGitMetadata } from '@/core/git/metadata';
-import { analyzeCommandWithProgram, analyzerCapBreach } from '@/gate/analyzer';
+import { analyzerCapBreach } from '@/gate/analyzer';
 import { evaluateGuard } from '@/gate/pipeline';
-import { bashCall, createGateTree, portedVerdict } from '../helpers/gate-differential';
-import { policySnapshot, testModes } from '../helpers/policy';
+import { bashCall, createGateTree } from '../helpers/gate-differential';
+import { policySnapshot } from '../helpers/policy';
 
 const tree = createGateTree('gate-analysis-budget-');
 const environment = createProcessEnvironment();
 const snapshot = policySnapshot();
 const dependencies = { loadPolicySnapshot: () => snapshot, resolveGitMetadata: () => null };
-const modes = testModes('standard');
 
 afterAll(() => {
   tree.remove();
 });
-
-const analysisInput = {
-  cwd: tree.workspace,
-  shell: 'posix' as const,
-  policySnapshot: snapshot,
-  environment,
-  protectedGitMetadata: null,
-  effectiveCapabilities: modes.capabilities,
-  strict: modes.strict,
-  paranoidRm: modes.paranoidRm,
-  paranoidInterpreters: modes.paranoidInterpreters,
-  worktreeMode: modes.worktreeMode,
-};
 
 function copies(count: number, make: (index: number) => string) {
   return Array.from({ length: count }, (_, index) => make(index));
@@ -80,25 +66,34 @@ const ROWS: readonly { kind: LimitKind; name: string; breaching: string; below: 
     breaching: `parallel echo ${copies(149, () => 'w').join(' ')} {} ::: ${numberedArgs(120)}`,
     below: `parallel echo ${copies(149, () => 'w').join(' ')} {} ::: ${numberedArgs(100)}`,
   },
+  {
+    kind: 'wrapperPeelIterations',
+    name: 'env wrapper peel iterations',
+    breaching: `${copies(21, () => 'env').join(' ')} echo ok`,
+    below: `${copies(19, () => 'env').join(' ')} echo ok`,
+  },
+  {
+    kind: 'trackedHeredocFiles',
+    name: 'tee and redirect heredoc files',
+    breaching: `tee ${copies(64, (index) => `sink${index}`).join(' ')} > extra <<'BODY'\nhello\nBODY`,
+    below: `tee ${copies(63, (index) => `sink${index}`).join(' ')} > extra <<'BODY'\nhello\nBODY`,
+  },
+  {
+    kind: 'controlFlowStates',
+    name: 'GIT_DIR control-flow states',
+    breaching: copies(64, (index) => `export GIT_DIR=g${index}`).join(' && '),
+    below: copies(63, (index) => `export GIT_DIR=g${index}`).join(' && '),
+  },
+  {
+    kind: 'derivedTokens',
+    name: 'derived command work',
+    breaching: `unmapped-head ${copies(200, () => 'sh').join(' ')}`,
+    below: `unmapped-head ${copies(100, () => 'sh').join(' ')}`,
+  },
 ];
-
-function breachedKind(command: string): LimitKind | 'analyzed without a breach' {
-  try {
-    analyzeCommandWithProgram(command, analysisInput);
-    return 'analyzed without a breach';
-  } catch (error) {
-    if (error instanceof AnalysisLimit) return error.kind;
-    throw error;
-  }
-}
 
 describe('one budget, one report per analyzer cap', () => {
   for (const row of ROWS) {
-    test(`${row.name}: the counter that breaches is the one the row names`, () => {
-      expect(breachedKind(row.breaching)).toBe(row.kind);
-      expect(breachedKind(row.below)).toBe('analyzed without a breach');
-    });
-
     test(`${row.name}: the pipeline reports the denial and the audit class`, () => {
       expect(
         evaluateGuard(bashCall(row.breaching, tree.workspace), { environment, dependencies }),
@@ -113,27 +108,15 @@ describe('one budget, one report per analyzer cap', () => {
           evidence: { command: row.breaching, segment: row.breaching },
         },
       });
-    });
-
-    test(`${row.name}: the shipped gate reaches the same verdict, and not below the cap`, () => {
-      expect(
-        portedVerdict(bashCall(row.breaching, tree.workspace), environment, dependencies).reason,
-      ).toBe(LIMITS[row.kind].reason);
-      expect(
-        portedVerdict(bashCall(row.below, tree.workspace), environment, dependencies).reason,
-      ).not.toBe(LIMITS[row.kind].reason);
+      const below = evaluateGuard(bashCall(row.below, tree.workspace), {
+        environment,
+        dependencies,
+      });
+      expect(below.errorCode).not.toBe(LIMITS[row.kind].errorCode);
+      if (below.decision.kind === 'deny')
+        expect(below.decision.reason).not.toBe(LIMITS[row.kind].reason);
     });
   }
-
-  test('the rows cover every analyzer cap the table names', () => {
-    expect([...new Set(ROWS.map((row) => row.kind))].sort()).toStrictEqual([
-      'controlFlowStates',
-      'derivedCommandShape',
-      'derivedTokens',
-      'trackedHeredocFiles',
-      'wrapperPeelIterations',
-    ]);
-  });
 
   test('and no other kind in the table is answered as an analyzer cap', () => {
     const analyzerKinds = new Set<LimitKind>(ROWS.map((row) => row.kind));

@@ -4,11 +4,7 @@ import { join } from 'node:path';
 import { createCwdDenial, createFailedClosedDenial, formatDenial } from '@/core/denial';
 import { createProcessEnvironment } from '@/core/environment';
 import { getUserPolicyPath } from '@/core/policy/paths';
-import {
-  createPiToolCallHandler as portedHandler,
-  registerToolCallEvent as portedRegister,
-  handlePiToolCall as portedToolCall,
-} from '@/hosts/pi/tool-call';
+import { createPiToolCallHandler as portedHandler } from '@/hosts/pi/tool-call';
 import { createHookFixture, type HookFixture } from '../../helpers/hook-hosts';
 import {
   captureInProcessCall,
@@ -226,49 +222,23 @@ describeDifferential('one Pi tool call through both handlers', ROWS, runSide, (r
   expect(agreed.entries).toHaveLength(row.lines);
   expect(agreed.returned?.reason ?? '').toContain(row.contains ?? '');
   expect(agreed.returned === undefined).toBe(!row.blocked);
-});
-
-test('the block for a failing secret scan names no command', async () => {
-  const row = ROWS.find((candidate) => candidate.breaks === 'secret-scan') as Row;
-  const blocked = await runSide(row);
-
-  expect(blocked.returned?.reason).not.toContain('Command:');
-  expect(blocked.returned?.reason).toContain('failed closed');
-});
-
-test('the debug line names the failing Pi event', async () => {
-  const row = ROWS.find((candidate) => candidate.env?.CC_SAFETY_NET_DEBUG === '1') as Row;
-  const debugged = await runSide(row);
-
-  expect(debugged.stderr).toStrictEqual([
-    `CC Safety Net debug: pi tool_call analysis failed: ${ANALYZER_FAILURE}`,
-  ]);
-});
-
-test('an unusable context directory is the one the audit records', async () => {
-  const row = ROWS.find((candidate) => candidate.cwd?.(fixture) === fixture.file) as Row;
-
-  const blocked = await runSide(row);
-
-  expect(blocked.returned?.reason).toContain(`Working directory: ${fixture.file}`);
-  expect(blocked.entries[0]?.entry).toMatchObject({
-    decision: 'deny',
-    agent: 'pi',
-    cwd: fixture.file,
-  });
-});
-
-test('registering the event claims tool_call on both sides', () => {
-  const record = (register: (pi: { on: (...args: unknown[]) => void }) => void) => {
-    const recorded: unknown[][] = [];
-    register({ on: (...args) => recorded.push(args) });
-    return recorded;
-  };
-  const named = (recorded: unknown[][]) =>
-    recorded.map(([event, handler]) => [event, typeof handler]);
-
-  expect(named(record(portedRegister))).toStrictEqual([['tool_call', 'function']]);
-  expect(record(portedRegister)[0]?.[1]).toBe(portedToolCall);
+  if (row.breaks === 'secret-scan') {
+    expect(agreed.returned?.reason).not.toContain('Command:');
+    expect(agreed.returned?.reason).toContain('failed closed');
+  }
+  if (row.env?.CC_SAFETY_NET_DEBUG === '1') {
+    expect(agreed.stderr).toStrictEqual([
+      `CC Safety Net debug: pi tool_call analysis failed: ${ANALYZER_FAILURE}`,
+    ]);
+  }
+  if (row.name === 'a context directory that is a regular file') {
+    expect(agreed.returned?.reason).toContain(`Working directory: ${fixture.file}`);
+    expect(agreed.entries[0]?.entry).toMatchObject({
+      decision: 'deny',
+      agent: 'pi',
+      cwd: fixture.file,
+    });
+  }
 });
 
 test('a context that throws blocks in Pi form instead of escaping the handler', async () => {

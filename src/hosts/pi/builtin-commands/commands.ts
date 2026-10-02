@@ -32,7 +32,6 @@ export function registerBuiltinCommands(pi: PiCommandApi): void {
   });
 }
 
-/** @internal */
-export function buildSafetyNetCommandPrompt(args: string): string {
+function buildSafetyNetCommandPrompt(args: string): string {
   return `${CC_SAFETY_NET_TEMPLATE.slice(CC_SAFETY_NET_TEMPLATE.indexOf('# CC Safety Net')).trimEnd()}\n\n## User request\n\n${args.trim() || DEFAULT_USER_REQUEST}`;
 }

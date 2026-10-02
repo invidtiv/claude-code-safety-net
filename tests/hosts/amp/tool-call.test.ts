@@ -104,12 +104,6 @@ const ROWS: readonly Row[] = [
     lines: 1,
   },
   {
-    name: 'a shell command without a directory',
-    event: () => shell('git status', undefined),
-    rejected: false,
-    lines: 1,
-  },
-  {
     name: 'a workspace without a root',
     event: () => shell('git status'),
     api: 'no-root',
@@ -254,34 +248,23 @@ describeDifferential('one Amp tool call through both handlers', ROWS, runSide, (
   expect(agreed.entries).toHaveLength(row.lines);
   expect(agreed.returned?.action).toBe(row.rejected ? 'reject-and-continue' : 'allow');
   expect(JSON.stringify(agreed.returned)).toContain(row.contains ?? '');
-});
-
-test('the debug line names the failing Amp event', async () => {
-  const row = ROWS.find((candidate) => candidate.env?.CC_SAFETY_NET_DEBUG === '1') as Row;
-  const debugged = await runSide(row);
-
-  expect(debugged.stderr).toStrictEqual([
-    `CC Safety Net debug: amp tool.call analysis failed: ${ANALYZER_FAILURE}`,
-  ]);
-});
-
-test('the rejection for a failing secret scan names no command', async () => {
-  const row = ROWS.find((candidate) => candidate.breaks === 'secret-scan') as Row;
-  const rejected = JSON.stringify((await runSide(row)).returned);
-
-  expect(rejected).not.toContain('Command:');
-  expect(rejected).toContain('failed closed');
-});
-
-test('the directory a command runs in is the one the audit records', async () => {
-  const row = ROWS.find((candidate) => candidate.name.endsWith('outside the workspace')) as Row;
-
-  expect((await runSide(row)).entries[0]?.entry).toMatchObject({
-    decision: 'allow',
-    agent: 'amp',
-    command: 'git status',
-    cwd: realpathSync(fixture.outside),
-  });
+  if (row.env?.CC_SAFETY_NET_DEBUG === '1') {
+    expect(agreed.stderr).toStrictEqual([
+      `CC Safety Net debug: amp tool.call analysis failed: ${ANALYZER_FAILURE}`,
+    ]);
+  }
+  if (row.breaks === 'secret-scan') {
+    expect(JSON.stringify(agreed.returned)).not.toContain('Command:');
+    expect(JSON.stringify(agreed.returned)).toContain('failed closed');
+  }
+  if (row.name === 'a directory outside the workspace') {
+    expect(agreed.entries[0]?.entry).toMatchObject({
+      decision: 'allow',
+      agent: 'amp',
+      command: 'git status',
+      cwd: realpathSync(fixture.outside),
+    });
+  }
 });
 
 test('an API that throws rejects in Amp form instead of escaping the handler', async () => {

@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { AMP_MANAGED_HEADER } from '@/hosts/amp/artifact';
 import {
   ampArtifactCandidates,
-  getMaskingLocalFilePath,
   installAmp,
   resolveAmpArtifactPath,
   uninstallAmp,
@@ -215,19 +214,6 @@ describe('clearing a local plugin that masks the personal one', () => {
   const masking = (relative: string) =>
     `Local Amp plugin ${local(relative)} is not a managed copy and masks the personal plugin. Remove it and rerun install --amp.`;
 
-  test('names the same system-scope path on both sides', async () => {
-    expect(
-      (
-        await differential(
-          {
-            seed: {},
-          },
-          (environment) => getMaskingLocalFilePath(environment),
-        )
-      ).outcome,
-    ).toEqual({ kind: 'returned', value: local(LEGACY) });
-  });
-
   test.each([
     ['a managed copy of the legacy file', { [`${LOCAL_PLUGINS}/${LEGACY}`]: ARTIFACT }],
     ['a managed copy of the directory plugin', { [`${LOCAL_PLUGINS}/${ENTRY}`]: ARTIFACT }],
@@ -329,11 +315,6 @@ describe('removing the plugin from the hosted repository', () => {
 });
 
 describe('finding the packaged artifact', () => {
-  test('resolves the same shipped dist path from either module', () => {
-    const candidates = ampArtifactCandidates();
-    expect(candidates.at(-1)).toBe(join(import.meta.dir, '..', '..', '..', 'dist', 'amp', ENTRY));
-  });
-
   test('looks beside the module itself, where the bundled cli.js sits at the dist root', () => {
     expect(ampArtifactCandidates()).toContain(join(SRC_MODULE_DIR, 'amp', ENTRY));
   });

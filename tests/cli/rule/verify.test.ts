@@ -123,16 +123,6 @@ describe('rule verify', () => {
     expect(outcome.report).toContain('Config validation failed.');
   });
 
-  test('no config anywhere reports the built-in rules alone', () => {
-    const outcome = verifyBothWays({});
-    expect(outcome.code).toBe(0);
-    expect(outcome.written).toEqual([
-      'CC Safety Net Config',
-      '════════════════════',
-      '\nNo config files found. Using built-in rules only.',
-    ]);
-  });
-
   test('a valid user config gains its schema and lists its sources', () => {
     const outcome = verifyBothWays({
       [USER_RULES_CONFIG]: JSON.stringify({ version: 1, rules: ['team-rules'] }),

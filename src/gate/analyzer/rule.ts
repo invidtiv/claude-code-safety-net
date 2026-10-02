@@ -113,8 +113,6 @@ export const ANALYZER_RULES: readonly AnalyzerRule[] = [
         envAssignments: context.envAssignments,
         policy: context.options.policy,
         analyzeTokens: context.analyzeChildTokens,
-        analyzeNested: (command, overrides) =>
-          matchFromBlockResult(context.options.analyzeNested(command, overrides)),
       }),
   },
   {

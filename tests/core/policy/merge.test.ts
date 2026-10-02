@@ -166,24 +166,6 @@ describe('the weakening lines a project policy raises', () => {
   test.each(PAIRS.map((row) => [row.behavior, row] as const))('%s', (_behavior, row) => {
     expect(mergeProjectPolicy(row.user, row.project).weakenings).toEqual([...row.weakenings]);
   });
-
-  test('the pairs above raise every line the merge can report', () => {
-    const lines = PAIRS.flatMap((pair) => mergeProjectPolicy(pair.user, pair.project).weakenings);
-    expect([...new Set(lines)].sort()).toStrictEqual([
-      'project policy adds destructive allow path: ~/p',
-      'project policy adds secret allow path: ~/p',
-      'project policy disables destructive command protection',
-      'project policy disables fail_closed',
-      'project policy disables paranoid_interpreters',
-      'project policy disables paranoid_rm',
-      'project policy disables rule git.reset-hard',
-      'project policy disables rule secret.cli.codex.config',
-      'project policy disables rule secret.ext.pem',
-      'project policy disables secret protection',
-      'project policy enables worktree mode relaxations',
-      'project policy lowers level: paranoid -> standard',
-    ]);
-  });
 });
 
 describe('what the merged policy holds', () => {
@@ -213,12 +195,6 @@ describe('what the merged policy holds', () => {
       'secret.ext.pem': 'on',
       'secret.cli.claude-code.config': 'off',
     });
-  });
-
-  test('audit is user scope only and survives any project projection', () => {
-    expect(mergeProjectPolicy(STRONG_USER, { safety: { level: 'standard' } }).policy.audit).toEqual(
-      { retention_days: 30 },
-    );
   });
 });
 

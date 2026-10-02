@@ -55,59 +55,7 @@ afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-const FIND_COMMANDS: readonly string[] = [
-  'find',
-  'find .',
-  'find . -name "*.log"',
-  'find . -delete',
-  'find . -name "*.log" -delete',
-  'find . -name -delete',
-  'find . -newermt yesterday -delete',
-  'find . -newerXY ref -delete',
-  'find . -fprintf out fmt -delete',
-  'find -delete',
-  'find / -delete',
-  'find /* -delete',
-  'find ~ -delete',
-  'find $HOME -delete',
-  'find "$HOME"/notes -delete',
-  'find $TMPDIR -delete',
-  'find $TMPDIR/build -delete',
-  'find /tmp/next-find-probe -delete',
-  'find logs -delete',
-  'find logs -L -delete',
-  'find logs -follow -delete',
-  'find -H -P -- logs -delete',
-  'find ! -name x -delete',
-  'find ( logs ) -delete',
-  'find .git -delete',
-  'find . -name hooks -delete',
-  'find . -iname HOOKS -delete',
-  'find . -name hooks -print',
-  'find . -exec rm -rf {} ;',
-  'find . -exec rm -rf {} \\;',
-  'find . -exec rm -rf {} +',
-  'find . -exec rm {} \\;',
-  'find . -execdir rm -rf {} \\;',
-  'find . -ok rm -rf {} \\;',
-  'find . -okdir rm -rf {} \\;',
-  'find . -exec busybox rm -rf {} \\;',
-  'find . -exec env rm -rf {} \\;',
-  'find . -exec sudo rm -rf {} \\;',
-  'find . -exec echo {} \\;',
-  'find . -exec rm -rf {} \\; -exec echo done \\;',
-  'find . -exec rm -rf',
-  'find . -exec',
-  'find . -name -exec -delete',
-  'find . -exec DANGER {} \\; -exec CUSTOM {} \\;',
-  'find /nonexistent -exec rm -rf {} +',
-  'find . -type f -exec rm {} + -delete',
-  'find . -maxdepth 1 -delete',
-  'find . -exec DANGER {} \\;',
-  'find . -exec CUSTOM {} \\;',
-];
-
-type NestedCall = { tokens: string[]; cwd: string | null | undefined; command?: string };
+type NestedCall = { tokens: string[]; cwd: string | null | undefined };
 
 function nestedMatchFor(tokens: readonly string[]): DestructiveCommandRuleMatch | null {
   if (tokens.includes('DANGER')) {
@@ -163,29 +111,18 @@ function sharedContext(row: FindCase) {
   };
 }
 
-function analyzePair(source: string, row: FindCase, mode: 'tokens' | 'nested') {
+function analyzePair(source: string, row: FindCase) {
   const paired = pairedEnvironments({ HOME: home, ...row.env }, home);
   const calls: NestedCall[] = [];
-  const hooks =
-    mode === 'tokens'
-      ? {
-          analyzeTokens: (tokens: readonly string[], cwd: string | null | undefined) => {
-            calls.push({ tokens: [...tokens], cwd });
-            return nestedMatchFor(tokens);
-          },
-        }
-      : {
-          analyzeNested: (command: string, overrides?: { effectiveCwd?: string | null }) => {
-            calls.push({ tokens: command.split(' '), cwd: overrides?.effectiveCwd, command });
-            return nestedMatchFor(command.split(' '));
-          },
-        };
   return {
     match: describeOutcome(() =>
       analyzeFindMatch(commandWords(source), {
         ...sharedContext(row),
         environment: paired,
-        ...hooks,
+        analyzeTokens: (tokens, cwd) => {
+          calls.push({ tokens: [...tokens], cwd });
+          return nestedMatchFor(tokens);
+        },
       }),
     ),
     calls,
@@ -199,7 +136,7 @@ function caseFor(label: string): FindCase {
 }
 
 function matchId(source: string, row: FindCase): string | null {
-  const outcome = analyzePair(source, row, 'tokens').match;
+  const outcome = analyzePair(source, row).match;
   if (!outcome.ok) throw outcome.error;
   return outcome.value?.id ?? null;
 }
@@ -520,46 +457,16 @@ describe('find analysis', () => {
     },
   );
 
-  test('the table reaches the delete, exec and git-metadata rules', () => {
-    const reported = new Set(
-      findCases().flatMap((row) =>
-        FIND_COMMANDS.flatMap((source) => {
-          const outcome = analyzePair(source, row, 'tokens').match;
-          return outcome.ok && outcome.value ? [outcome.value.id] : [];
-        }),
-      ),
-    );
-    expect([...reported].sort()).toStrictEqual([
-      'custom.nested',
-      'find.delete',
-      'find.delete-git-metadata',
-      'find.exec-rm-recursive-force',
-      'rm.recursive-force-outside-cwd',
-      'rm.recursive-force-root-or-home',
-    ]);
-  });
-
   test('a -execdir child is analyzed without a cwd, an -exec child keeps it', () => {
-    const execdir = analyzePair(
-      'find . -execdir rm {} \\;',
-      { label: 'x', cwd: workspace },
-      'tokens',
-    );
+    const execdir = analyzePair('find . -execdir rm {} \\;', { label: 'x', cwd: workspace });
     expect(execdir.calls).toStrictEqual([{ tokens: ['rm', '{}'], cwd: null }]);
-    const exec = analyzePair('find . -exec rm {} \\;', { label: 'x', cwd: workspace }, 'tokens');
+    const exec = analyzePair('find . -exec rm {} \\;', { label: 'x', cwd: workspace });
     expect(exec.calls).toStrictEqual([{ tokens: ['rm', '{}'], cwd: workspace }]);
-  });
-
-  test('a nested analysis is handed the exec body as a command', () => {
-    const nested = analyzePair('find . -exec rm {} \\;', { label: 'x', cwd: workspace }, 'nested');
-    expect(nested.calls).toStrictEqual([
-      { tokens: ['rm', '{}'], cwd: workspace, command: 'rm {}' },
-    ]);
   });
 
   test('a derived-command budget shared across many exec bodies fails closed', () => {
     const source = `find . ${'-exec rm {} \\; '.repeat(120)}`.trim();
-    const pair = analyzePair(source, { label: 'budget', cwd: workspace }, 'tokens');
+    const pair = analyzePair(source, { label: 'budget', cwd: workspace });
     expect(pair.match.ok).toBeFalse();
     expect(pair.match.ok ? '' : pair.match.error.name).toBe('AnalysisLimit');
     expect(pair.match.ok ? '' : pair.match.error.message).toBe(REASON_DERIVED_COMMAND_WORK_LIMIT);

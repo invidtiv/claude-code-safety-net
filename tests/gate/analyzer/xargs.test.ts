@@ -121,110 +121,6 @@ function runBothXargs(tokens: readonly string[], setting: XargsSetting) {
   };
 }
 
-const OPTION_SHAPES: readonly (readonly string[])[] = [
-  ['xargs'],
-  ['xargs', 'rm', '-rf'],
-  ['xargs', '-0', 'rm', '-rf'],
-  ['xargs', '-0', '-n', '1', 'rm', '-rf'],
-  ['xargs', '-n1', 'rm', '-rf'],
-  ['xargs', '-P', '4', 'rm', '-rf'],
-  ['xargs', '-P4', '-n', '2', 'rm', '-rf'],
-  ['xargs', '-L', '1', 'echo'],
-  ['xargs', '-s', '4096', 'echo'],
-  ['xargs', '-E', 'END', 'echo'],
-  ['xargs', '-a', 'list.txt', 'rm', '-rf'],
-  ['xargs', '-d', '\\n', 'rm', '-rf'],
-  ['xargs', '--max-args', '2', 'rm', '-rf'],
-  ['xargs', '--max-procs=4', 'rm', '-rf'],
-  ['xargs', '--delimiter', '\\0', 'rm', '-rf'],
-  ['xargs', '--process-slot-var', 'SLOT', 'echo'],
-  ['xargs', '--unknown-flag', 'rm', '-rf'],
-  ['xargs', '--', 'rm', '-rf'],
-  ['xargs', '--', '-I', '{}'],
-  ['xargs', '-I', '{}', 'rm', '-rf', '{}'],
-  ['xargs', '-I{}', 'rm', '-rf', '{}'],
-  ['xargs', '-I', '%', 'rm', '-rf', '%'],
-  ['xargs', '-I%', 'rm', '%'],
-  ['xargs', '--replace', 'rm', '-rf', '{}'],
-  ['xargs', '--replace=%', 'rm', '-rf', '%'],
-  ['xargs', '--replace=', 'rm', '-rf', '{}'],
-  ['xargs', '-J', '%', 'cp', 'src', '%'],
-  ['xargs', '-I'],
-  ['xargs', '-J'],
-  ['xargs', '-n'],
-  ['xargs', '', 'rm', '-rf'],
-  ['xargs', '-I', '{}'],
-];
-
-const CHILD_SHAPES: readonly (readonly string[])[] = [
-  ['xargs', 'cat'],
-  ['xargs', 'rm', '-rf', 'dist'],
-  ['xargs', '-I', '{}', 'rm', '{}'],
-  ['xargs', '-I', '{}', 'rm', '-{}', 'dist'],
-  ['xargs', '-I', '{}', 'rm', '-rf', '--', '{}'],
-  ['xargs', '-I', '{}', '{}', 'dist'],
-  ['xargs', '-I', '{}', 'rm', '-rf', '/'],
-  ['xargs', 'sh', '-c', 'rm -rf /tmp/x'],
-  ['xargs', 'sh', '-c', 'rm -rf "$1"', '_'],
-  ['xargs', 'sh', '-c', 'eval "$FOO"'],
-  ['xargs', 'bash', '-c', '$0'],
-  ['xargs', 'bash', '-c', 'echo BOOM'],
-  ['xargs', 'sh', '-n', '-c', 'rm -rf /'],
-  ['xargs', 'sh', 'script.sh'],
-  ['xargs', 'sh'],
-  ['xargs', '-I', '{}', 'sh', '-c', 'echo {}'],
-  ['xargs', '-I', '{}', 'sh', '-c', '{}'],
-  ['xargs', '-I', '{}', 'sh', '{}'],
-  ['xargs', '-I', '{}', 'sh', '-{}', 'echo hi'],
-  ['xargs', '-I', '{}', '{}c', 'rm -rf /'],
-  ['xargs', 'env', 'FOO=bar', 'rm', '-rf'],
-  ['xargs', '-I', '{}', 'env', 'FOO={}', 'sh', '-c', 'eval "$FOO"'],
-  ['xargs', '-I', '{}', 'env', 'FOO={}', 'sh', '-c', 'echo hi'],
-  ['xargs', 'python3', '-c', 'print(1)'],
-  ['xargs', 'python3', 'main.py'],
-  ['xargs', 'python3'],
-  ['xargs', '-I', '{}', 'python3', '-c', '{}'],
-  ['xargs', '-I', '{}', 'python3', '{}'],
-  ['xargs', '-I', '{}', 'python3', '-{}', 'print(1)'],
-  ['xargs', 'node', '-e', 'process.exit(0)'],
-  ['xargs', '-I', '{}', 'node', '--eval={}'],
-  ['xargs', 'awk', '{ print }'],
-  ['xargs', 'awk'],
-  ['xargs', '-I', '{}', 'awk', '{}'],
-  ['xargs', '-I', '{}', 'awk', '-f', '{}'],
-  ['xargs', 'eval'],
-  ['xargs', 'eval', 'echo hi'],
-  ['xargs', '-I', '{}', 'eval', '{}'],
-  ['xargs', 'find', '.', '-delete'],
-  ['xargs', '-I', '{}', 'find', '{}', '-delete'],
-  ['xargs', '-I', '{}', 'find', '.', '-name', '{}'],
-  ['xargs', '-I', '{}', 'find', '.', '-name', 'x', '-print'],
-  ['xargs', '-I', '{}', 'find', '.', '-exec', 'rm', '-rf', '{}', ';'],
-  ['xargs', '-I', '%', 'find', '.', '-exec', 'rm', '-%', 'dist', ';'],
-  ['xargs', '-I', '{}', 'find', '.', '-exec', 'sh', '-c', '{}', ';'],
-  ['xargs', '-I', '{}', 'find', '.', '-newermt', '{}'],
-  ['xargs', 'git', 'reset', '--hard'],
-  ['xargs', 'git'],
-  ['xargs', 'git', 'status'],
-  ['xargs', '-I', '{}', 'git', '{}', '--hard'],
-  ['xargs', '-I', '{}', 'git', 'checkout', '{}'],
-  ['xargs', '-I', '{}', 'git', 'checkout', '--', '{}'],
-  ['xargs', '-I', '{}', 'git', 'status', '{}'],
-  ['xargs', 'command', 'rm', '-rf'],
-  ['xargs', 'command', '-I', '{}'],
-  ['xargs', 'sudo', 'rm', '-rf'],
-  ['xargs', '-I', '{}', 'sudo', '{}'],
-  ['xargs', 'uv', 'run', 'rm', '-rf'],
-  ['xargs', 'kubectl', 'drain', '--force'],
-  ['xargs', '-I', '{}', 'kubectl', 'drain', '{}'],
-  ['xargs', '-I', '{}', 'skopeo', '{}'],
-  ['xargs', 'skopeo', 'copy'],
-  ['xargs', '-I', '{}', 'echo', '{}'],
-  ['xargs', 'printf', '%s'],
-];
-
-const EVERY_SHAPE = [...OPTION_SHAPES, ...CHILD_SHAPES];
-
 describe('xargs option parsing', () => {
   test('the option scan stops where the child command starts', () => {
     const rows: readonly {
@@ -280,16 +176,6 @@ describe('xargs option parsing', () => {
       expect(extractXargsChildCommandWithInfo(row.tokens), row.tokens.join(' ')).toStrictEqual(
         row.info,
       );
-  });
-
-  test('the table separates every replacement spelling from the plain options', () => {
-    const spellings = EVERY_SHAPE.map(
-      (tokens) => extractXargsChildCommandWithInfo(tokens).replacementToken,
-    );
-    expect(new Set(spellings)).toStrictEqual(new Set([null, '{}', '%']));
-    expect(extractXargsChildCommandWithInfo(['xargs', '-0', 'rm']).childStart).toBe(2);
-    expect(extractXargsChildCommandWithInfo(['xargs', '-n', '1', 'rm']).childStart).toBe(3);
-    expect(extractXargsChildCommandWithInfo(['xargs', '-n1', 'rm']).childStart).toBe(2);
   });
 });
 
@@ -377,26 +263,6 @@ describe('xargs analysis', () => {
     const nested = runBothXargs(['xargs', 'bash', '-c', 'echo BOOM'], { label: 'defaults' });
     expect(nested.match).toStrictEqual({ ok: true, value: NESTED_HIT });
     expect(runBothXargs(['xargs', 'cat'], { label: 'defaults' }).asked).toStrictEqual([]);
-  });
-
-  test('the shapes reach the dynamic-source, dynamic-rm and custom-rule verdicts', () => {
-    const reported: string[] = [];
-    for (const tokens of EVERY_SHAPE) {
-      for (const setting of SETTINGS) {
-        const verdict = runBothXargs(tokens, setting).match;
-        if (verdict.ok && verdict.value) reported.push(verdict.value.id);
-      }
-    }
-    for (const ruleId of [
-      'custom.no-cluster-drain',
-      'find.delete',
-      'git.reset-hard',
-      'rm.recursive-force-root-or-home',
-      'xargs.rm-recursive-force-dynamic',
-      'xargs.shell-dynamic',
-    ]) {
-      expect([...new Set(reported)].sort(), ruleId).toContain(ruleId);
-    }
   });
 
   test('a reader child is allowed where a deleting child is not', () => {

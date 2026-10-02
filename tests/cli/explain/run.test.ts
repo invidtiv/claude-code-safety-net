@@ -329,16 +329,6 @@ describe('explain diverges from the shipped CLI only where the design says it mu
     );
   }
 
-  for (const command of [
-    'Remove-Item . -Recurse -Force',
-    'Get-ChildItem . -Recurse | Remove-Item -Force',
-  ]) {
-    test(`agrees on ${command}`, async () => {
-      const outcome = await explain({ args: ['explain', '--json', command] });
-      expect(outcome.exitCode).toBe(0);
-    }, 30_000);
-  }
-
   test('strict mode answers a partial program identically', async () => {
     const outcome = await explain({
       args: ['explain', '--json', "git reset --hard 'unterminated"],

@@ -7,7 +7,6 @@ import type { ShellKind } from '@/core/shell/model';
 import { parseCommand } from '@/core/shell/parse';
 import { projectCommandViews } from '@/core/shell/traversal';
 import { analyzePowerShellCommandViewMatch } from '@/gate/analyzer/powershell/remove-item';
-import { createRecursiveDeleteTargetContext } from '@/gate/analyzer/recursive-delete-targets';
 import { pairedEnvironments } from '../../core/differential-inputs';
 import { writeTree } from '../../helpers/fixture-tree';
 
@@ -38,62 +37,6 @@ beforeAll(() => {
 afterAll(() => {
   rmSync(root, { recursive: true, force: true });
 });
-
-const REMOVE_ITEM_COMMANDS: readonly string[] = [
-  'Remove-Item build',
-  'Remove-Item -Recurse -Force build',
-  'Remove-Item -Recurse -Force ..',
-  'Remove-Item -Recurse -Force .',
-  'Remove-Item -Recurse -Force /',
-  'Remove-Item /',
-  'Remove-Item -Force ~',
-  'Remove-Item -Recurse -Force C:\\',
-  'Remove-Item -Recurse -Force $env:USERPROFILE',
-  'Remove-Item -Recurse -Force $env:USERPROFILE\\Documents',
-  'Remove-Item -Recurse -Force $env:HOME',
-  'Remove-Item -Recurse -Force ~',
-  'Remove-Item -Recurse -Force $HOME',
-  'Remove-Item -Recurse -Force $target',
-  'Remove-Item -Recurse -Force',
-  'Remove-Item -Recurse',
-  'Remove-Item -Force build',
-  'Remove-Item -Rec -Fo build',
-  'Remove-Item -r -f build',
-  'Remove-Item -Recurse:$true -Force:$true build',
-  'Remove-Item -Recurse -Force -WhatIf build',
-  'Remove-Item -Recurse -Force -WhatIf:$false build',
-  'Remove-Item -Recurse -Force -wi build',
-  'Remove-Item -Path build -Recurse -Force',
-  'Remove-Item -Path:build -Recurse -Force',
-  'Remove-Item -LiteralPath build -Recurse -Force',
-  'Remove-Item -p build -Recurse -Force',
-  'Remove-Item -Path -Recurse -Force',
-  'Remove-Item -Recurse -Force ./build -Path',
-  'Remove-Item -Recurse -Force -- -weird',
-  'Remove-Item -Recurse -Force a, b',
-  'Remove-Item -Recurse -Force a,b',
-  'Remove-Item -Recurse -Force .git',
-  'Remove-Item -Recurse -Force .git\\hooks',
-  'Remove-Item -Force .git\\HEAD',
-  'Remove-Item .git\\hooks\\pre-commit',
-  'Remove-Item -Recurse -Force \\\\?\\C:\\Temp',
-  'ri -Recurse -Force build',
-  'del -Recurse -Force build',
-  'erase -Recurse -Force build',
-  'rd -Recurse -Force build',
-  'rm -Recurse -Force build',
-  'rmdir -Recurse -Force build',
-  '& Remove-Item -Recurse -Force build',
-  '. Remove-Item -Recurse -Force build',
-  '& Remove-Item',
-  'Get-ChildItem | Remove-Item -Recurse -Force',
-  'Get-ChildItem | Remove-Item build',
-  'Get-ChildItem | Remove-Item -Recurse -Force build',
-  'Remove-Item -Recurse -Force $env:TEMP\\x',
-  'Remove-Item -Recurse -Force "quoted dir"',
-  "Remove-Item -Recurse -Force 'quoted dir'",
-  'Write-Output x',
-];
 
 type RemoveItemCase = {
   readonly label: string;
@@ -233,6 +176,7 @@ describe('powershell Remove-Item', () => {
         id: 'powershell.remove-item-recursive-force-cwd-self',
       },
       { source: 'Remove-Item -Recurse -Force -WhatIf .', id: null },
+      { source: 'Remove-Item -Recurse -Force -WhatIf ..', id: null },
       { source: 'Remove-Item -Recurse -Force -wi .', id: null },
       {
         source: 'Remove-Item -Recurse -Force -WhatIf:$false .',
@@ -248,6 +192,7 @@ describe('powershell Remove-Item', () => {
       },
       { source: '& Remove-Item', id: null },
       { source: 'Write-Output x', id: null },
+      { source: 'Write-Output ..', id: null },
     ];
     for (const row of rows) expect(ruleIdFor(row.source, 'workspace'), row.source).toBe(row.id);
     for (const alias of ['ri', 'del', 'erase', 'rd', 'rm', 'rmdir'])
@@ -346,76 +291,5 @@ describe('powershell Remove-Item', () => {
         'PowerShell Remove-Item -Recurse -Force for non-temporary paths is blocked by the active safety policy. Retry deleting only explicit paths inside the current directory; escalate for anything outside it.',
       intent: 'scope_down',
     });
-  });
-
-  test('the table reaches every Remove-Item rule', () => {
-    const reported = new Set(
-      removeItemCases().flatMap((row) => {
-        const paired = pairedEnvironments({ HOME: home }, home);
-        const options = { ...optionsFor(row), environment: paired };
-        return REMOVE_ITEM_COMMANDS.flatMap((source) =>
-          viewPairs(source, 'powershell').flatMap((view) =>
-            [false, true].flatMap((hasPipelineInput) => {
-              const match = analyzePowerShellCommandViewMatch(view, hasPipelineInput, options);
-              return match ? [match.id] : [];
-            }),
-          ),
-        );
-      }),
-    );
-    expect([...reported].sort()).toStrictEqual([
-      'powershell.remove-item-git-metadata',
-      'powershell.remove-item-pipeline-dynamic-target',
-      'powershell.remove-item-recursive-force-cwd-self',
-      'powershell.remove-item-recursive-force-dynamic-target',
-      'powershell.remove-item-recursive-force-home-cwd',
-      'powershell.remove-item-recursive-force-outside-cwd',
-      'powershell.remove-item-recursive-force-paranoid',
-      'powershell.remove-item-recursive-force-root-or-home',
-      'powershell.remove-item-root-or-home',
-    ]);
-  });
-
-  test('a caller-supplied delete-target context overrides the one built from the options', () => {
-    const paired = pairedEnvironments({ HOME: home }, home);
-    const anchoredAtHome = { cwd: home, originalCwd: home, protectedGitMetadata: null };
-    const options = { cwd: workspace, originalCwd: workspace, protectedGitMetadata: null };
-    for (const view of viewPairs('Remove-Item -Recurse -Force build', 'powershell')) {
-      const next = analyzePowerShellCommandViewMatch(
-        view,
-        false,
-        { ...options, environment: paired },
-        createRecursiveDeleteTargetContext({ ...anchoredAtHome, environment: paired }),
-      );
-      expect(next?.id).toBe('powershell.remove-item-recursive-force-home-cwd');
-      expect(
-        analyzePowerShellCommandViewMatch(view, false, {
-          ...options,
-          environment: paired,
-        }),
-      ).toBeNull();
-    }
-  });
-
-  test('-WhatIf disarms the command and an unabbreviated alias is still recognized', () => {
-    const paired = pairedEnvironments({ HOME: home }, home);
-    const options = {
-      cwd: workspace,
-      originalCwd: workspace,
-      protectedGitMetadata: null,
-      environment: paired,
-    };
-    const analyze = (source: string, piped = false) =>
-      viewPairs(source, 'powershell').map(
-        (view) => analyzePowerShellCommandViewMatch(view, piped, options)?.id ?? null,
-      );
-    expect(analyze('Remove-Item -Recurse -Force ..')).toStrictEqual([
-      'powershell.remove-item-recursive-force-outside-cwd',
-    ]);
-    expect(analyze('Remove-Item -Recurse -Force -WhatIf ..')).toStrictEqual([null]);
-    expect(analyze('rd -Recurse -Force ..')).toStrictEqual([
-      'powershell.remove-item-recursive-force-outside-cwd',
-    ]);
-    expect(analyze('Write-Output ..')).toStrictEqual([null]);
   });
 });

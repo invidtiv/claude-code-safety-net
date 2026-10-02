@@ -80,18 +80,6 @@ describe('the Antigravity hook config differential', () => {
     });
   });
 
-  test('reports an active definition without touching the file', async () => {
-    const seed = hooksConfig({ 'cc-safety-net': DEFINITION });
-
-    expectRow((await row({ [CONFIG]: seed })).steps, {
-      file: CONFIG,
-      alreadyInstalled: true,
-      wrote: seed,
-      detected: CONFIGURED,
-      left: hooksConfig(EMPTIED),
-    });
-  });
-
   test.each([
     ['[]\n', 'Antigravity hooks config must be a JSON object'],
     [
@@ -123,13 +111,6 @@ describe('the Antigravity hook config differential', () => {
 });
 
 describe('the Antigravity detector differential', () => {
-  test('finds the managed handler', async () => {
-    expect(await detection({ [CONFIG]: hooksConfig({ 'cc-safety-net': DEFINITION }) })).toEqual({
-      kind: 'returned',
-      value: CONFIGURED,
-    });
-  });
-
   test('reports a definition the user disabled', async () => {
     const disabled = { 'cc-safety-net': { enabled: false, ...DEFINITION } };
 

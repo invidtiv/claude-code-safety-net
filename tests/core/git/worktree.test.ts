@@ -13,7 +13,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   findDotGitInAncestors,
-  isLinkedWorktree,
   normalizePathForComparison,
   resolveDotGitFileTargets,
   resolveWorktreeFacts,
@@ -65,9 +64,8 @@ describe('linked worktree facts', () => {
     await withLinkedWorktreeFixture((temporary) => {
       const targets = resolveDotGitFileTargets(join(temporary.linkedWorktree, '.git'));
       if (!targets) throw new Error('the real Git worktree has no metadata target');
-      expect(isLinkedWorktree(temporary.linkedWorktree)).toBe(true);
+      expect(resolveWorktreeFacts(temporary.linkedWorktree)).not.toBeNull();
       writeFileSync(join(targets.gitDir, 'gitdir'), join(temporary.mainWorktree, '.git'));
-      expect(isLinkedWorktree(temporary.linkedWorktree)).toBe(false);
       expect(resolveWorktreeFacts(temporary.linkedWorktree)).toBeNull();
     });
   });
@@ -83,7 +81,8 @@ describe('linked worktree facts', () => {
         [scratch, false],
         [join(scratch, 'file'), false],
       ] as const;
-    for (const [cwd, linked] of rows()) expect(isLinkedWorktree(cwd), cwd).toBe(linked);
+    for (const [cwd, linked] of rows())
+      expect(resolveWorktreeFacts(cwd, null) !== null, cwd).toBe(linked);
   });
 
   test('the walk finds the nearest .git, and stops where there is none', () => {
@@ -122,18 +121,6 @@ describe('linked worktree facts', () => {
     const configPath = join(linkedGitDir(), 'config.worktree');
     const quoted = quoteForGitConfig(realpathSync(fixture.linkedWorktree));
     const escaped = quoted.slice(1, -1);
-    const values = [
-      quoted,
-      `"${escaped}\\n"`,
-      `"${escaped}\\t"`,
-      `"${escaped}\\"`,
-      `'${escaped}'`,
-      escaped,
-      '"',
-      `"${escaped}\\q"`,
-      fixture.mainWorktree,
-      quoteForGitConfig(join(scratch, ODD_LINK_NAME)),
-    ];
     const accepted: readonly (readonly [string, boolean])[] = [
       [quoted, true],
       [`"${escaped}\\n"`, false],
@@ -146,12 +133,11 @@ describe('linked worktree facts', () => {
       [fixture.mainWorktree, false],
       [quoteForGitConfig(join(scratch, ODD_LINK_NAME)), true],
     ];
-    expect(accepted.map(([value]) => value)).toEqual(values);
 
     try {
       for (const [value, linked] of accepted) {
         writeFileSync(configPath, `[core]\n\tworktree = ${value}\n`);
-        expect(isLinkedWorktree(fixture.linkedWorktree), value).toBe(linked);
+        expect(resolveWorktreeFacts(fixture.linkedWorktree, null) !== null, value).toBe(linked);
       }
     } finally {
       rmSync(configPath, { force: true });

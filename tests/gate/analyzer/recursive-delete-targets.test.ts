@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { createProcessEnvironment } from '@/core/environment';
+import { join, parse } from 'node:path';
+import { createProcessEnvironment, createTestEnvironment } from '@/core/environment';
 import type { ProtectedGitMetadata } from '@/core/git/metadata';
 import { resolveProtectedGitMetadata } from '@/core/git/metadata';
 import type { CommandWord } from '@/core/shell/model';
@@ -175,70 +175,6 @@ function contextPair(row: ContextCase) {
   });
 }
 
-function targets(cwd: string): readonly string[] {
-  return [
-    '/',
-    '/*',
-    '/**',
-    '/*/*',
-    '//',
-    '~',
-    '~/',
-    '~/*',
-    '~/projects',
-    '$HOME',
-    '$HOME/',
-    '$HOME/*',
-    '${HOME}',
-    '${HOME}/projects',
-    'C:/',
-    'C:\\',
-    '//server/share',
-    '.',
-    './',
-    '.\\',
-    '..',
-    '../x',
-    '*',
-    './*',
-    'file.txt',
-    './nested',
-    'nested/deep',
-    'nested/../file.txt',
-    cwd,
-    `${cwd}/`,
-    join(cwd, 'nested'),
-    join(root, 'link-to-work'),
-    join(root, 'allowed'),
-    join(root, 'allowed', 'inner'),
-    join(home, 'allowed-home'),
-    join(root, 'tmp'),
-    join(root, 'tmp', 'inner'),
-    '/tmp',
-    '/tmp/next-delete-targets-probe',
-    '$TMPDIR',
-    '$TMPDIR/',
-    '$TMPDIR/x',
-    '${TMPDIR}/x',
-    '$TMPDIR/../escape',
-    '$TMPDIR/$VAR',
-    '$TMPDIRX/x',
-    '$VAR/x',
-    '`hostname`/x',
-    'a?b',
-    '[ab]',
-    '{a,b}',
-    '+(x)',
-    '@(x)',
-    '!(x)',
-    'x\\*y',
-    '.git',
-    '.git/hooks',
-    '',
-    '   ',
-  ];
-}
-
 type ReadableContext = {
   readonly anchoredCwd: string | null;
   readonly resolvedCwd: string | null;
@@ -251,15 +187,6 @@ type ReadableContext = {
   readonly allowRoots: readonly string[];
   readonly protectedGitMetadata: ProtectedGitMetadata | null;
 };
-
-const CLASSIFICATION_OPTIONS: readonly RecursiveDeleteTargetClassificationOptions[] = [
-  {},
-  { targetIsLiteral: true },
-  { tmpdirWordSplittingProtected: true },
-  { skipHomeCwd: true },
-  { skipCwdSelf: true },
-  { skipHomeCwd: true, skipCwdSelf: true, targetIsLiteral: true },
-];
 
 describe('recursive delete target context', () => {
   test('the anchors and flags come from the options and the environment', () => {
@@ -405,40 +332,35 @@ describe('recursive delete target classification', () => {
     expect(kindFor('.', 'workspace anchored', { skipCwdSelf: true })).toBe('within_anchored_cwd');
     expect(kindFor('file.txt', 'no anchor')).toBe('outside_anchored_cwd');
     expect(kindFor('.', 'no anchor')).toBe('outside_anchored_cwd');
-    for (const target of [
-      join(root, 'allowed'),
-      join(root, 'allowed', 'inner'),
-      join(home, 'allowed-home'),
-    ])
-      expect(kindFor(target, 'allow paths configured'), target).toBe('temp_target');
-    expect(kindFor(join(root, 'allowed'), 'allow path containing home')).toBe('temp_target');
+    const base = join(parse(root).root, 'ccsn-delete-targets');
+    const allowed = join(base, 'allowed');
+    const isolatedHome = join(base, 'home');
+    const options = {
+      cwd: join(base, 'work'),
+      protectedGitMetadata: null,
+      environment: createTestEnvironment({
+        home: isolatedHome,
+        entries: new Map([[base, 'directory']]),
+      }),
+    };
+    for (const target of [allowed, join(allowed, 'inner'), join(isolatedHome, 'allowed-home')]) {
+      for (const row of [
+        { allowPaths: [], kind: 'outside_anchored_cwd' },
+        { allowPaths: [allowed, '~/allowed-home'], kind: 'temp_target' },
+        { allowPaths: [base, isolatedHome], kind: 'outside_anchored_cwd' },
+      ] as const) {
+        expect(
+          classifyRecursiveDeleteTarget(
+            target,
+            createRecursiveDeleteTargetContext({ ...options, allowPaths: row.allowPaths }),
+          ).kind,
+          `${target}: ${row.allowPaths.join(', ')}`,
+        ).toBe(row.kind);
+      }
+    }
     expect(kindFor('.git', 'git repository')).toBe('git_metadata_target');
     expect(kindFor('.git/hooks', 'git repository')).toBe('git_metadata_target');
     expect(kindFor('.git', 'workspace anchored')).toBe('within_anchored_cwd');
-  });
-
-  test('every classification kind is reached by the table', () => {
-    const kinds = new Set(
-      contextCases().flatMap((row) => {
-        const context = contextPair(row);
-        const cwd = context.resolvedCwd ?? workspace;
-        return targets(cwd).flatMap((target) =>
-          CLASSIFICATION_OPTIONS.map(
-            (options) => classifyRecursiveDeleteTarget(target, context, options).kind,
-          ),
-        );
-      }),
-    );
-    expect([...kinds].sort()).toStrictEqual([
-      'cwd_self_target',
-      'dynamic_target',
-      'git_metadata_target',
-      'home_cwd_target',
-      'outside_anchored_cwd',
-      'root_or_home_target',
-      'temp_target',
-      'within_anchored_cwd',
-    ]);
   });
 
   test('a temp descendant is trusted but a temp root or a workspace parent is not', () => {

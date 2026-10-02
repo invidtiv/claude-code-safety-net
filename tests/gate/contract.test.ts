@@ -154,19 +154,25 @@ describe('pipeline-only contract through the ported gate', () => {
     userPolicyPath,
     userPolicyDir: dirname(userPolicyPath),
   })) {
-    test(contractCase.name, () => {
-      expectContract(
-        evaluate(
-          invocationFor(
-            contractCase.toolName,
-            contractCase.input,
-            contractCase.route,
-            contractCase.cwd === 'repo' ? repository : workspace,
+    const levels =
+      contractCase.route.kind === 'command'
+        ? ([contractCase.level ?? 'standard'] as const)
+        : (['standard', 'strict'] as const);
+    for (const level of levels) {
+      test(`${contractCase.name} (${level})`, () => {
+        expectContract(
+          evaluate(
+            invocationFor(
+              contractCase.toolName,
+              contractCase.input,
+              contractCase.route,
+              contractCase.cwd === 'repo' ? repository : workspace,
+            ),
+            policySnapshot({ safety: { level } }),
           ),
-          policySnapshot(contractCase.level ? { safety: { level: contractCase.level } } : {}),
-        ),
-        contractCase.expected,
-      );
-    });
+          contractCase.expected,
+        );
+      });
+    }
   }
 });

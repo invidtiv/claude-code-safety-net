@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
   findJsonArrayProperty,
-  findJsonStringItems,
   findMatchingBracket,
   getLineIndent,
   removeArrayRangeItem,
@@ -11,8 +10,6 @@ import { describeOutcome } from '../../helpers/fixture-tree';
 import { corpusStrings, seededRandom } from '../differential-inputs';
 
 const ERRORS = { stringError: 'unterminated string', bracketError: 'unmatched bracket' };
-
-const MANAGED = 'cc-safety-net';
 
 function isSubsequence(part: string, whole: string): boolean {
   return (
@@ -189,14 +186,11 @@ describe('removeArrayRangeItem', () => {
   }
 });
 
-describe('findJsonArrayProperty and findJsonStringItems', () => {
+describe('findJsonArrayProperty', () => {
   test('locates the array a root key holds', () => {
     const document = '{"plugin": ["a"]}';
     const array = findJsonArrayProperty(document, 'plugin', ERRORS);
     expect(array).toEqual({ start: 11, end: 15 });
-    expect(findJsonStringItems(document, { start: 11, end: 15 }, ERRORS.stringError)).toEqual([
-      { range: { start: 12, end: 15 }, value: 'a' },
-    ]);
   });
 
   test('walks past a nested key of the same name to the root one', () => {
@@ -235,179 +229,6 @@ describe('findJsonArrayProperty and findJsonStringItems', () => {
     expect(() => findJsonArrayProperty('{"plugin": ["open"', 'plugin', ERRORS)).toThrow(
       ERRORS.bracketError,
     );
-  });
-
-  test('reports only the string items of an array that mixes types', () => {
-    const document = '{"plugin": [1, "a", true, null, "d"]}';
-    const array = findJsonArrayProperty(document, 'plugin', ERRORS);
-    expect(
-      findJsonStringItems(document, array ?? { start: 0, end: 0 }, ERRORS.stringError).map(
-        (item) => item.value,
-      ),
-    ).toEqual(['a', 'd']);
-  });
-});
-
-function removeManaged(content: string) {
-  const array = findJsonArrayProperty(content, 'plugin', ERRORS);
-  if (!array) throw new Error('plugin array not found');
-  return {
-    array,
-    updated: findJsonStringItems(content, array, ERRORS.stringError)
-      .filter((item) => item.value.includes(MANAGED))
-      .map((item) => item.range)
-      .reverse()
-      .reduce(removeArrayRangeItem, content),
-  };
-}
-
-const OPENCODE_ROWS: readonly {
-  name: string;
-  content: string;
-  expected: string;
-  plugins: string[];
-}[] = [
-  {
-    name: 'empties an array that held only the managed entry',
-    content: '{\n  "plugin": ["cc-safety-net"]\n}\n',
-    expected: '{\n  "plugin": []\n}\n',
-    plugins: [],
-  },
-  {
-    name: 'keeps every comment and key around the entry it removes',
-    content:
-      '{\n  // keep me\n  "plugin": [\n    "other-plugin", // first\n    "cc-safety-net", /* managed */\n    "last-plugin"\n  ],\n  "theme": "dark"\n}\n',
-    expected:
-      '{\n  // keep me\n  "plugin": [\n    "other-plugin", // first\n     /* managed */\n    "last-plugin"\n  ],\n  "theme": "dark"\n}\n',
-    plugins: ['other-plugin', 'last-plugin'],
-  },
-  {
-    name: 'removes a versioned entry, which carries the managed name as a prefix',
-    content: '{\n  "plugin": [\n    "cc-safety-net@latest",\n    "other"\n  ]\n}\n',
-    expected: '{\n  "plugin": [\n        "other"\n  ]\n}\n',
-    plugins: ['other'],
-  },
-  {
-    name: 'removes the last entry together with the comma before it',
-    content: '{\n  "plugin": [\n    "other",\n    "cc-safety-net"\n  ]\n}\n',
-    expected: '{\n  "plugin": [\n    "other"\n  ]\n}\n',
-    plugins: ['other'],
-  },
-  {
-    name: 'removes the last entry of an array that already ended with a trailing comma',
-    content: '{\n  "plugin": [\n    "other",\n    "cc-safety-net",\n  ]\n}\n',
-    expected: '{\n  "plugin": [\n    "other",\n      ]\n}\n',
-    plugins: ['other'],
-  },
-  {
-    name: 'leaves a nested plugin array of the same name untouched',
-    content: '{"plugin":["a","cc-safety-net","b"],"x":{"plugin":["cc-safety-net"]}}\n',
-    expected: '{"plugin":["a","b"],"x":{"plugin":["cc-safety-net"]}}\n',
-    plugins: ['a', 'b'],
-  },
-  {
-    name: 'edits the root array even when a nested one is written first',
-    content:
-      '{\n  "x": { "plugin": ["cc-safety-net"] },\n  "plugin": [ "cc-safety-net", "other" ]\n}\n',
-    expected: '{\n  "x": { "plugin": ["cc-safety-net"] },\n  "plugin": [  "other" ]\n}\n',
-    plugins: ['other'],
-  },
-  {
-    name: 'leaves the managed name mentioned in a comment in place',
-    content:
-      '{\n  "plugin": [\n    // "cc-safety-net" mentioned in a comment stays\n    "other"\n  ]\n}\n',
-    expected:
-      '{\n  "plugin": [\n    // "cc-safety-net" mentioned in a comment stays\n    "other"\n  ]\n}\n',
-    plugins: ['other'],
-  },
-  {
-    name: 'leaves the managed name inside another key’s string value in place',
-    content:
-      '{\n  "note": "cc-safety-net inside a string value stays",\n  "plugin": ["cc-safety-net", "keep"]\n}\n',
-    expected:
-      '{\n  "note": "cc-safety-net inside a string value stays",\n  "plugin": [ "keep"]\n}\n',
-    plugins: ['keep'],
-  },
-  {
-    name: 'removes an entry whose text carries an escaped quote and a bracket',
-    content: '{\n  "plugin": [\n    "quote \\" ] cc-safety-net",\n    "other"\n  ]\n}\n',
-    expected: '{\n  "plugin": [\n        "other"\n  ]\n}\n',
-    plugins: ['other'],
-  },
-  {
-    name: 'keeps the comments written around the array brackets',
-    content: '{\n  "plugin": /* between */ [ // after\n    "cc-safety-net"\n  ]\n}\n',
-    expected: '{\n  "plugin": /* between */ [ // after\n    \n  ]\n}\n',
-    plugins: [],
-  },
-  {
-    name: 'leaves a config with no managed entry byte for byte',
-    content: '{\n  "plugin": ["untouched"]\n}\n',
-    expected: '{\n  "plugin": ["untouched"]\n}\n',
-    plugins: ['untouched'],
-  },
-  {
-    name: 'leaves an already empty array byte for byte',
-    content: '{\n  "plugin": []\n}\n',
-    expected: '{\n  "plugin": []\n}\n',
-    plugins: [],
-  },
-  {
-    name: 'keeps CRLF line endings when removing an entry',
-    content: '{\r\n  "plugin": [\r\n    "cc-safety-net",\r\n    "other"\r\n  ]\r\n}\r\n',
-    expected: '{\r\n  "plugin": [\r\n    \r\n    "other"\r\n  ]\r\n}\r\n',
-    plugins: ['other'],
-  },
-  {
-    name: 'keeps tab indentation when removing an entry',
-    content: '{\n\t"plugin": [\n\t\t"one",\n\t\t"cc-safety-net",\n\t\t"three"\n\t]\n}\n',
-    expected: '{\n\t"plugin": [\n\t\t"one",\n\t\t\t\t"three"\n\t]\n}\n',
-    plugins: ['one', 'three'],
-  },
-];
-
-describe('the OpenCode plugin-array edit', () => {
-  for (const row of OPENCODE_ROWS) {
-    test(row.name, () => {
-      expect(removeManaged(row.content).updated).toBe(row.expected);
-    });
-  }
-
-  test('never touches a byte outside the array it edits', () => {
-    const leaked = OPENCODE_ROWS.filter((row) => {
-      const result = removeManaged(row.content);
-      return (
-        !result.updated.startsWith(row.content.slice(0, result.array.start + 1)) ||
-        !result.updated.endsWith(row.content.slice(result.array.end))
-      );
-    }).map((row) => row.name);
-    expect(leaked).toEqual([]);
-  });
-
-  test('leaves a document that parses to the intended plugin list', () => {
-    const parsed = OPENCODE_ROWS.map((row) => {
-      const document: unknown = JSON.parse(stripJsonComments(removeManaged(row.content).updated));
-      return {
-        name: row.name,
-        plugins:
-          typeof document === 'object' && document !== null && 'plugin' in document
-            ? document.plugin
-            : null,
-      };
-    });
-    expect(parsed).toEqual(OPENCODE_ROWS.map((row) => ({ name: row.name, plugins: row.plugins })));
-  });
-
-  test('is idempotent: a second uninstall finds nothing left to remove', () => {
-    const changed = OPENCODE_ROWS.filter((row) => {
-      const once = removeManaged(row.content).updated;
-      return removeManaged(once).updated !== once;
-    }).map((row) => row.name);
-    expect(changed).toEqual([]);
-  });
-
-  test('refuses a config whose plugin array is missing', () => {
-    expect(() => removeManaged('{"other": []}')).toThrow('plugin array not found');
   });
 });
 

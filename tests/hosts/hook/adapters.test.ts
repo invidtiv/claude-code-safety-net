@@ -10,34 +10,48 @@ import {
   hostEnv,
 } from '../../helpers/hook-hosts';
 
-const DENIED = 'a denied command';
-const ALLOWED = 'an allowed command';
-const CWD_IS_A_FILE = 'a cwd that is a regular file';
 const BREACHED_WITH_DEBUG = 'a command that breaches an analysis limit with debug output on';
 const DEBUG_STAGE = 'CC Safety Net debug: hook policy protection failed: ';
 
-const DENY_DOCUMENT_KEYS: Record<string, readonly string[]> = {
-  'claude-code': [
-    'hookSpecificOutput.hookEventName',
-    'hookSpecificOutput.permissionDecision',
-    'hookSpecificOutput.permissionDecisionReason',
-  ],
-  codex: [
-    'hookSpecificOutput.hookEventName',
-    'hookSpecificOutput.permissionDecision',
-    'hookSpecificOutput.permissionDecisionReason',
-  ],
-  'kimi-code': [
-    'hookSpecificOutput.hookEventName',
-    'hookSpecificOutput.permissionDecision',
-    'hookSpecificOutput.permissionDecisionReason',
-  ],
-  'gemini-cli': ['decision', 'reason', 'systemMessage'],
-  'copilot-cli': ['permissionDecision', 'permissionDecisionReason'],
-  cursor: ['permission', 'user_message', 'agent_message'],
-  'antigravity-cli': ['decision', 'reason'],
-  'grok-build': ['decision', 'reason'],
-  'hermes-agent': ['action', 'message'],
+const PRE_TOOL_USE_DENIAL = {
+  hookSpecificOutput: {
+    hookEventName: 'PreToolUse',
+    permissionDecision: 'deny',
+    permissionDecisionReason: expect.any(String),
+  },
+};
+
+const DENY_DOCUMENTS: Record<string, object> = {
+  'claude-code': PRE_TOOL_USE_DENIAL,
+  codex: PRE_TOOL_USE_DENIAL,
+  'kimi-code': PRE_TOOL_USE_DENIAL,
+  'gemini-cli': { decision: 'deny', reason: expect.any(String), systemMessage: expect.any(String) },
+  'copilot-cli': { permissionDecision: 'deny', permissionDecisionReason: expect.any(String) },
+  cursor: {
+    permission: 'deny',
+    user_message: expect.any(String),
+    agent_message: expect.any(String),
+  },
+  'antigravity-cli': { decision: 'deny', reason: expect.any(String) },
+  'grok-build': { decision: 'deny', reason: expect.any(String) },
+  'hermes-agent': { action: 'block', message: expect.any(String) },
+};
+
+const INPUT_DIAGNOSTICS: Record<string, string> = {
+  'a payload that is not JSON': 'Failed to parse hook input JSON.',
+  'an empty payload': 'Missing hook input JSON.',
+  'a payload that is an array': 'failed closed',
+  'a payload past the input byte limit': 'Failed to parse hook input JSON.',
+  'a payload without a tool name': 'failed closed',
+  'a read tool over a private key': 'Tool: Read',
+};
+
+const CLAUDE_ATTRIBUTION: Record<string, { agent: string; shape?: string }> = {
+  'a transcript under the Codex home': { agent: 'codex', shape: 'claude-code' },
+  'a transcript under the Copilot home': { agent: 'copilot-cli', shape: 'claude-code' },
+  'a transcript under the Claude config directory': { agent: 'claude-code' },
+  'no transcript under a Claude Code entrypoint': { agent: 'claude-code' },
+  'a PowerShell removal Copilot sends as Bash': { agent: 'copilot-cli', shape: 'claude-code' },
 };
 
 const ALLOW_DOCUMENTS: Record<string, object> = {
@@ -69,13 +83,6 @@ function rowNamed(host: HookHost, name: string): HookRow {
 
 const debugStage = (line: string) => line.replace(/^(CC Safety Net debug: [^:]+: ).*$/s, '$1');
 
-function keyPaths(value: unknown, prefix = ''): string[] {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return [prefix];
-  return Object.entries(value).flatMap(([key, nested]) =>
-    keyPaths(nested, prefix === '' ? key : `${prefix}.${key}`),
-  );
-}
-
 for (const host of HOOK_HOSTS) {
   for (const row of host.rows(fixture)) {
     test(`${host.id}: ${row.name}`, async () => {
@@ -88,34 +95,26 @@ for (const host of HOOK_HOSTS) {
       if (row.expected.ruleId !== undefined) {
         expect(ported.audit[0]?.entry.ruleId).toBe(row.expected.ruleId);
       }
+      const attribution = CLAUDE_ATTRIBUTION[row.name];
+      if (host.id === 'claude-code' && attribution) {
+        expect(
+          ported.audit.map(({ entry }) => ({ agent: entry.agent, shape: entry.shape })),
+        ).toEqual([{ shape: undefined, ...attribution }]);
+      }
       if (row.expected.document === 'none') return;
       if (row.expected.document === 'allow') {
         expect(JSON.parse(ported.stdout[0] as string)).toEqual(ALLOW_DOCUMENTS[host.id] as object);
         return;
       }
-      expect(keyPaths(JSON.parse(ported.stdout[0] as string))).toStrictEqual(
-        DENY_DOCUMENT_KEYS[host.id] as string[],
-      );
+      expect(JSON.parse(ported.stdout[0] as string)).toStrictEqual(DENY_DOCUMENTS[host.id]);
+      const diagnostic = INPUT_DIAGNOSTICS[row.name];
+      if (diagnostic) expect(ported.stdout[0]).toContain(diagnostic);
       expect(ported.stdout[0]).toContain('BLOCKED by CC Safety Net');
       if (row.expected.reason !== undefined) {
         expect(ported.stdout[0]).toContain(`Reason: ${row.expected.reason}`);
       }
     }, 30_000);
   }
-
-  test(`${host.id}: denies in its own document shape`, async () => {
-    const ported = await runSide(host, rowNamed(host, CWD_IS_A_FILE));
-    expect(ported.stdout).toHaveLength(1);
-    expect(keyPaths(JSON.parse(ported.stdout[0] as string))).toStrictEqual(
-      DENY_DOCUMENT_KEYS[host.id] as string[],
-    );
-    expect(ported.stdout[0]).toContain('CC Safety Net');
-  });
-
-  test(`${host.id}: the table reaches the gate`, async () => {
-    expect((await runSide(host, rowNamed(host, DENIED))).stdout).toHaveLength(1);
-    expect((await runSide(host, rowNamed(host, ALLOWED))).audit).toHaveLength(1);
-  });
 }
 
 test('a session directory that no longer exists is named as the working directory', async () => {

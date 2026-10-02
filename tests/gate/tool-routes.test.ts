@@ -1,12 +1,11 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { createProcessEnvironment } from '@/core/environment';
 import { getUserPolicyPath } from '@/core/policy/paths';
 import { getNonCommandToolInputKind } from '@/core/tool-input';
 import { createGateTree, portedVerdict, toolCall } from '../helpers/gate-differential';
 import { policySnapshot } from '../helpers/policy';
-import { pipelineContractCases } from './pipeline-contract-cases';
 
 const tree = createGateTree('gate-tool-routes-');
 const environment = createProcessEnvironment();
@@ -45,39 +44,6 @@ function decisionAtEveryLevel(toolName: string, input: unknown, cwd: string) {
   );
   return standard;
 }
-
-describe('the pipeline corpus rows that carry no command', () => {
-  const rows = pipelineContractCases({
-    workspace: tree.workspace,
-    repo: tree.repository,
-    home,
-    userPolicyPath,
-    userPolicyDir: dirname(userPolicyPath),
-  }).filter((row) => row.route.kind !== 'command');
-
-  test('every non-command row decides the way the corpus declares, at either level', () => {
-    expect(rows.length).toBe(5);
-    for (const row of rows) {
-      const verdict = decisionAtEveryLevel(
-        row.toolName,
-        row.input,
-        row.cwd === 'repo' ? tree.repository : tree.workspace,
-      );
-      if (row.expected.kind === 'allow') {
-        expect(verdict.outcome, row.name).toBe('allow');
-        continue;
-      }
-      expect(
-        { outcome: verdict.outcome, stage: verdict.stage, ruleId: verdict.ruleId },
-        row.name,
-      ).toStrictEqual({
-        outcome: 'deny',
-        stage: row.expected.stage,
-        ruleId: row.expected.ruleId,
-      });
-    }
-  });
-});
 
 const PAYLOADS = [
   {
@@ -240,10 +206,4 @@ describe('hand-built host payloads', () => {
       });
     });
   }
-
-  test('the table covers every non-command route', () => {
-    expect(
-      [...new Set(PAYLOADS.map((payload) => getNonCommandToolInputKind(payload.toolName)))].sort(),
-    ).toStrictEqual(['glob', 'grep', 'patch', 'path', 'unknown']);
-  });
 });

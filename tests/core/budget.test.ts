@@ -53,9 +53,7 @@ function limitThrownBy(call: () => void): AnalysisLimit | undefined {
 
 describe('analysis budget', () => {
   test('names every capped kind in the table', () => {
-    expect(COUNTED_KINDS.length).toBe(
-      Object.values(LIMITS).filter((limit) => 'cap' in limit).length,
-    );
+    expect(Object.keys(CAPS).sort()).toEqual([...COUNTED_KINDS].sort());
   });
 
   test('each counter breaches independently one unit past its cap', () => {
@@ -105,10 +103,18 @@ describe('analysis budget', () => {
   });
 
   test('maps every kind to a shipped audit error class', () => {
-    const codes = new Set(Object.values(LIMITS).map((limit) => limit.errorCode));
-    expect([...codes].sort()).toEqual([
-      'path-canonicalization-limit',
-      'structural-shell-syntax-limit',
-    ]);
+    expect(
+      Object.fromEntries(Object.entries(LIMITS).map(([kind, limit]) => [kind, limit.errorCode])),
+    ).toEqual({
+      realpathAttempts: 'path-canonicalization-limit',
+      processedCandidateBytes: 'path-canonicalization-limit',
+      pathEnvironmentExpansion: 'path-canonicalization-limit',
+      recursionDepth: 'structural-shell-syntax-limit',
+      derivedTokens: 'structural-shell-syntax-limit',
+      trackedHeredocFiles: 'structural-shell-syntax-limit',
+      controlFlowStates: 'structural-shell-syntax-limit',
+      wrapperPeelIterations: 'structural-shell-syntax-limit',
+      derivedCommandShape: 'structural-shell-syntax-limit',
+    });
   });
 });

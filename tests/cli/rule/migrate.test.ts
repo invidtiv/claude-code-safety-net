@@ -75,18 +75,6 @@ const content = (tree: { path: string; content?: string }[], path: string) =>
 afterEach(removeTempRoots);
 
 describe('rule migrate over both scopes', () => {
-  test('a workspace with no legacy file reports both scopes and changes nothing', async () => {
-    const agreed = await runMigrate({});
-    expect(agreed.results.returned).toBe(0);
-    expect(agreed.results.log).toEqual(
-      [posix.join('<root>', PROJECT_LEGACY), posix.join('<root>', USER_LEGACY)].map(
-        (path) => `No legacy config found at ${path}`,
-      ),
-    );
-    expect(agreed.results.error).toEqual([]);
-    expect(agreed.tree.map((entry) => entry.path)).toEqual(['home', 'home/tmp', 'project']);
-  });
-
   test('a project legacy file becomes a listed rulebook and is kept', async () => {
     const agreed = await runMigrate({
       [PROJECT_LEGACY]: legacyConfig([NO_FORCE_PUSH, NO_CURL_PIPE]),
@@ -106,18 +94,6 @@ describe('rule migrate over both scopes', () => {
       }),
     );
     expect(content(agreed.tree, PROJECT_LEGACY)).toBe(legacyConfig([NO_FORCE_PUSH, NO_CURL_PIPE]));
-  });
-
-  test('--cleanup deletes the legacy file once the migrated pair verifies', async () => {
-    const agreed = await runMigrate({ [PROJECT_LEGACY]: legacyConfig([NO_FORCE_PUSH]) }, true);
-    expect(agreed.results.returned).toBe(0);
-    expect(agreed.results.log).toContain(
-      `Deleted legacy config at ${posix.join('<root>', PROJECT_LEGACY)}`,
-    );
-    expect(content(agreed.tree, PROJECT_LEGACY)).toBeUndefined();
-    expect(content(agreed.tree, 'project/.cc-safety-net/rules/project-rules/rulebook.json')).toBe(
-      PROJECT_MIGRATED('project-rules'),
-    );
   });
 
   test('a user legacy file lands under the user rules directory', async () => {

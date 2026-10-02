@@ -3,10 +3,9 @@ import {
   canPromptInstallTargets as portedCanPrompt,
   promptInstallTargets as portedPromptInstallTargets,
   promptKimiInstallMethod as portedPromptKimi,
-  renderInstallSelection as portedRenderInstallSelection,
 } from '@/cli/install/prompt';
 import type { InstallTargetChoice } from '@/hosts/install/choices';
-import type { InstallAction, InstallTarget } from '@/hosts/install/targets';
+import type { InstallAction } from '@/hosts/install/targets';
 import { createFakeInput, createFakeOutput, withStdoutTTY } from '../../helpers/fake-tty';
 import { withProcessEnv } from '../../helpers/temp-home';
 
@@ -28,22 +27,6 @@ const NOTHING_AVAILABLE: readonly InstallTargetChoice[] = CHOICES.map((choice) =
   available: false,
   unavailableReason: undefined,
 }));
-
-const STATES: readonly { cursor: number; selected: readonly InstallTarget[] }[] = [
-  { cursor: 2, selected: [] },
-  { cursor: 3, selected: ['cursor'] },
-  { cursor: 0, selected: ['cursor', 'gemini-cli'] },
-];
-
-const ACTIONS: readonly InstallAction[] = ['install', 'uninstall'];
-
-function renderEvery(color: boolean) {
-  return ACTIONS.flatMap((action) =>
-    [CHOICES, NOTHING_AVAILABLE].flatMap((choices) =>
-      STATES.map((state) => portedRenderInstallSelection(action, choices, state, { color })),
-    ),
-  );
-}
 
 type KeyPress = { name: string; value?: string; ctrl?: boolean };
 
@@ -95,10 +78,16 @@ function pickKimiMethod(globalHookInstalled: boolean, keys: readonly KeyPress[])
 const framesOf = (chunks: readonly string[]) => chunks.filter((chunk) => chunk.startsWith('\n'));
 
 describe('cli/install/prompt', () => {
-  test('every row state renders identically on both implementations', () => {
-    const plain = renderEvery(false);
-    expect(plain).toHaveLength(12);
-    expect(plain[0]?.split('\n')).toEqual([
+  test.each([
+    { label: 'plain', noColor: '1' },
+    { label: 'colored', noColor: undefined },
+  ])('selection renders $label rows and returns choice order', async ({ noColor }) => {
+    const keys = [KEY.down, KEY.space, KEY.down, KEY.space, KEY.enter];
+    const result = await withStdoutTTY(true, () =>
+      withProcessEnv({ NO_COLOR: noColor }, () => pickTargets('install', CHOICES, keys)),
+    );
+    const frames = framesOf(result.chunks);
+    expect(Bun.stripANSI(frames[0] ?? '').split('\n')).toEqual([
       '',
       'Install CC Safety Net into:',
       '',
@@ -108,45 +97,31 @@ describe('cli/install/prompt', () => {
       '  ◯ Gemini CLI',
       '',
       'Space: select  Enter: confirm  u: update installed  Up/Down: move  q/Esc: cancel',
+      '',
     ]);
-    expect(plain[2]?.split('\n').slice(3, 7)).toEqual([
-      '> ◯ Claude Code (CLI not found)',
-      '  ◯ Codex CLI (not installed)',
-      '  ◉ Cursor',
-      '  ◉ Gemini CLI',
-    ]);
-    expect(plain[6]?.split('\n').at(-1)).toBe(
-      'Space: select  Enter: confirm  Up/Down: move  q/Esc: cancel',
+    expect(frames[0]?.split('\n').slice(3, 7)).toEqual(
+      noColor
+        ? [
+            '  ◯ Claude Code (CLI not found)',
+            '  ◯ Codex CLI (not installed)',
+            '> ◯ Cursor',
+            '  ◯ Gemini CLI',
+          ]
+        : [
+            '  \x1b[2m◯ Claude Code (CLI not found)\x1b[0m',
+            '  \x1b[2m◯ Codex CLI (not installed)\x1b[0m',
+            '> \x1b[1m◯ Cursor\x1b[0m',
+            '  ◯ Gemini CLI',
+          ],
     );
-    expect(plain[9]?.split('\n').at(-1)).toBe(
-      'No selectable integrations found for uninstall. q/Esc: close',
+    expect(frames.at(-1)?.split('\n').slice(5, 7)).toEqual(
+      noColor
+        ? ['> ◉ Cursor', '  ◉ Gemini CLI']
+        : ['> \x1b[32m◉ Cursor\x1b[0m', '  \x1b[32m◉ Gemini CLI\x1b[0m'],
     );
-  });
-
-  test('the colored rows render identically on both implementations', () => {
-    withStdoutTTY(true, () =>
-      withProcessEnv({ NO_COLOR: undefined }, () => {
-        const colored = renderEvery(true);
-        expect(colored[0]?.split('\n').slice(3, 7)).toEqual([
-          '  \x1b[2m◯ Claude Code (CLI not found)\x1b[0m',
-          '  \x1b[2m◯ Codex CLI (not installed)\x1b[0m',
-          '> \x1b[1m◯ Cursor\x1b[0m',
-          '  ◯ Gemini CLI',
-        ]);
-        expect(colored[2]?.split('\n').slice(5, 7)).toEqual([
-          '  \x1b[32m◉ Cursor\x1b[0m',
-          '  \x1b[32m◉ Gemini CLI\x1b[0m',
-        ]);
-      }),
-    );
-  });
-
-  test('selection is returned in choice order on both implementations', async () => {
-    const keys = [KEY.down, KEY.space, KEY.down, KEY.space, KEY.enter];
-    const ported = await pickTargets('install', CHOICES, keys);
-    expect(ported.result).toEqual(['cursor', 'gemini-cli']);
-    expect(ported.chunks.at(-1)).toBe('Installing selected integrations...\n');
-    expect(ported.rawModeCalls).toEqual([true, false]);
+    expect(result.result).toEqual(['cursor', 'gemini-cli']);
+    expect(result.chunks.at(-1)).toBe('Installing selected integrations...\n');
+    expect(result.rawModeCalls).toEqual([true, false]);
   });
 
   test('q cancels on both implementations', async () => {
@@ -163,6 +138,9 @@ describe('cli/install/prompt', () => {
     expect(ignored.result).toBeNull();
     const quitOnly = await pickTargets('uninstall', CHOICES, [KEY.quit]);
     expect(ignored.chunks).toEqual(quitOnly.chunks);
+    expect(framesOf(ignored.chunks)[0]?.split('\n').at(-2)).toBe(
+      'Space: select  Enter: confirm  Up/Down: move  q/Esc: cancel',
+    );
   });
 
   test('confirming nothing beeps and redraws on both implementations', async () => {

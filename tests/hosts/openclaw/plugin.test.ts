@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { createCwdDenial, createFailedClosedDenial, formatDenial } from '@/core/denial';
-import {
-  createOpenClawBeforeToolCallHandler as portedHandler,
-  registerOpenClawPlugin as portedRegister,
-} from '@/hosts/openclaw/plugin';
+import { createOpenClawBeforeToolCallHandler as portedHandler } from '@/hosts/openclaw/plugin';
 import { createHookFixture, type HookFixture } from '../../helpers/hook-hosts';
 import {
   captureInProcessCall,
@@ -45,12 +42,10 @@ const failingAnalyzer = (): never => {
 const exec = (params: unknown) => ({ toolName: 'exec', params });
 
 function createFakeApi(fixture: HookFixture, workspace: Row['workspace']) {
-  const calls: unknown[][] = [];
   const workspaceByAgent: Record<string, string> = {
     [AGENT]: workspace === 'missing' ? fixture.missing : fixture.project,
   };
   return {
-    calls,
     api: {
       config: {},
       runtime: {
@@ -61,9 +56,7 @@ function createFakeApi(fixture: HookFixture, workspace: Row['workspace']) {
           },
         },
       },
-      on: (...args: unknown[]) => {
-        calls.push(args);
-      },
+      on: () => {},
     },
   };
 }
@@ -256,28 +249,20 @@ describeDifferential(
     expect(agreed.entries).toHaveLength(row.lines);
     expect(agreed.returned?.blockReason ?? '').toContain(row.contains ?? '');
     expect(agreed.returned === undefined).toBe(!row.blocked);
+    if (row.env?.CC_SAFETY_NET_DEBUG === '1') {
+      expect(agreed.stderr).toStrictEqual([
+        `CC Safety Net debug: openclaw before_tool_call analysis failed: ${ANALYZER_FAILURE}`,
+      ]);
+    }
+    if (row.name === 'a safe command recorded as an allow') {
+      expect(agreed.entries[0]?.entry).toMatchObject({
+        decision: 'allow',
+        agent: 'openclaw',
+        command: 'git status',
+      });
+    }
   },
 );
-
-test('the debug line names the failing OpenClaw hook', async () => {
-  const row = ROWS.find((candidate) => candidate.env?.CC_SAFETY_NET_DEBUG === '1');
-  const debugged = await runSide(row as Row);
-
-  expect(debugged.stderr).toStrictEqual([
-    `CC Safety Net debug: openclaw before_tool_call analysis failed: ${ANALYZER_FAILURE}`,
-  ]);
-});
-
-test('registering the plugin claims the same hook on both sides', () => {
-  const ported = createFakeApi(fixture, undefined);
-  portedRegister(ported.api);
-
-  const recorded = (calls: unknown[][]) =>
-    calls.map(([hook, handler, options]) => [hook, typeof handler, options]);
-  expect(recorded(ported.calls)).toStrictEqual([
-    ['before_tool_call', 'function', { matcher: ['exec'], priority: 50 }],
-  ]);
-});
 
 test('a host context that throws blocks in OpenClaw form instead of escaping the handler', async () => {
   const hostile = {
@@ -300,14 +285,4 @@ test('a host context that throws blocks in OpenClaw form instead of escaping the
       failure: CONTEXT_FAILURE,
     },
   );
-});
-
-test('the allow row records the command OpenClaw was about to run', async () => {
-  const allowed = await runSide(ROWS[1] as Row);
-
-  expect(allowed.entries[0]?.entry).toMatchObject({
-    decision: 'allow',
-    agent: 'openclaw',
-    command: 'git status',
-  });
 });

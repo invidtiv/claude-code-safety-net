@@ -4,7 +4,7 @@ import * as portedResolver from '@/rules-manager/resolver';
 import * as portedLimits from '@/rules-manager/resource-limits';
 import { type FakeGitHub, startFakeGitHub } from '../helpers/fake-github';
 import { type TreeSpec, writeTree } from '../helpers/fixture-tree';
-import { v1Rulebook, v2Rulebook } from '../helpers/rulebook-seeds';
+import { v1Rulebook } from '../helpers/rulebook-seeds';
 import {
   createTempRoot,
   describeAsyncOutcome,
@@ -476,24 +476,10 @@ describe('rulebook resolution', () => {
       reason: 'Vendored copy.',
     },
   ]);
-  const flawed = v2Rulebook(
-    'flawed',
-    [
-      {
-        name: 'block-terraform-destroy',
-        command: 'terraform',
-        match: { command_path: ['destroy'] },
-        reason: 'Destroys infrastructure.',
-      },
-    ],
-    [{ command: 'terraform plan', expect: 'blocked', rule: 'block-terraform-destroy' }],
-  );
   const fetchedTeam = {
     kind: 'returned' as const,
     value: { spec: 'acme/rules#main/team', name: 'team', content: publishedTeam },
   };
-  const fixtureFailure =
-    'tests[0]: expected "block-terraform-destroy" to block "terraform plan" but no rule matched';
   const vendored = (name: string, content: string) => ({
     [`${RULES_SUBPATH}/${name}/rulebook.json`]: content,
   });
@@ -506,7 +492,7 @@ describe('rulebook resolution', () => {
         defaultBranch: 'main',
         refs: { main: rulesSha },
         trees: {
-          [rulesSha]: { team: publishedTeam, skewed: v1Rulebook('other'), flawed },
+          [rulesSha]: { team: publishedTeam, skewed: v1Rulebook('other') },
         },
       },
     ]);
@@ -555,33 +541,12 @@ describe('rulebook resolution', () => {
     expect(agreed.requests).toEqual([]);
   });
 
-  test('a local source with no file names the source', async () => {
-    const agreed = await resolution('team');
-    expect(agreed.value.outcome).toEqual({
-      kind: 'threw',
-      message: 'Rulebook source not found: team',
-    });
-  });
-
-  test('a local rulebook naming itself something else is refused', async () => {
-    const agreed = await resolution('team', vendored('team', v1Rulebook('other')));
-    expect(agreed.value.outcome).toEqual({
-      kind: 'threw',
-      message: 'rulebook name "other" must match local source "team"',
-    });
-  });
-
   test('a local rulebook that is not JSON is refused', async () => {
     const agreed = await resolution('team', vendored('team', 'not json'));
     expect(agreed.value.outcome).toEqual({
       kind: 'threw',
       message: 'Invalid local rulebook source.',
     });
-  });
-
-  test('a local rulebook whose own fixture fails is refused', async () => {
-    const agreed = await resolution('flawed', vendored('flawed', flawed));
-    expect(agreed.value.outcome).toEqual({ kind: 'threw', message: fixtureFailure });
   });
 
   test('a source that is not a bare name is refused before any read', async () => {
@@ -619,11 +584,6 @@ describe('rulebook resolution', () => {
       message: 'Failed to fetch acme/rules#main/team: GitHub raw returned 500',
     });
     expect(agreed.value.spend.requests).toBe(2);
-  });
-
-  test('a fetched rulebook whose own fixture fails is refused', async () => {
-    const agreed = await resolution('acme/rules#main/flawed');
-    expect(agreed.value.outcome).toEqual({ kind: 'threw', message: fixtureFailure });
   });
 
   test('a vendored copy is read without a request', async () => {

@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createCwdDenial } from '@/core/denial';
-import { loadBuiltinCommands } from '@/hosts/opencode/builtin-commands/commands';
 import {
   createCCSafetyNetPlugin as portedCreate,
   normalizeOpenCodeWindowsWorkdir as portedNormalizeWorkdir,
@@ -232,7 +231,13 @@ test('the config hook adds the builtin command without dropping the host own', a
   const ported = config.command;
 
   expect(Object.keys(ported as Record<string, unknown>)).toStrictEqual(['cc-safety-net', 'own']);
-  expect(ported).toEqual({ ...loadBuiltinCommands(), own: { template: 'x' } });
+  expect(ported).toEqual({
+    'cc-safety-net': {
+      description: 'Operate CC Safety Net: explain blocks, rules, integrations, diagnostics',
+      template: expect.stringMatching(/^# CC Safety Net/),
+    },
+    own: { template: 'x' },
+  });
 });
 
 test('the shell route and the Windows workdir resolve the same way on both sides', () => {

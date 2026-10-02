@@ -232,8 +232,7 @@ interface GetConfigSourceOptions {
   userConfigDir?: string;
 }
 
-/** @internal */
-export function getConfigSource(
+function getConfigSource(
   environment: Environment,
   options: GetConfigSourceOptions,
 ): {

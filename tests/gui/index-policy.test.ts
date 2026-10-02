@@ -221,15 +221,14 @@ describe('the policy GUI server', () => {
 
   test('serves the page with the session token in the data tag', async () => {
     const row = await runGuiRow({ seed: S0, requests: [{ path: '/' }] });
-    const page = row.responses[0]?.body as { head: string; modules: string[]; tail: string };
+    const page = row.responses[0]?.body as string;
 
     expect(row.responses[0]).toMatchObject({
       status: 200,
       contentType: 'text/html; charset=utf-8',
       cacheControl: 'no-store',
     });
-    expect(page.modules).toHaveLength(7);
-    expect(page.head).toContain(
+    expect(page).toContain(
       '<script id="ccsn-data" type="application/json">{"token":"<token>"}</script>',
     );
   });
@@ -374,19 +373,26 @@ describe('the policy GUI server', () => {
     expect(policyFile(refused.tree)?.content).toBe(json(USER_POLICY));
   });
 
-  test('caps the body it will parse at the same size on both sides', async () => {
+  test('accepts one mebibyte and rejects a larger body without writing it', async () => {
     const encoded = JSON.stringify(USER_POLICY);
     const row = await runGuiRow({
       seed: S0,
       requests: [
         { method: 'POST', path: '/api/policy', raw: encoded.padEnd(1_048_576, ' ') },
-        { method: 'POST', path: '/api/policy', raw: encoded.padEnd(1_048_577, ' ') },
+        {
+          method: 'POST',
+          path: '/api/policy',
+          raw: JSON.stringify(DEFAULT_GUI_POLICY).padEnd(1_048_577, ' '),
+        },
       ],
     });
 
     expect(row.responses[0]).toMatchObject({ status: 200, body: { errors: [] } });
     expect(policyFile(row.tree)?.content).toBe(json(USER_POLICY));
-    expect(row.responses).toHaveLength(2);
+    expect(row.responses[1]).toMatchObject({
+      status: 413,
+      body: { errors: ['Request body is too large'] },
+    });
   });
 
   test('resets to the defaults and repairs a file it can still read', async () => {

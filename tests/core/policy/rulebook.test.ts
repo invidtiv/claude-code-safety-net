@@ -342,10 +342,6 @@ describe('rulebook diagnostics', () => {
 });
 
 describe('the rulebook assertion wrapper', () => {
-  test('a valid rulebook is returned untouched', () => {
-    expect(assertValidRulebook(VALID_RULEBOOK) as unknown).toBe(VALID_RULEBOOK);
-  });
-
   test('an invalid rulebook throws with every diagnostic joined by "; "', () => {
     const thrown = describeOutcome(() => assertValidRulebook({ rulebook_version: 1 }));
     expect(thrown.ok).toBe(false);

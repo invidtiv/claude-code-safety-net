@@ -88,15 +88,11 @@ test('reports the parse failure when no config names the plugin', async () => {
   });
 });
 
-test('follows XDG_CONFIG_HOME to the config OpenCode would read', async () => {
-  expect(
-    await detection(
-      { 'xdg/opencode/opencode.json': plugins('cc-safety-net') },
-      {
-        XDG_CONFIG_HOME: '<home>/xdg',
-      },
-    ),
-  ).toEqual(configured('xdg/opencode/opencode.json'));
+test.each([
+  ['XDG_CONFIG_HOME', { XDG_CONFIG_HOME: '<home>/xdg' }, 'xdg/opencode/opencode.json'],
+  ['an empty OPENCODE_CONFIG_DIR', { OPENCODE_CONFIG_DIR: '' }, JSON_FILE],
+])('reads the config selected by %s', async (_case, env, path) => {
+  expect(await detection({ [path]: plugins('cc-safety-net') }, env)).toEqual(configured(path));
 });
 
 describe('with OPENCODE_CONFIG_DIR naming another directory', () => {

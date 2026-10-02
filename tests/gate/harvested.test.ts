@@ -88,8 +88,6 @@ afterAll(() => {
 
 const BATCH_TIMEOUT_MS = 30_000;
 
-const reached = new Set<string>();
-
 function decide(input: string, index: number, environment: Environment) {
   const levels = index % 10 === 0 ? [...LEVELS, ...PARANOID_LEVELS] : LEVELS;
   const decided = PLACES.flatMap((place) =>
@@ -98,7 +96,6 @@ function decide(input: string, index: number, environment: Environment) {
         loadPolicySnapshot: () => entry.snapshot,
         resolveGitMetadata: () => place.metadata,
       });
-      reached.add(`${ported.outcome} ${String(ported.stage)} ${ported.ruleId ?? ''}`.trim());
       return { column: `${place.where}/${entry.level}`, verdict: ported };
     }),
   );
@@ -138,14 +135,6 @@ function mismatchesAgainstTable(row: HarvestedRow, index: number): string[] {
 const BATCH_SIZE = 250;
 
 describe(`${HARVESTED_LITERAL_COUNT} literals harvested from the shipped test suite`, () => {
-  test('the harvest read whole files, not a fragment of them', () => {
-    expect(HARVESTED_LITERAL_COUNT).toBeGreaterThan(5_000);
-    for (const known of ['rm -rf /', 'git reset --hard', 'cat ~/.ssh/config', 'npm run build']) {
-      expect(HARVESTED_LITERALS).toContain(known);
-    }
-    expect(HARVESTED_LITERALS.filter((literal) => literal.length > 2_000)).toStrictEqual([]);
-  });
-
   for (let start = 0; start < HARVESTED_LITERAL_COUNT; start += BATCH_SIZE) {
     const batch = HARVESTED_LITERALS.slice(start, start + BATCH_SIZE);
     test(
@@ -256,13 +245,6 @@ describe(`${HARVESTED_LITERAL_COUNT} literals harvested from the shipped test su
       'deny @command-analysis Command could not be safely analyzed (strict mode). Simplify the command and retry, or ask the user to verify.',
     );
     expect(row?.['repo/strict']).toBe(row?.['work/strict']);
-  });
-
-  test('the replay reached allows, analyzer denials and secret denials', () => {
-    expect([...reached].some((entry) => entry.startsWith('allow'))).toBeTrue();
-    expect(reached.has('deny command-analysis rm.recursive-force-root-or-home')).toBeTrue();
-    expect(reached.has('deny secret-protection secret.home.ssh')).toBeTrue();
-    expect(reached.has('deny command-validation')).toBeTrue();
   });
 });
 

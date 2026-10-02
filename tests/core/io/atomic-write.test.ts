@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, spyOn, test } from 'b
 import * as fs from 'node:fs';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { atomicWriteFile } from '@/core/io/atomic-write';
 
 const CONTENTS: readonly (readonly [string, string | Buffer])[] = [
@@ -69,10 +69,10 @@ describe('atomic write', () => {
     spy.mockRestore();
 
     expect(staged).toHaveLength(1);
-    expect(staged[0]?.from).toBe(`${dest}.${process.pid}.tmp`);
+    expect(staged[0]?.from).not.toBe(dest);
     expect(dirname(staged[0]?.from ?? '')).toBe(dir);
     expect(staged[0]?.to).toBe(dest);
-    expect(staged[0]?.listing).toEqual(['settings.json', `settings.json.${process.pid}.tmp`]);
+    expect(staged[0]?.listing).toEqual(['settings.json', basename(staged[0]?.from ?? '')].sort());
     expect(readFileSync(staged[0]?.from ?? '', 'utf-8')).toBe('new\n');
     expect(staged[0]?.destination).toBe('old\n');
   });
@@ -81,14 +81,18 @@ describe('atomic write', () => {
     const dir = freshDirectory('failed-rename');
     const dest = join(dir, 'settings.json');
     writeFileSync(dest, 'old\n');
-    const spy = spyOn(fs, 'renameSync').mockImplementation(() => {
+    const staged: string[] = [];
+    const spy = spyOn(fs, 'renameSync').mockImplementation((from) => {
+      staged.push(String(from));
       throw new Error('rename refused');
     });
     expect(() => atomicWriteFile(dest, 'new\n')).toThrow('rename refused');
     spy.mockRestore();
 
     expect(readFileSync(dest, 'utf-8')).toBe('old\n');
-    expect(readdirSync(dir).sort()).toEqual(['settings.json', `settings.json.${process.pid}.tmp`]);
-    expect(readFileSync(`${dest}.${process.pid}.tmp`, 'utf-8')).toBe('new\n');
+    expect(staged).toHaveLength(1);
+    expect(dirname(staged[0] ?? '')).toBe(dir);
+    expect(readdirSync(dir).sort()).toEqual(['settings.json', basename(staged[0] ?? '')].sort());
+    expect(readFileSync(staged[0] ?? '', 'utf-8')).toBe('new\n');
   });
 });

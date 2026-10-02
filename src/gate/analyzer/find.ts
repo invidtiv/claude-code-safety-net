@@ -17,7 +17,7 @@ import { destructiveCommandMatch } from '@/core/rules/destructive';
 import type { DestructiveCommandRuleMatch } from '@/core/rules/types';
 import type { CommandWord } from '@/core/shell/model';
 import { getBasename } from '@/core/shell/tokens';
-import type { AnalyzeNestedOverrides, EnvironmentContext } from '@/gate/analysis';
+import type { EnvironmentContext } from '@/gate/analysis';
 import {
   isProtectedGitHookNameSelection,
   mayHaveGitMetadataEntryNamed,
@@ -101,10 +101,6 @@ export interface AnalyzeFindContext extends RecursiveDeleteTargetTrustOptions {
     tokens: readonly string[],
     cwd: string | null | undefined,
   ) => DestructiveCommandRuleMatch | null;
-  analyzeNested?: (
-    command: string,
-    overrides?: AnalyzeNestedOverrides,
-  ) => DestructiveCommandRuleMatch | null;
 }
 
 export function analyzeFindMatch(
@@ -148,14 +144,8 @@ export function analyzeFindMatch(
     }
 
     const directoryRelative = token === '-execdir' || token === '-okdir';
-    const nestedMatch = context.analyzeTokens
-      ? context.analyzeTokens(execCommand.tokens, directoryRelative ? null : context.cwd)
-      : context.analyzeNested
-        ? context.analyzeNested(execCommand.tokens.join(' '), {
-            effectiveCwd: directoryRelative ? undefined : context.cwd,
-            envAssignments: context.envAssignments,
-          })
-        : null;
+    const nestedMatch =
+      context.analyzeTokens?.(execCommand.tokens, directoryRelative ? null : context.cwd) ?? null;
     const match = nestedMatch?.id.startsWith('custom.')
       ? nestedMatch
       : filterDestructiveCommandMatch(nestedMatch, context.policy);

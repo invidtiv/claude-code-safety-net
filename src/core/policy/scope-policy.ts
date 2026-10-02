@@ -134,16 +134,6 @@ export function getRulesConfigRuntimeErrorsForConfig(
   ];
 }
 
-/** @internal */
-export function getUnknownOverrideErrorsForConfig(
-  configPath: string,
-  filesystemScope?: PolicyFilesystemScope,
-): string[] {
-  const loaded = loadScopePolicyForConfig(configPath, filesystemScope);
-  if (!loaded) return [];
-  return getUnknownOverrideErrorsForScope(loaded.config, loaded.scope, configPath);
-}
-
 function loadScopePolicyForConfig(
   configPath: string,
   filesystemScope?: PolicyFilesystemScope,

@@ -55,6 +55,7 @@ describe('statusline', () => {
         ...row,
       });
       expect(outcome.stdout).toBe(expected);
+      expect(outcome.stderr).toBe('');
     }, 60_000);
   }
 

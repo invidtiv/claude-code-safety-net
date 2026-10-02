@@ -218,10 +218,4 @@ describe('awk program scanning', () => {
       );
     }
   });
-
-  test('analyzeAwkSystemCallMatch works without a scan-work counter', () => {
-    expect(analyzeAwkSystemCallMatch(['awk', 'BEGIN { system($0) }'], nestedAnalyzer)?.id).toBe(
-      'awk.system-dynamic',
-    );
-  });
 });

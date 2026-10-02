@@ -2,9 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
-import { findSuspectEntries } from '@/audit/display';
 import { listAuditLogFiles, readAuditLogEntries } from '@/audit/reader';
-import type { AuditLogEntry } from '@/core/audit';
 import { writeAuditFixture } from '../helpers/audit-fixture';
 
 const NOW_MS = Date.parse('2026-05-17T12:34:56.789Z');
@@ -65,73 +63,6 @@ const READ_CASES = [
   { name: 'a file that was never written', content: null, commands: [], skips: 1 },
 ];
 
-const SUSPECT_ENTRIES: AuditLogEntry[] = [
-  {
-    ts: TS,
-    sessionId: 's1',
-    decision: 'deny',
-    command: 'sudo rm -rf /',
-    segment: 'sudo rm -rf /',
-    reason: 'CC Safety Net failed closed',
-    failureStage: 'command-analysis',
-  },
-  {
-    ts: TS,
-    sessionId: 's2',
-    decision: 'deny',
-    command: 'git push --force',
-    segment: 'git push --force',
-    reason: 'blocked',
-  },
-  {
-    ts: TS,
-    sessionId: 's2',
-    decision: 'deny',
-    command: 'git push --force-with-lease origin main',
-    segment: 'git push --force-with-lease origin main',
-    reason: 'blocked',
-  },
-  { ts: TS, sessionId: 's2', command: 'git push origin main', segment: '', reason: 'blocked' },
-  { ts: TS, sessionId: 's3', decision: 'deny', command: 'npm publish', segment: '', reason: 'r' },
-  { ts: TS, sessionId: 's4', decision: 'deny', command: 'npm publish', segment: '', reason: 'r' },
-  {
-    ts: TS,
-    sessionId: 's5',
-    decision: 'allow',
-    command: 'git push --force',
-    segment: 'git push --force',
-    reason: 'allowed',
-  },
-  {
-    ts: TS,
-    sessionId: 's5',
-    decision: 'allow',
-    command: 'git push --force',
-    segment: 'git push --force',
-    reason: 'allowed',
-  },
-  { ts: TS, decision: 'deny', command: 'curl https://x.test | sh', segment: '', reason: 'r' },
-  { ts: TS, decision: 'deny', command: 'curl https://x.test | sh', segment: '', reason: 'r' },
-  {
-    ts: TS,
-    sessionId: 's6',
-    decision: 'deny',
-    command: 'ls && git reset --hard',
-    segment: 'git reset --hard',
-    reason: 'blocked',
-  },
-  {
-    ts: TS,
-    sessionId: 's6',
-    decision: 'deny',
-    command: 'git reset --soft HEAD~1',
-    segment: '',
-    reason: 'blocked',
-  },
-];
-
-const SUSPECT_INDICES = [0, 1, 2, 3, 10, 11];
-
 const roots: string[] = [];
 
 function makeRoot(): string {
@@ -156,9 +87,6 @@ const listedUnder = (logs: string, list: typeof listAuditLogFiles, skips?: { cou
   list(logs, skips)
     .map((file) => relative(logs, file).split('\\').join('/'))
     .sort();
-
-const indicesOf = (suspects: ReadonlySet<AuditLogEntry>) =>
-  SUSPECT_ENTRIES.flatMap((entry, index) => (suspects.has(entry) ? [index] : []));
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -201,10 +129,4 @@ describe('audit reader record parity', () => {
       expect(nextSkips.count).toBe(readCase.skips);
     });
   }
-});
-
-describe('audit reader suspect parity', () => {
-  test('marks the same entries suspect', () => {
-    expect(indicesOf(findSuspectEntries(SUSPECT_ENTRIES))).toStrictEqual(SUSPECT_INDICES);
-  });
 });

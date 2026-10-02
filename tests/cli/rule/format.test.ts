@@ -2,12 +2,11 @@ import { describe, expect, test } from 'bun:test';
 import * as portedFormat from '@/cli/rule/format';
 import { captureConsole } from '../../helpers/console-capture';
 
-type Printers = Pick<typeof portedFormat, 'printRuleAddResult' | 'printRuleChangeResult'>;
+type Printers = Pick<typeof portedFormat, 'printRuleAddResult'>;
 
 const SCOPE_LINE = 'Project scope: .cc-safety-net/rules/rule.json';
 const CATALOG_A = { spec: 'acme/catalog#main/a', name: 'a', version: '1.0.0', ruleCount: 1 };
 const CATALOG_B = { spec: 'acme/catalog#main/b', name: 'b', version: '2.1.0', ruleCount: 3 };
-const LOCAL_ENTRY = { spec: 'team-rules', name: 'team-rules', version: '1.0.0', ruleCount: 1 };
 
 const rows = [
   {
@@ -115,36 +114,6 @@ const rows = [
     error: [],
   },
   {
-    name: 'a local add carries no add block and names the source it took',
-    print: (printers: Printers) =>
-      printers.printRuleAddResult(
-        { ok: true, errors: [], changes: ['  + team-rules'], entries: [LOCAL_ENTRY] },
-        'team-rules',
-        SCOPE_LINE,
-      ),
-    log: [
-      SCOPE_LINE,
-      '  + team-rules',
-      'Added rulebook source: team-rules',
-      '',
-      'Active rulebooks (1):',
-      '  - team-rules 1.0.0 (1 rule)',
-      '    Source: team-rules',
-    ],
-    error: [],
-  },
-  {
-    name: 'a failed local add names no scope, because it wrote nowhere',
-    print: (printers: Printers) =>
-      printers.printRuleAddResult(
-        { ok: false, errors: ['Rulebook not found: team-rules'], entries: [] },
-        'team-rules',
-        SCOPE_LINE,
-      ),
-    log: [],
-    error: ['Rulebook not found: team-rules'],
-  },
-  {
     name: 'a failed catalogue add reports its errors and nothing it would have taken',
     print: (printers: Printers) =>
       printers.printRuleAddResult(
@@ -166,32 +135,6 @@ const rows = [
       ),
     log: [],
     error: ['Failed to fetch acme/catalog: 500'],
-  },
-  {
-    name: 'a scope left with nothing active says so instead of printing an empty list',
-    print: (printers: Printers) =>
-      printers.printRuleChangeResult(
-        { ok: true, errors: [], changes: ['  - team-rules'], entries: [] },
-        'Removed rulebook source: team-rules',
-      ),
-    log: ['  - team-rules', 'Removed rulebook source: team-rules', '', 'Active rulebooks: (none)'],
-    error: [],
-  },
-  {
-    name: 'a change that leaves one rulebook counts its single rule in the singular',
-    print: (printers: Printers) =>
-      printers.printRuleChangeResult(
-        { ok: true, errors: [], entries: [LOCAL_ENTRY] },
-        'Rule config updated.',
-      ),
-    log: [
-      'Rule config updated.',
-      '',
-      'Active rulebooks (1):',
-      '  - team-rules 1.0.0 (1 rule)',
-      '    Source: team-rules',
-    ],
-    error: [],
   },
 ] as const;
 

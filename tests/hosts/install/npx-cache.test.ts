@@ -32,13 +32,6 @@ const CASES: readonly {
     remaining: ['b', 'c'],
   },
   {
-    name: 'sweeps the cache npx injected and nothing else',
-    env: (home) => ({ npm_config_cache: join(home, 'cache') }),
-    fixture: () => ({ ...npxFixture('cache'), ...npxFixture('.npm') }),
-    cacheDir: 'cache',
-    remaining: ['b', 'c'],
-  },
-  {
     name: 'falls back to the home when the injected cache path is empty',
     env: () => ({ npm_config_cache: '' }),
     fixture: () => npxFixture('.npm'),

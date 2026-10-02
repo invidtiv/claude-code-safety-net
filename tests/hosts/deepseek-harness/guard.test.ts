@@ -199,32 +199,24 @@ function runRow(row: Row) {
   );
 }
 
-const rowNamed = (name: string) => ROWS.find((row) => row.name === name) as Row;
-
 describeDifferential('one DeepSeek Harness tool execution', ROWS, runRow, (row, outcome) => {
   expect(outcome.entries).toHaveLength(row.lines);
   expect(outcome.returned ?? '').toContain(row.contains ?? '');
   expect(outcome.returned === undefined).toBe(!row.blocked);
-});
-
-test('the debug line names the failing DeepSeek Harness guard', async () => {
-  const debugged = await runRow(rowNamed('an analyzer that fails with debug output on'));
-
-  expect(debugged.stderr).toStrictEqual([
-    `CC Safety Net debug: deepseek-harness tool guard analysis failed: ${ANALYZER_FAILURE}`,
-  ]);
-});
-
-test('the audit records the session, agent and command DeepSeek Harness was about to run', async () => {
-  const allowed = await runRow(rowNamed('a safe bash command recorded as an allow'));
-
-  expect(allowed.entries[0]?.entry).toMatchObject({
-    decision: 'allow',
-    agent: 'deepseek-harness',
-    command: 'git status',
-    cwd: realpathSync(fixture.project),
-    sessionId: SESSION,
-  });
+  if (row.env?.CC_SAFETY_NET_DEBUG === '1') {
+    expect(outcome.stderr).toStrictEqual([
+      `CC Safety Net debug: deepseek-harness tool guard analysis failed: ${ANALYZER_FAILURE}`,
+    ]);
+  }
+  if (row.name === 'a safe bash command recorded as an allow') {
+    expect(outcome.entries[0]?.entry).toMatchObject({
+      decision: 'allow',
+      agent: 'deepseek-harness',
+      command: 'git status',
+      cwd: realpathSync(fixture.project),
+      sessionId: SESSION,
+    });
+  }
 });
 
 test('registering installs one tool guard that denies with the formatted reason', async () => {

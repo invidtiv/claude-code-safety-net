@@ -22,8 +22,7 @@ export interface ParsedGitHubSource {
   name: string;
 }
 
-/** @internal */
-export function getRepositoryRulebookPath(name: string): string {
+function getRepositoryRulebookPath(name: string): string {
   return `${RULES_DIR}/${name}/${RULEBOOK_FILE}`;
 }
 

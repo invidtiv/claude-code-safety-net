@@ -4,7 +4,6 @@ import { connect } from 'node:net';
 import { join } from 'node:path';
 import { createPolicyGuiServer as createPortedServer } from '@/gui/index';
 import { snapshotTree, type TreeSpec, writeTree } from './fixture-tree';
-import { normalizePage } from './gui-page';
 import {
   BLANKED_ENV_NAMES,
   createTempRoot,
@@ -78,7 +77,7 @@ const observeBody = (contentType: string | null, text: string, token: string): u
   contentType?.startsWith('application/json')
     ? (JSON.parse(text) as unknown)
     : contentType?.startsWith('text/html')
-      ? normalizePage(text, token)
+      ? text.replaceAll(token, '<token>')
       : text;
 
 async function send(origin: string, token: string, request: GuiRequest): Promise<GuiResponse> {

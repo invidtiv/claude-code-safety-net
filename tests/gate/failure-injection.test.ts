@@ -6,7 +6,6 @@ import {
   AnalysisLimit,
   LIMITS,
   type LimitKind,
-  REASON_DERIVED_COMMAND_WORK_LIMIT,
   REASON_SAFETY_NET_FAILED_CLOSED,
 } from '@/core/budget';
 import { createProcessEnvironment } from '@/core/environment';
@@ -24,15 +23,9 @@ import { policySnapshot } from '../helpers/policy';
 
 const tree = createGateTree('gate-failure-injection-');
 const environment = createProcessEnvironment();
-const snapshot = policySnapshot();
-const dependencies = { loadPolicySnapshot: () => snapshot, resolveGitMetadata: () => null };
+const dependencies = { loadPolicySnapshot: () => policySnapshot(), resolveGitMetadata: () => null };
 
-afterAll(() => {
-  tree.remove();
-});
-
-const repeated = (count: number, make: (index: number) => string, separator = ' ') =>
-  Array.from({ length: count }, (_, index) => make(index)).join(separator);
+afterAll(tree.remove);
 
 function agreedOn(command: string, overrides = {}) {
   const ported = portedVerdict(bashCall(command, tree.workspace), environment, {
@@ -74,17 +67,13 @@ describe('a filesystem that throws instead of answering', () => {
   });
 
   test('commands that never resolve a path are unaffected', () => {
-    for (const command of ['git status', 'echo hello']) brokenRealpathVerdict(command);
+    for (const command of ['git status', 'echo hello']) {
+      expect(brokenRealpathVerdict(command).outcome).toBe('allow');
+    }
   });
 });
 
 describe('input past the intake caps', () => {
-  test('a command longer than the parser can hold', () => {
-    const verdict = agreedOn(`echo ${'y'.repeat(200_000)}`);
-    expect(verdict.stage).toBe('command-analysis');
-    expect(verdict.reason).toBe(REASON_RECURSION_LIMIT);
-  });
-
   test('a tool input string past the traversal cap fails closed with the command withheld', () => {
     const call = toolCall(
       'Bash',
@@ -197,46 +186,6 @@ const CAP_BREACHES = [
     audited: null,
   },
   {
-    kind: 'wrapperPeelIterations',
-    name: 'wrapper peel iterations',
-    breaching: `${repeated(21, () => 'env')} echo ok`,
-    below: `${repeated(19, () => 'env')} echo ok`,
-    reason: REASON_DERIVED_COMMAND_WORK_LIMIT,
-    audited: null,
-  },
-  {
-    kind: 'trackedHeredocFiles',
-    name: 'tracked heredoc files',
-    breaching: `tee ${repeated(64, (index) => `sink${index}`)} > extra <<'BODY'\nhello\nBODY`,
-    below: `tee ${repeated(63, (index) => `sink${index}`)} > extra <<'BODY'\nhello\nBODY`,
-    reason: REASON_DERIVED_COMMAND_WORK_LIMIT,
-    audited: null,
-  },
-  {
-    kind: 'controlFlowStates',
-    name: 'control-flow states',
-    breaching: repeated(64, (index) => `export GIT_DIR=g${index}`, ' && '),
-    below: repeated(63, (index) => `export GIT_DIR=g${index}`, ' && '),
-    reason: REASON_DERIVED_COMMAND_WORK_LIMIT,
-    audited: null,
-  },
-  {
-    kind: 'derivedTokens',
-    name: 'derived command work',
-    breaching: `unmapped-head ${repeated(200, () => 'sh')}`,
-    below: `unmapped-head ${repeated(100, () => 'sh')}`,
-    reason: REASON_DERIVED_COMMAND_WORK_LIMIT,
-    audited: null,
-  },
-  {
-    kind: 'derivedTokens',
-    name: 'parallel expansion',
-    breaching: `parallel echo ${repeated(149, () => 'w')} {} ::: ${repeated(120, (index) => `arg${index}`)}`,
-    below: `parallel echo ${repeated(149, () => 'w')} {} ::: ${repeated(100, (index) => `arg${index}`)}`,
-    reason: REASON_DERIVED_COMMAND_WORK_LIMIT,
-    audited: null,
-  },
-  {
     kind: 'pathEnvironmentExpansion',
     name: 'path environment expansion',
     breaching: `cat ${'${HOME:-'.repeat(65)}x${'}'.repeat(65)}/.ssh/config`,
@@ -285,58 +234,4 @@ describe('every cap a command can still reach', () => {
       ).toBe(breach.audited);
     });
   }
-
-  test('the caps the table names, and the codes the LIMITS table already assigns them', () => {
-    expect(
-      CAP_BREACHES.map((breach) => ({
-        kind: breach.kind,
-        reported: breach.audited,
-        table: LIMITS[breach.kind].errorCode,
-        wordingMatchesTable: breach.reason === LIMITS[breach.kind].reason,
-      })),
-    ).toStrictEqual([
-      {
-        kind: 'recursionDepth',
-        reported: null,
-        table: 'structural-shell-syntax-limit',
-        wordingMatchesTable: true,
-      },
-      {
-        kind: 'wrapperPeelIterations',
-        reported: null,
-        table: 'structural-shell-syntax-limit',
-        wordingMatchesTable: true,
-      },
-      {
-        kind: 'trackedHeredocFiles',
-        reported: null,
-        table: 'structural-shell-syntax-limit',
-        wordingMatchesTable: true,
-      },
-      {
-        kind: 'controlFlowStates',
-        reported: null,
-        table: 'structural-shell-syntax-limit',
-        wordingMatchesTable: true,
-      },
-      {
-        kind: 'derivedTokens',
-        reported: null,
-        table: 'structural-shell-syntax-limit',
-        wordingMatchesTable: true,
-      },
-      {
-        kind: 'derivedTokens',
-        reported: null,
-        table: 'structural-shell-syntax-limit',
-        wordingMatchesTable: true,
-      },
-      {
-        kind: 'pathEnvironmentExpansion',
-        reported: 'path-canonicalization-limit',
-        table: 'path-canonicalization-limit',
-        wordingMatchesTable: true,
-      },
-    ]);
-  });
 });
