@@ -21,6 +21,11 @@ https://github.com/user-attachments/assets/928dbe97-31e3-41d1-b35a-7941a701b056
 
 CC Safety Net (Coding CLI Safety Net) blocks destructive commands and access to secrets such as SSH keys and `.env` files before the tool call runs. It parses what the command does. Wrapping the command or reordering flags does not hide it. A broken config file never blocks anything.
 
+> [!NOTE]
+> **[Full documentation →](https://ccsafetynet.com/docs)** covers installation, configuration, reference material, guides, and the security model. This README is the short version.
+
+## How it works
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/how-it-works-dark.svg">
@@ -29,8 +34,7 @@ CC Safety Net (Coding CLI Safety Net) blocks destructive commands and access to 
   </picture>
 </p>
 
-> [!NOTE]
-> **[Full documentation →](https://ccsafetynet.com/docs)** covers installation, configuration, reference material, guides, and the security model. This README is the short version.
+Details: [How It Works](https://ccsafetynet.com/docs/guides/how-it-works).
 
 ## Supported coding CLIs
 
