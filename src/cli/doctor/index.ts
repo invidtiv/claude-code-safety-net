@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { getActivitySummary } from '@/cli/doctor/activity';
 import { getConfigInfo } from '@/cli/doctor/config';
 import { getEnvironmentInfo } from '@/cli/doctor/environment';
@@ -20,6 +21,10 @@ import { printInstallBanner } from '@/cli/install/banner';
 import { findRuleV2Leftovers } from '@/cli/rule/sync-migrate';
 import { resolveAfterOptionalBanner } from '@/cli/startup/banner';
 import type { Environment } from '@/core/environment';
+import {
+  getLegacyProjectConfigPath,
+  getLegacyUserRulesConfigPath,
+} from '@/core/policy/config-file';
 import { resolveEffectiveDestructiveCommandRules } from '@/core/policy/effective-rules';
 import { getCCSafetyNetEnvModes } from '@/core/policy/env';
 import { describeConfigState, loadPolicySnapshot } from '@/core/policy/snapshot';
@@ -86,6 +91,10 @@ async function collectDoctorReport(
   const ruleStates = resolveEffectiveDestructiveCommandRules(policy, modes.capabilities);
   const activity = getActivitySummary(environment, 7);
   const v2Leftovers = findRuleV2Leftovers(environment, cwd);
+  const legacyConfigs = [
+    getLegacyProjectConfigPath(cwd),
+    getLegacyUserRulesConfigPath(environment),
+  ].filter((path) => existsSync(path));
   const update = options.skipUpdateCheck
     ? {
         currentVersion: getPackageVersion(),
@@ -123,6 +132,7 @@ async function collectDoctorReport(
       ...(snapshot.policyScopes ? { policyScopes: snapshot.policyScopes } : {}),
     },
     ...(v2Leftovers.length > 0 ? { v2Leftovers } : {}),
+    ...(legacyConfigs.length > 0 ? { legacyConfigs } : {}),
     posture: getDoctorPosture(environment, configInfo.userConfig.path),
     activity,
     update,

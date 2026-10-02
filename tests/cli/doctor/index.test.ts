@@ -240,6 +240,27 @@ describe('doctor --json', () => {
     expect(leftovers[0]?.detail).toContain(posix.join('<root>', 'home/.cc-safety-net/cache'));
   }, 120_000);
 
+  test('legacy inline rule configs are reported once as ignored, naming both scopes', async () => {
+    const { report } = await runDoctorJson('legacy-configs', {
+      seed: (side) => {
+        seedFiles(side, {
+          'home/.cc-safety-net/config.json': json({ version: 1, rules: [] }),
+          'project/.safety-net.json': json({ version: 1, rules: [] }),
+        });
+      },
+    });
+    expect(report.legacyConfigs).toEqual([
+      posix.join('<root>', 'project/.safety-net.json'),
+      posix.join('<root>', 'home/.cc-safety-net/config.json'),
+    ]);
+    const legacy = report.findings.filter((finding) => finding.checkId === 'config.legacy-ignored');
+    expect(legacy).toHaveLength(1);
+    expect(legacy[0]?.severity).toBe('warning');
+    expect(legacy[0]?.detail).toContain(posix.join('<root>', 'project/.safety-net.json'));
+    expect(legacy[0]?.detail).toContain(posix.join('<root>', 'home/.cc-safety-net/config.json'));
+    expect(legacy[0]?.fixHint).toContain('cc-safety-net rule migrate');
+  }, 120_000);
+
   test('a regular file where the config directory belongs is an unsafe posture', async () => {
     const { report } = await runDoctorJson('unsafe-posture', {
       seed: (side) => {

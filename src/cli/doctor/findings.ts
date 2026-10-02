@@ -127,6 +127,21 @@ const findingRules: FindingRule[] = [
         : [],
   },
   {
+    derive: (report) =>
+      report.legacyConfigs && report.legacyConfigs.length > 0
+        ? [
+            {
+              checkId: 'config.legacy-ignored',
+              severity: 'warning',
+              title: 'Legacy inline rule configs are ignored',
+              detail: `CC Safety Net no longer loads these files, so their rules enforce nothing: ${report.legacyConfigs.join(', ')}.`,
+              fixHint:
+                'Run `cc-safety-net rule migrate` to convert them (add `--cleanup` to delete each file once it is converted), then rerun doctor.',
+            },
+          ]
+        : [],
+  },
+  {
     derive: (report) => {
       const scope = report.environment.find((item) => item.name === 'CC_SAFETY_NET_AUDIT_SCOPE');
 

@@ -134,6 +134,16 @@ const rows: Array<{ name: string; facts: DoctorFacts; ids: string[] }> = [
     ids: [],
   },
   {
+    name: 'legacy inline rule configs',
+    facts: facts({ legacyConfigs: ['/p/.safety-net.json', '/u/config.json'] }),
+    ids: ['config.legacy-ignored'],
+  },
+  {
+    name: 'an empty legacy config list is not a finding',
+    facts: facts({ legacyConfigs: [] }),
+    ids: [],
+  },
+  {
     name: 'an unparseable audit scope',
     facts: facts({ environment: auditScope('bogus') }),
     ids: ['environment.audit-scope-invalid'],
@@ -217,6 +227,7 @@ const SEVERITIES: Readonly<Record<string, 'error' | 'warning' | 'info'>> = {
   'config.project-invalid': 'error',
   'config.runtime-degraded': 'warning',
   'config.v2-leftovers': 'info',
+  'config.legacy-ignored': 'warning',
   'environment.audit-scope-invalid': 'warning',
   'posture.policy-directory-unsafe': 'error',
   'posture.config-directory-unsafe': 'error',

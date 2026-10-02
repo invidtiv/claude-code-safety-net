@@ -146,6 +146,7 @@ export interface DoctorReport {
   effectiveSafety: EffectiveSafetyInfo;
 
   v2Leftovers?: readonly string[];
+  legacyConfigs?: readonly string[];
   posture: DoctorPosture;
   findings: DoctorFinding[];
   activity: ActivitySummary;
