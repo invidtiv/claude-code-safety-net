@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 600" width="720" height="600" role="img" aria-label="An AI coding agent tries to run a command or open a file. CC Safety Net checks what it would actually do before it runs, against destructive-command, secret-file, and custom rules. Safe calls such as git status run normally; dangerous ones such as git reset --hard never run, and the agent is told why.">
+<style>
+text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif;fill:#f0f6fc}
+.title{font-size:20px;font-weight:600}
+.sub{font-size:14px;fill:#9198a1}
+.chip{font-size:13.5px;font-weight:500}
+.code{font-family:ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;font-size:14px}
+.box{fill:#151b23;stroke:#3d444d;stroke-width:1.25}
+.edge{fill:none;stroke:#9198a1;stroke-width:1.75}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" fill="#9198a1"/></marker></defs>
+
+<rect class="box" x="80" y="16" width="560" height="96" rx="14"/>
+<text class="title" x="360" y="54" text-anchor="middle">AI coding agent</text>
+<text class="sub" x="360" y="84" text-anchor="middle">Claude Code · Codex · Cursor · Gemini CLI · +10 more</text>
+
+<line class="edge" x1="360" y1="112" x2="360" y2="174" marker-end="url(#a)"/>
+<text class="sub" x="376" y="148">tries to run a command or open a file</text>
+
+<rect x="80" y="180" width="560" height="172" rx="14" fill="#151b23" stroke="#e5602a" stroke-width="2.5"/>
+<svg x="252" y="198" width="34" height="34" viewBox="-172.38 -172.38 824.77 824.77"><g transform="rotate(45 240 240)"><rect x="-30" y="14" width="195" height="52" rx="9" fill="#f0f6fc"/><rect x="315" y="14" width="195" height="52" rx="9" fill="#f0f6fc"/><rect x="-30" y="94" width="115" height="52" rx="9" fill="#f0f6fc"/><rect x="235" y="94" width="170" height="52" rx="9" fill="#f0f6fc"/><rect x="155" y="174" width="170" height="52" rx="9" fill="#f0f6fc"/><rect x="75" y="254" width="170" height="52" rx="9" fill="#f0f6fc"/><rect x="395" y="254" width="115" height="52" rx="9" fill="#f0f6fc"/><rect x="-30" y="334" width="195" height="52" rx="9" fill="#f0f6fc"/><rect x="315" y="334" width="195" height="52" rx="9" fill="#f0f6fc"/><rect x="-30" y="414" width="115" height="52" rx="9" fill="#f0f6fc"/><rect x="235" y="414" width="170" height="52" rx="9" fill="#f0f6fc"/><rect x="14" y="155" width="52" height="170" rx="9" fill="#e5602a"/><rect x="94" y="75" width="52" height="170" rx="9" fill="#e5602a"/><rect x="94" y="395" width="52" height="115" rx="9" fill="#e5602a"/><rect x="174" y="-30" width="52" height="195" rx="9" fill="#e5602a"/><rect x="174" y="315" width="52" height="195" rx="9" fill="#e5602a"/><rect x="254" y="-30" width="52" height="115" rx="9" fill="#e5602a"/><rect x="254" y="235" width="52" height="170" rx="9" fill="#e5602a"/><rect x="334" y="155" width="52" height="170" rx="9" fill="#e5602a"/><rect x="414" y="75" width="52" height="170" rx="9" fill="#e5602a"/><rect x="414" y="395" width="52" height="115" rx="9" fill="#e5602a"/></g></svg>
+<text x="296" y="223" font-size="22" font-weight="700" font-style="italic">CC Safety Net</text>
+<text class="sub" x="360" y="258" text-anchor="middle">checks what it would actually do, before it runs</text>
+<rect x="96" y="280" width="168" height="48" rx="10" fill="none" stroke="#3d444d" stroke-width="1.25"/>
+<text class="chip" x="180" y="309" text-anchor="middle">Destructive commands</text>
+<rect x="276" y="280" width="168" height="48" rx="10" fill="none" stroke="#3d444d" stroke-width="1.25"/>
+<text class="chip" x="360" y="309" text-anchor="middle">Secrets &amp; keys</text>
+<rect x="456" y="280" width="168" height="48" rx="10" fill="none" stroke="#3d444d" stroke-width="1.25"/>
+<text class="chip" x="540" y="309" text-anchor="middle">Your own rules</text>
+
+<path class="edge" d="M360 352V384M200 384H520V422" marker-end="url(#a)"/>
+<path class="edge" d="M200 384V422" marker-end="url(#a)"/>
+
+<rect x="60" y="428" width="280" height="156" rx="14" fill="#151b23" stroke="#3fb950" stroke-width="2"/>
+<circle cx="90" cy="462" r="12" fill="#3fb950"/>
+<path d="M84 462.5l4 4 8-8.5" fill="none" stroke="#0d1117" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<text class="title" x="112" y="469" fill="#3fb950" style="fill:#3fb950">Allowed</text>
+<text class="code" x="80" y="506">git status</text>
+<text class="code" x="80" y="530">npm test</text>
+<text class="sub" x="80" y="564">runs as normal</text>
+
+<rect x="380" y="428" width="280" height="156" rx="14" fill="#151b23" stroke="#e5602a" stroke-width="2"/>
+<circle cx="410" cy="462" r="12" fill="#f0763f"/>
+<path d="M405 457l10 10M415 457l-10 10" fill="none" stroke="#0d1117" stroke-width="2.5" stroke-linecap="round"/>
+<text class="title" x="432" y="469" style="fill:#f0763f">Blocked</text>
+<text class="code" x="400" y="506">git reset --hard</text>
+<text class="code" x="400" y="530">cat ~/.ssh/id_rsa</text>
+<text class="sub" x="400" y="564">never runs; the agent is told why</text>
+</svg>

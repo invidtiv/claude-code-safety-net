@@ -21,6 +21,14 @@ https://github.com/user-attachments/assets/928dbe97-31e3-41d1-b35a-7941a701b056
 
 CC Safety Net (Coding CLI Safety Net) blocks destructive commands and access to secrets such as SSH keys and `.env` files before the tool call runs. It parses what the command does. Wrapping the command or reordering flags does not hide it. A broken config file never blocks anything.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./.github/assets/how-it-works-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./.github/assets/how-it-works-light.svg">
+    <img alt="An AI coding agent tries to run a command or open a file. CC Safety Net checks what it would actually do before it runs. Safe calls such as git status run normally; dangerous ones such as git reset --hard never run, and the agent is told why." src="./.github/assets/how-it-works-light.svg" width="720">
+  </picture>
+</p>
+
 > [!NOTE]
 > **[Full documentation →](https://ccsafetynet.com/docs)** covers installation, configuration, reference material, guides, and the security model. This README is the short version.
 
