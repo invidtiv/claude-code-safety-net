@@ -8,7 +8,16 @@ import { getBasename, normalizeCommandToken } from '@/core/shell/tokens';
 import { isDeviceCommand } from './device';
 
 const STANDARD_COMMAND_WRAPPERS = new Set(['sudo', 'env', 'command', 'builtin']);
-const EXEC_WRAPPERS = new Set(['exec', 'nice', 'nohup', 'setsid', 'stdbuf', 'time', 'timeout']);
+const EXEC_WRAPPERS = new Set([
+  'caffeinate',
+  'exec',
+  'nice',
+  'nohup',
+  'setsid',
+  'stdbuf',
+  'time',
+  'timeout',
+]);
 
 interface TransparentWrapperUnwrap {
   wrapper: string;
