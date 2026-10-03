@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Environment } from '@/core/environment';
 import { atomicWriteFile } from '@/core/io/atomic-write';
+import { stripJsonComments } from '@/core/io/jsonc';
 import {
   canonicalPreToolUseEntry,
   isInstalledOnceCanonically,
@@ -35,7 +36,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readJson(path: string): { ok: true; value: unknown } | { ok: false; message: string } {
   try {
-    return { ok: true, value: JSON.parse(readFileSync(path, 'utf-8')) };
+    return { ok: true, value: JSON.parse(stripJsonComments(readFileSync(path, 'utf-8'))) };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : String(error) };
   }

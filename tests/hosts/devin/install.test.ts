@@ -107,6 +107,28 @@ describe('the Devin CLI hook config differential', () => {
     });
   });
 
+  test('reads a config that uses the comments Devin supports', async () => {
+    const seed = [
+      '{',
+      '  // set by the Devin CLI',
+      '  "version": 1,',
+      '  /* organisation */ "devin": { "org_id": "org-0123" },',
+      '  "shell": "zsh",',
+      '  "theme_mode": "dark",',
+      '  "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "echo stop" }] }] }',
+      '}',
+      '',
+    ].join('\n');
+
+    expectRow((await row({ [DEVIN_CONFIG]: seed })).steps, {
+      file: DEVIN_CONFIG,
+      alreadyInstalled: false,
+      wrote: configText({ ...DEVIN_OWNED, hooks: { Stop: STOP, PreToolUse: [OUR_ENTRY] } }),
+      detected: configuredAt(CONFIG_PATH),
+      left: configText({ ...DEVIN_OWNED, hooks: { Stop: STOP, PreToolUse: [] } }),
+    });
+  });
+
   test.skipIf(process.platform === 'win32')('writes under XDG_CONFIG_HOME', async () => {
     const file = 'xdg/devin/config.json';
     const seed = configText({ ...DEVIN_OWNED, hooks: { Stop: STOP } });
