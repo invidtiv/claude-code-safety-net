@@ -9,6 +9,7 @@ import {
 } from '@/core/paths/tmpdir';
 import {
   type DestructiveCommandRulePolicy,
+  destructiveCommandRuleIsEnabled,
   filterDestructiveCommandMatch,
 } from '@/core/policy/effective-rules';
 import type { EffectivePolicy } from '@/core/policy/types';
@@ -375,7 +376,11 @@ function hasOnlyScopedDeleteTargets(
         tmpdirWordSplittingProtected: facts.tmpdirWordSplittingProtected,
       };
       if (
-        !context.paranoid &&
+        !destructiveCommandRuleIsEnabled(
+          context.policy,
+          'rm.recursive-force-paranoid',
+          context.paranoid ?? false,
+        ) &&
         !trackedCwd &&
         classifyRecursiveDeleteTarget(startingPoint, targetContext, classificationOptions).kind ===
           'within_anchored_cwd'

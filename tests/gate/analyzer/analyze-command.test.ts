@@ -1087,6 +1087,24 @@ describe('analyzeCommand', () => {
       'interpreter.one-liner-paranoid',
     );
   });
+
+  test('a paranoid rm rule override decides find -delete in the workspace the way it decides rm -rf', () => {
+    const forcedOn = policySnapshot({
+      destructiveCommandRuleOverrides: { 'rm.recursive-force-paranoid': 'on' },
+    });
+    expect(decisionAt(project, 'rm -rf logs', standard, forcedOn)?.ruleId).toBe(
+      'rm.recursive-force-paranoid',
+    );
+    expect(decisionAt(project, 'find logs -delete', standard, forcedOn)?.ruleId).toBe(
+      'find.delete',
+    );
+
+    const forcedOff = policySnapshot({
+      destructiveCommandRuleOverrides: { 'rm.recursive-force-paranoid': 'off' },
+    });
+    expect(decisionAt(project, 'rm -rf logs', paranoidRm, forcedOff)).toBeNull();
+    expect(decisionAt(project, 'find logs -delete', paranoidRm, forcedOff)).toBeNull();
+  });
 });
 
 function nestShellWrappers(depth: number, payload: string): string {
