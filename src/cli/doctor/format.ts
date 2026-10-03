@@ -214,7 +214,7 @@ export function formatEffectiveSafetySection(report: DoctorReport): string {
   }
 
   if (scopes && scopes.weakenings.length > 0) {
-    lines.push('   Project policy deltas:');
+    lines.push(`   Project policy deltas${scopes.weakeningsIgnored ? ' (ignored)' : ''}:`);
     for (const weakening of scopes.weakenings) lines.push(`      ${weakening}`);
   }
 

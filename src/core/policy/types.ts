@@ -145,6 +145,7 @@ export type CustomRuleMetadata = {
 export type PolicyScopes = {
   readonly levelScope: 'user' | 'project' | 'default';
   readonly weakenings: readonly string[];
+  readonly weakeningsIgnored: boolean;
 };
 
 export function describePolicyScope(scope: PolicyScopes['levelScope']): string {

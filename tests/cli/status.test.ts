@@ -76,6 +76,15 @@ describe('status', () => {
     expect(outcome.stdout).toContain('  Project policy');
   }, 60_000);
 
+  test('a weakening project policy under tighten-only is named as ignored', async () => {
+    const outcome = await runStatus({
+      seed: (side) => seedFiles(side, WEAKENED_BY_PROJECT),
+      env: { CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY: '1' },
+    });
+    expect(outcome.stdout).toContain('  Level        strict\n');
+    expect(outcome.stdout).toContain('  Project policy (ignored)\n');
+  }, 60_000);
+
   test('a rule override that changes inherited behaviour marks the level customised', async () => {
     const outcome = await runStatus({
       seed: (side) => seedFiles(side, { [USER_POLICY]: RULE_SWITCHED_OFF }),

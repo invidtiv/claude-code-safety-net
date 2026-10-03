@@ -47,6 +47,11 @@ const ENV_VARS: Array<{
     description: 'Command decisions recorded: all, or blocked (privacy-minimizing, denials only)',
     defaultBehavior: 'all',
   },
+  {
+    flag: ENV_FLAGS.projectTightenOnly,
+    description: 'Ignore project policy settings that weaken the user policy',
+    defaultBehavior: 'off',
+  },
 ];
 
 export function getEnvironmentInfo(environment: Environment): EnvVarInfo[] {

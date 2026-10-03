@@ -217,12 +217,15 @@ Adjudicated 2026-07-22. Source: `SECURITY.md` safety-preset contract.
 
 A cloned repository ships `.cc-safety-net/policy.json` or custom rules that weaken protection
 relative to the user's own policy, and social-engineers the clone. The project policy is honored as
-written, loosenings included, because within a team the committed file is the leader's legitimate
-artifact and git is its delivery mechanism, not an attack channel. Distinguishing a leader's file
-from a hostile one needs a trust gesture per repository, which was rejected: it defends against an
-adversary CC Safety Net does not claim to stop, since a hostile agent can uninstall the tool
-outright. `CC_SAFETY_NET_LEVEL` still raises the level for a session and is never lowered by a
-project file, and every weakening is displayed in `status`, `doctor`, the statusline, and the GUI.
+written, loosenings included, unless the user sets `CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY=1`, because
+within a team the committed file is the leader's legitimate artifact and git is its delivery
+mechanism, not an attack channel. Distinguishing a leader's file from a hostile one needs a trust
+gesture per repository, which was rejected: it defends against an adversary CC Safety Net does not
+claim to stop, since a hostile agent can uninstall the tool outright. With the switch set, every
+project weakening is ignored while the project file's tightenings still apply; project custom rules
+only ever add denials. `CC_SAFETY_NET_LEVEL` still raises the level for a session and is never
+lowered by a project file. Every weakening is listed in `status` and `doctor`, marked as ignored
+under the switch; the statusline and the GUI flag only weakenings in force.
 
 Adjudicated 2026-08-28. Sources: `TEAM-POLICY-DESIGN.md` threat model adjudication;
 `TEAM-POLICY-DESIGN.md` rejected alternatives (trust-gated weakening).

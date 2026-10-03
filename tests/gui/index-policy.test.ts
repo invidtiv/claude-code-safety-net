@@ -276,6 +276,19 @@ describe('the policy GUI server', () => {
     });
   });
 
+  test('lists no merged weakening while project weakenings are ignored', async () => {
+    const row = await runGuiRow({
+      seed: S5,
+      env: { CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY: '1' },
+      requests: [{ path: '/api/policy' }],
+    });
+    const body = row.responses[0]?.body as PolicyBody;
+    expect(body.projectPolicy).toStrictEqual({
+      path: posix.join('<root>', PROJECT_POLICY_FILE),
+      weakenings: [],
+    });
+  });
+
   test('previews a draft policy and reports the diagnostics of one the schema refuses', async () => {
     const row = await runGuiRow({
       seed: S1,

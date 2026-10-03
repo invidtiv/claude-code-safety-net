@@ -23,6 +23,7 @@ export const ENV_FLAGS = {
   worktree: { name: 'CC_SAFETY_NET_WORKTREE', legacyName: 'SAFETY_NET_WORKTREE' },
   debug: { name: 'CC_SAFETY_NET_DEBUG' },
   auditScope: { name: 'CC_SAFETY_NET_AUDIT_SCOPE' },
+  projectTightenOnly: { name: 'CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY' },
 } as const satisfies Record<string, EnvFlag>;
 
 const SAFETY_LEVELS: PolicySafetyLevel[] = ['standard', 'strict', 'paranoid'];
