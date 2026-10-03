@@ -124,7 +124,7 @@ export function matchFromBlockResult(
   result: Omit<AnalyzeResult, 'segment'> | null,
 ): DestructiveCommandRuleMatch | null {
   return result
-    ? { id: result.ruleId ?? '', reason: result.reason, intent: result.intent ?? 'manual_only' }
+    ? { id: result.ruleId, reason: result.reason, intent: result.intent ?? 'manual_only' }
     : null;
 }
 

@@ -452,7 +452,7 @@ describe('the policy GUI server', () => {
       writeFileSync(marker, readFileSync(join(fixture.linkedWorktree, '.git'), 'utf-8'));
       expect(await explain()).toMatchObject({
         result: 'blocked',
-        ruleId: 'git-metadata-protection',
+        ruleId: 'guard.git-metadata',
       });
 
       unlinkSync(marker);

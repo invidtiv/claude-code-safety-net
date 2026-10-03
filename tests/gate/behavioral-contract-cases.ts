@@ -12,7 +12,7 @@ export interface BehavioralContractCase {
     | { kind: 'allow' }
     | {
         kind: 'block';
-        ruleId: string | undefined;
+        ruleId: string;
         intent: BlockIntent | undefined;
         reasonIncludes: string;
         segment?: string;
@@ -471,7 +471,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd, strict: true }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.strict-unparseable',
         intent: 'stop_and_explain',
         reasonIncludes: 'could not be safely analyzed (strict mode)',
         segment: "echo 'unterminated",
@@ -495,7 +495,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.recursion-limit',
         intent: 'stop_and_explain',
         reasonIncludes: 'exceeds maximum recursion depth',
       },
@@ -655,7 +655,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.dynamic-shell-source',
         intent: 'stop_and_explain',
         reasonIncludes: 'shell execution source cannot be verified',
         segment: 'bash',
@@ -719,7 +719,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd, strict: true }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.unsupported-heredoc',
         intent: 'stop_and_explain',
         reasonIncludes: 'heredoc',
       },
@@ -828,7 +828,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd, strict: true }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.unsupported-heredoc',
         intent: 'stop_and_explain',
         reasonIncludes: 'heredoc',
       },
@@ -839,7 +839,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd, strict: true }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.unsupported-heredoc',
         intent: 'stop_and_explain',
         reasonIncludes: 'Unquoted heredoc',
       },
@@ -1138,7 +1138,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.dynamic-shell-source',
         intent: 'stop_and_explain',
         reasonIncludes: 'shell execution source cannot be verified',
       },

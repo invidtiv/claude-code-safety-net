@@ -15,13 +15,13 @@ function deny(
   reason: string,
   intent: BlockIntent,
   evidence: { command: string; segment?: string } | undefined,
-  ruleId?: string,
+  ruleId = 'test.rule',
 ): Decision {
   return {
     kind: 'deny',
     reason,
     intent,
-    ...(ruleId === undefined ? {} : { ruleId }),
+    ruleId,
     ...(evidence === undefined ? {} : { evidence }),
   };
 }
@@ -187,7 +187,7 @@ describe('denial renderer', () => {
       ),
     ).toEqual({
       reason: 'Bare',
-      ruleId: undefined,
+      ruleId: 'test.rule',
       intent: 'scope_down',
       command: undefined,
       segment: undefined,
@@ -291,6 +291,7 @@ describe('denial renderer', () => {
       [
         'BLOCKED by CC Safety Net',
         `Reason: ${REASON_SAFETY_NET_FAILED_CLOSED}`,
+        'Rule: analysis.failed-closed',
         'Command: rm -rf /',
         FOOTERS.stop_and_explain,
       ].join('\n\n'),
@@ -309,6 +310,7 @@ describe('denial renderer', () => {
       [
         'BLOCKED by CC Safety Net',
         "Reason: CC Safety Net cannot check tool calls because the session's working directory or workspace root no longer exists, is inaccessible, is not a directory, or uses an unsupported path form. Ask the user to restart the session from an existing directory.",
+        'Rule: cwd.session-unusable',
         'Tool: Read',
         'Working directory: /gone/worktree',
         FOOTERS.hard_stop,
@@ -325,6 +327,7 @@ describe('denial renderer', () => {
       [
         'BLOCKED by CC Safety Net',
         'Reason: CC Safety Net could not use the requested working directory because it does not exist, is inaccessible, is not a directory, or uses an unsupported path form. Use an existing accessible working directory. If the requested directory is missing, create it from an accessible location before retrying the command.',
+        'Rule: cwd.requested-unusable',
         'Tool: Bash',
         'Command: git status',
         'Working directory: /tmp/<redacted>',

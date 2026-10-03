@@ -14,7 +14,7 @@ export type Decision =
       kind: 'deny';
       reason: string;
       intent: BlockIntent;
-      ruleId?: string;
+      ruleId: string;
       evidence?: { command: string; segment?: string };
       unverifiedByStandardMode?: true;
     };

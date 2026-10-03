@@ -934,7 +934,7 @@ function reserveWrapperNormalization(budget: { iterations: number }): void {
 }
 
 function blockResultFromMatch(match: DestructiveCommandRuleMatch): AnalyzeBlockResult {
-  return { reason: match.reason, ruleId: match.id || undefined, intent: match.intent };
+  return { reason: match.reason, ruleId: match.id, intent: match.intent };
 }
 
 function dynamicShellSourceResult(trace: CommandTraceContext | undefined): AnalyzeBlockResult {
@@ -943,7 +943,11 @@ function dynamicShellSourceResult(trace: CommandTraceContext | undefined): Analy
 }
 
 function dynamicShellSourceMatch(): DestructiveCommandRuleMatch {
-  return { id: '', reason: REASON_DYNAMIC_SHELL_SOURCE, intent: 'stop_and_explain' };
+  return {
+    id: 'analysis.dynamic-shell-source',
+    reason: REASON_DYNAMIC_SHELL_SOURCE,
+    intent: 'stop_and_explain',
+  };
 }
 
 function isShellWrapperCommand(head: string, normalizedHead: string): boolean {

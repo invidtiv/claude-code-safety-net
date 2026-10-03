@@ -94,6 +94,7 @@ export function createFailedClosedDenial(
 ): IntegrationDenial {
   return {
     reason: REASON_SAFETY_NET_FAILED_CLOSED,
+    ruleId: 'analysis.failed-closed',
     intent: 'stop_and_explain',
     command: options.command,
     segment: options.segment ?? options.command,
@@ -107,11 +108,13 @@ const CWD_DENIALS = {
       reason:
         "CC Safety Net cannot check tool calls because the session's working directory or workspace root no longer exists, is inaccessible, is not a directory, or uses an unsupported path form. Ask the user to restart the session from an existing directory.",
       intent: 'hard_stop',
+      ruleId: 'cwd.session-unusable',
     },
     'outside-workspace': {
       reason:
         "CC Safety Net cannot check tool calls because the session's working directory is outside its workspace roots. Ask the user to restart the session from a directory inside the workspace.",
       intent: 'hard_stop',
+      ruleId: 'cwd.session-outside-workspace',
     },
   },
   requested: {
@@ -119,14 +122,19 @@ const CWD_DENIALS = {
       reason:
         'CC Safety Net could not use the requested working directory because it does not exist, is inaccessible, is not a directory, or uses an unsupported path form. Use an existing accessible working directory. If the requested directory is missing, create it from an accessible location before retrying the command.',
       intent: 'use_alternative',
+      ruleId: 'cwd.requested-unusable',
     },
     'outside-workspace': {
       reason:
         "CC Safety Net could not use the requested working directory because it is outside the session's workspace. Use a working directory inside the workspace.",
       intent: 'use_alternative',
+      ruleId: 'cwd.requested-outside-workspace',
     },
   },
-} as const satisfies Record<string, Record<string, { reason: string; intent: BlockIntent }>>;
+} as const satisfies Record<
+  string,
+  Record<string, { reason: string; intent: BlockIntent; ruleId: string }>
+>;
 
 export type CwdProblem = keyof (typeof CWD_DENIALS)['session'];
 
@@ -139,7 +147,7 @@ export type CwdDenial = {
 export function createCwdDenial(
   cause: CwdDenial,
   options: Pick<IntegrationDenial, 'command' | 'toolName'> = {},
-): IntegrationDenial {
+) {
   return {
     ...CWD_DENIALS[cause.directory][cause.problem],
     command: options.command,

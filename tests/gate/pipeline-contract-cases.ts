@@ -16,7 +16,7 @@ export interface PipelineContractCase {
     | {
         kind: 'block';
         stage: GuardStage;
-        ruleId?: string;
+        ruleId: string;
         intent: BlockIntent;
         reasonIncludes: string;
       };
@@ -52,12 +52,14 @@ export function pipelineContractCases(paths: {
   const policyBlock: PipelineContractCase['expected'] = {
     kind: 'block',
     stage: 'policy-protection',
+    ruleId: 'guard.policy-config',
     intent: 'hard_stop',
     reasonIncludes: REASON_POLICY_CONFIG_PROTECTION,
   };
   const gitMetadataBlock: PipelineContractCase['expected'] = {
     kind: 'block',
     stage: 'policy-protection',
+    ruleId: 'guard.git-metadata',
     intent: 'hard_stop',
     reasonIncludes: REASON_GIT_METADATA_PROTECTION,
   };
@@ -160,6 +162,7 @@ export function pipelineContractCases(paths: {
       expected: {
         kind: 'block',
         stage: 'policy-protection',
+        ruleId: 'guard.policy-apply',
         intent: 'hard_stop',
         reasonIncludes: REASON_POLICY_APPLY_PROTECTION,
       },
@@ -197,6 +200,7 @@ export function pipelineContractCases(paths: {
       expected: {
         kind: 'block',
         stage: 'command-validation',
+        ruleId: 'analysis.failed-closed',
         intent: 'stop_and_explain',
         reasonIncludes: 'failed closed',
       },

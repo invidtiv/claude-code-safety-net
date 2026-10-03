@@ -101,6 +101,7 @@ const DESCRIPTORS: Readonly<Record<string, Record<string, unknown>>> = {
       'CC Safety Net failed closed because command analysis failed unexpectedly. This is not caused by your command. Report it to the user.',
     cwd: tree.workspace,
     toolName: 'Bash',
+    ruleId: 'analysis.failed-closed',
     intent: 'stop_and_explain',
   },
 };

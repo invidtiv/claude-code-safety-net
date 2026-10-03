@@ -108,6 +108,7 @@ describe('a host that truncated the tool input', () => {
           command,
           intent: 'stop_and_explain',
           reason: REASON_SAFETY_NET_FAILED_CLOSED,
+          ruleId: 'analysis.failed-closed',
           segment: command,
           toolName: 'run_terminal_command',
         },

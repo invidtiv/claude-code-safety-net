@@ -367,6 +367,7 @@ describe('the execution directory a hook call reports', () => {
     expect(resolved.denials).toEqual([
       {
         reason: FAIL_CLOSED_REASON,
+        ruleId: 'analysis.failed-closed',
         intent: 'stop_and_explain',
         command: 'echo hi',
         segment: 'echo hi',
@@ -385,6 +386,7 @@ describe('the execution directory a hook call reports', () => {
     expect(resolved.denials).toEqual([
       {
         reason: SESSION_CWD_UNUSABLE_REASON,
+        ruleId: 'cwd.session-unusable',
         intent: 'hard_stop',
         command: 'echo hi',
         cwd: cwd(),
@@ -421,6 +423,7 @@ describe('the fail-closed denial', () => {
   test('the command is carried when the input plainly holds one', () => {
     expect(denialFor({ command: 'rm -rf /' })).toEqual({
       reason: FAIL_CLOSED_REASON,
+      ruleId: 'analysis.failed-closed',
       intent: 'stop_and_explain',
       command: 'rm -rf /',
       segment: 'rm -rf /',
@@ -444,6 +447,7 @@ describe('the fail-closed denial', () => {
   ] as const)('%s denies without a command', (_label, toolInput) => {
     expect(denialFor(toolInput)).toEqual({
       reason: FAIL_CLOSED_REASON,
+      ruleId: 'analysis.failed-closed',
       intent: 'stop_and_explain',
       toolName: 'Bash',
     });

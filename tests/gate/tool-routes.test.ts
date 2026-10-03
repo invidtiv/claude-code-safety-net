@@ -74,7 +74,7 @@ const PAYLOADS = [
     name: 'Write targets the user policy file',
     toolName: 'Write',
     input: { file_path: userPolicyPath, content: '{"version":1}' },
-    denies: 'policy',
+    denies: 'guard.policy-config',
   },
   {
     name: 'Write targets a Git hook',
@@ -84,7 +84,7 @@ const PAYLOADS = [
       content: '#!/bin/sh\n',
     },
     cwd: tree.repository,
-    denies: 'git-metadata',
+    denies: 'guard.git-metadata',
   },
   {
     name: 'Write targets the Git config file',
@@ -198,11 +198,10 @@ describe('hand-built host payloads', () => {
         });
         return;
       }
-      const protects = payload.denies === 'policy' || payload.denies === 'git-metadata';
       expect(decisionOf(verdict)).toStrictEqual({
         outcome: 'deny',
-        stage: protects ? 'policy-protection' : 'secret-protection',
-        ruleId: protects ? undefined : payload.denies,
+        stage: payload.denies.startsWith('guard.') ? 'policy-protection' : 'secret-protection',
+        ruleId: payload.denies,
       });
     });
   }

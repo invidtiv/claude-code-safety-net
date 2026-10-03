@@ -100,7 +100,7 @@ function expectContract(
   const decision = evaluation.decision;
   expect(decision.kind).toBe('deny');
   if (decision.kind !== 'deny') return;
-  expect<{ ruleId: string | undefined; intent: BlockIntent | undefined }>({
+  expect<{ ruleId: string; intent: BlockIntent | undefined }>({
     ruleId: decision.ruleId,
     intent: decision.intent,
   }).toStrictEqual({ ruleId: expected.ruleId, intent: expected.intent });

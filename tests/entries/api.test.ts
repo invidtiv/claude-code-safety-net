@@ -9,7 +9,12 @@ import { describeDifferential } from '../helpers/in-process';
 
 type Outcome = { returned: CheckCommandResult } | { thrown: string };
 
-type Row = { name: string; input: unknown; expected: Outcome };
+type Row = {
+  name: string;
+  input: unknown;
+  env?: Record<string, string>;
+  expected: Outcome;
+};
 
 const fixture = createHookFixture('next-api-');
 const scope = hostEnv(fixture, join(fixture.home, 'audit'));
@@ -22,6 +27,7 @@ const unusableCwd: Outcome = {
   returned: {
     kind: 'deny',
     reason: createCwdDenial({ directory: 'requested', problem: 'unusable', cwd: '' }).reason,
+    ruleId: 'cwd.requested-unusable',
   },
 };
 const allowed: Outcome = { returned: { kind: 'allow' } };
@@ -80,6 +86,32 @@ const ROWS: readonly Row[] = [
         kind: 'deny',
         reason:
           'This path contains the protected policy config and you must not modify or delete it.',
+        ruleId: 'guard.policy-config',
+      },
+    },
+  },
+  {
+    name: 'a shell wrapper whose script is a variable',
+    input: { command: 'sh -c "$CMD"', cwd: fixture.project },
+    expected: {
+      returned: {
+        kind: 'deny',
+        reason:
+          'shell execution source cannot be verified safely. Use a literal command string or ask the user to run it manually.',
+        ruleId: 'analysis.dynamic-shell-source',
+      },
+    },
+  },
+  {
+    name: 'an unparseable command in strict mode',
+    input: { command: "echo 'unterminated", cwd: fixture.project },
+    env: { CC_SAFETY_NET_STRICT: '1' },
+    expected: {
+      returned: {
+        kind: 'deny',
+        reason:
+          'Command could not be safely analyzed (strict mode). Simplify the command and retry, or ask the user to verify.',
+        ruleId: 'analysis.strict-unparseable',
       },
     },
   },
@@ -122,7 +154,7 @@ describeDifferential(
   'the library API answers one input the same way on both implementations',
   ROWS,
   async (row) =>
-    withEnv(scope, () => {
+    withEnv({ ...scope, ...row.env }, () => {
       const check = portedCheckCommand as (input: unknown) => CheckCommandResult;
       try {
         return { returned: check(row.input) } satisfies Outcome;

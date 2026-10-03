@@ -81,7 +81,12 @@ export function analyzeCommandInternal(
 ): AnalyzeResult | null {
   if (depth >= LIMITS.recursionDepth.cap) {
     options.trace?.recordSegment({ type: 'error', message: REASON_RECURSION_LIMIT });
-    return { reason: REASON_RECURSION_LIMIT, segment: command, intent: 'stop_and_explain' };
+    return {
+      reason: REASON_RECURSION_LIMIT,
+      segment: command,
+      ruleId: 'analysis.recursion-limit',
+      intent: 'stop_and_explain',
+    };
   }
 
   const program =
@@ -91,7 +96,12 @@ export function analyzeCommandInternal(
 
   if (program.status === 'limited') {
     options.trace?.recordSegment({ type: 'error', message: REASON_RECURSION_LIMIT });
-    return { reason: REASON_RECURSION_LIMIT, segment: command, intent: 'stop_and_explain' };
+    return {
+      reason: REASON_RECURSION_LIMIT,
+      segment: command,
+      ruleId: 'analysis.recursion-limit',
+      intent: 'stop_and_explain',
+    };
   }
 
   if (program.status === 'invalid') {
@@ -100,15 +110,30 @@ export function analyzeCommandInternal(
       if (!options.strict) return analyzeUnparseableCommand(command, options);
       const reason = `${REASON_UNSUPPORTED_HEREDOC_SYNTAX}: ${heredocIssue.message}`;
       options.trace?.recordGlobal({ type: 'error', message: reason });
-      return { reason, segment: command, intent: 'stop_and_explain' };
+      return {
+        reason,
+        segment: command,
+        ruleId: 'analysis.unsupported-heredoc',
+        intent: 'stop_and_explain',
+      };
     }
     recordStrictUnparseable(command, options);
-    return { reason: REASON_STRICT_UNPARSEABLE, segment: command, intent: 'stop_and_explain' };
+    return {
+      reason: REASON_STRICT_UNPARSEABLE,
+      segment: command,
+      ruleId: 'analysis.strict-unparseable',
+      intent: 'stop_and_explain',
+    };
   }
 
   if (options.strict && program.status === 'partial') {
     recordStrictUnparseable(command, options);
-    return { reason: REASON_STRICT_UNPARSEABLE, segment: command, intent: 'stop_and_explain' };
+    return {
+      reason: REASON_STRICT_UNPARSEABLE,
+      segment: command,
+      ruleId: 'analysis.strict-unparseable',
+      intent: 'stop_and_explain',
+    };
   }
 
   const hasUnclosedQuote = program.issues.some((issue) => issue.code.includes('quote'));
@@ -640,6 +665,7 @@ function recursionLimitAnalysis(
     result: {
       reason: REASON_RECURSION_LIMIT,
       segment,
+      ruleId: 'analysis.recursion-limit',
       intent: 'stop_and_explain',
     },
     states: [...states],
@@ -673,6 +699,7 @@ function analyzeCommandView(
     return {
       reason: heredocReason,
       segment: commandView.source,
+      ruleId: 'analysis.unsupported-heredoc',
       intent: 'stop_and_explain',
     };
   }

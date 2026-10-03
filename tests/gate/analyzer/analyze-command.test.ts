@@ -582,6 +582,7 @@ describe('analyzeCommand', () => {
       },
       {
         command: "foo find . -exec sh -c 'exec $X' ;",
+        ruleId: 'analysis.dynamic-shell-source',
         intent: 'stop_and_explain',
         segment: 'foo find . -exec sh -c exec $X',
       },

@@ -13,7 +13,7 @@ export type CheckCommandInput = Readonly<{
 
 export type CheckCommandResult =
   | Readonly<{ kind: 'allow' }>
-  | Readonly<{ kind: 'deny'; reason: string; ruleId?: string }>;
+  | Readonly<{ kind: 'deny'; reason: string; ruleId: string }>;
 
 export function checkCommand(input: CheckCommandInput): CheckCommandResult {
   if (typeof input !== 'object' || input === null) {
@@ -28,10 +28,8 @@ export function checkCommand(input: CheckCommandInput): CheckCommandResult {
 
   const cwd = resolve(input.cwd);
   if (!isUsableDirectory(cwd)) {
-    return {
-      kind: 'deny',
-      reason: createCwdDenial({ directory: 'requested', problem: 'unusable', cwd }).reason,
-    };
+    const denial = createCwdDenial({ directory: 'requested', problem: 'unusable', cwd });
+    return { kind: 'deny', reason: denial.reason, ruleId: denial.ruleId };
   }
   return projectDecision(
     evaluateCommandGuard(
@@ -57,9 +55,5 @@ function evaluateCommandGuard(invocation: Parameters<typeof evaluateGuard>[0]): 
 
 function projectDecision(decision: Decision): CheckCommandResult {
   if (decision.kind === 'allow') return { kind: 'allow' };
-  return {
-    kind: 'deny',
-    reason: decision.reason,
-    ...(decision.ruleId === undefined ? {} : { ruleId: decision.ruleId }),
-  };
+  return { kind: 'deny', reason: decision.reason, ruleId: decision.ruleId };
 }

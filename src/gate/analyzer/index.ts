@@ -48,7 +48,7 @@ export function analyzeCommandWithProgram(
     kind: 'deny',
     reason: result.reason,
     intent: result.intent ?? 'manual_only',
-    ...(result.ruleId ? { ruleId: result.ruleId } : {}),
+    ruleId: result.ruleId,
     evidence: { command, segment: result.segment },
   };
 }
@@ -85,6 +85,7 @@ export function analyzerCapBreach(
     decision: {
       kind: 'deny',
       reason: limit.reason,
+      ruleId: 'analysis.derived-command-limit',
       intent: 'stop_and_explain',
       evidence: { command, segment: command },
     },

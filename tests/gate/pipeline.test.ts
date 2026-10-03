@@ -214,21 +214,25 @@ const INJECTED_CAUSES: readonly {
   readonly label: string;
   readonly ported: () => never;
   readonly reasonIncludes: string;
+  readonly ruleId: string;
 }[] = [
   {
     label: 'an unexpected fault',
     ported: throwing(new Error('injected dependency fault')),
     reasonIncludes: 'failed closed',
+    ruleId: 'analysis.failed-closed',
   },
   {
     label: 'a path canonicalization breach',
     ported: throwing(new AnalysisLimit('realpathAttempts')),
     reasonIncludes: 'exceeds safe analysis limits',
+    ruleId: 'analysis.limit',
   },
   {
     label: 'a structural shell syntax breach',
     ported: throwing(new PortedStructuralLimit()),
     reasonIncludes: 'exceeds safe analysis limits',
+    ruleId: 'analysis.limit',
   },
 ];
 
@@ -260,6 +264,7 @@ describe('a failing dependency fails closed the same way', () => {
           decision: {
             kind: 'deny',
             reason: expect.stringContaining(cause.reasonIncludes),
+            ruleId: cause.ruleId,
             intent: 'stop_and_explain',
             evidence: { command: 'git status', segment: 'git status' },
           },
@@ -279,6 +284,7 @@ describe('a failing dependency fails closed the same way', () => {
       decision: {
         kind: 'deny',
         reason: expect.stringContaining('failed closed'),
+        ruleId: 'analysis.failed-closed',
         intent: 'stop_and_explain',
       },
     });
