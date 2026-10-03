@@ -82,6 +82,20 @@ describe('the Factory Droid hook config differential', () => {
     expect(fileAt(steps?.uninstall.tree, '.factory/settings.json')).toBe(settings);
   });
 
+  test('keeps the hooks file on uninstall so a settings.json fallback stays inactive', async () => {
+    const settings = `${JSON.stringify({ hooks: { PreToolUse: [CANONICAL_ENTRY] } })}\n`;
+    const { steps } = await row({ '.factory/settings.json': settings });
+
+    expectRow(steps, {
+      file: HOOKS,
+      alreadyInstalled: false,
+      wrote: droidHooks({ PreToolUse: [CANONICAL_ENTRY] }),
+      detected: CONFIGURED,
+      left: droidHooks({ PreToolUse: [] }),
+    });
+    expect(fileAt(steps?.uninstall.tree, '.factory/settings.json')).toBe(settings);
+  });
+
   test.each([
     [
       '{ "PreToolUse": [',

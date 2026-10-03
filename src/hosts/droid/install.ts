@@ -17,6 +17,10 @@ export function getDroidHooksPath(environment: Environment): string {
   return join(environment.home, '.factory', 'hooks.json');
 }
 
+function getDroidSettingsPath(environment: Environment): string {
+  return join(environment.home, '.factory', 'settings.json');
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -66,7 +70,7 @@ export function installDroid(environment: Environment): InstallResult {
   const hooksFileExists = existsSync(configPath);
   const config = hooksFileExists
     ? parseDroidHooksConfig(configPath)
-    : settingsFallbackHooks(join(environment.home, '.factory', 'settings.json'));
+    : settingsFallbackHooks(getDroidSettingsPath(environment));
   const existing = getPreToolUse(config);
   if (
     hooksFileExists &&
@@ -94,7 +98,8 @@ export function uninstallDroid(environment: Environment): InstallResult {
     return { path: configPath, alreadyInstalled: false };
   }
 
-  if (stripped.length === 0 && Object.keys(config).length === 1) {
+  const settingsFallbackWouldLoad = existsSync(getDroidSettingsPath(environment));
+  if (stripped.length === 0 && Object.keys(config).length === 1 && !settingsFallbackWouldLoad) {
     rmSync(configPath);
     return { path: configPath, alreadyInstalled: true };
   }
