@@ -7,6 +7,7 @@ import {
   createTestEnvironment,
   processPathResolver,
 } from '@/core/environment';
+import { getCCSafetyNetEnvModes } from '@/core/policy/env';
 import type { RulesPolicyOptions } from '@/core/policy/paths';
 import { loadPolicySnapshot as loadPortedSnapshot } from '@/core/policy/snapshot';
 import type { PolicySnapshot } from '@/core/policy/types';
@@ -303,6 +304,38 @@ const ROWS: readonly Row[] = [
         ],
         weakeningsIgnored: true,
       });
+    },
+  },
+  {
+    name: 'a project override that disables a capability the environment level raised, under tighten-only',
+    tree: {
+      [PROJECT_POLICY]: json({ version: 1, safety: { overrides: { paranoid_rm: false } } }),
+    },
+    env: () => ({ CC_SAFETY_NET_LEVEL: 'paranoid', CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY: '1' }),
+    check: (snapshot) => {
+      expect(
+        getCCSafetyNetEnvModes(snapshot.policy, new Map([['CC_SAFETY_NET_LEVEL', 'paranoid']]))
+          .paranoidRm,
+      ).toBeTrue();
+      expect(snapshot.policyScopes).toEqual({
+        levelScope: 'default',
+        weakenings: ['project policy disables paranoid_rm'],
+        weakeningsIgnored: true,
+      });
+    },
+  },
+  {
+    name: 'a project override that disables a capability the environment level raised',
+    tree: {
+      [PROJECT_POLICY]: json({ version: 1, safety: { overrides: { paranoid_rm: false } } }),
+    },
+    env: () => ({ CC_SAFETY_NET_LEVEL: 'paranoid' }),
+    check: (snapshot) => {
+      expect(
+        getCCSafetyNetEnvModes(snapshot.policy, new Map([['CC_SAFETY_NET_LEVEL', 'paranoid']]))
+          .paranoidRm,
+      ).toBeFalse();
+      expect(snapshot.policyScopes?.weakenings).toEqual(['project policy disables paranoid_rm']);
     },
   },
   {

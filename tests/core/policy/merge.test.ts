@@ -427,6 +427,17 @@ describe('merging with project weakenings ignored', () => {
     ).toBe('paranoid');
   });
 
+  test('a capability raised by the session level stays on when the project turns it off', () => {
+    const merged = mergeProjectPolicy(
+      { ...STRONG_USER, safety: { level: 'standard', overrides: {} } },
+      { safety: { overrides: { paranoid_rm: false } } },
+      true,
+      'paranoid',
+    );
+    expect(merged.policy.safety.overrides).toEqual({});
+    expect(merged.weakenings).toEqual(['project policy disables paranoid_rm']);
+  });
+
   test('a rule switched off by the project stays on, while a tightening beside it applies', () => {
     expect(
       mergeProjectPolicy(

@@ -221,11 +221,14 @@ written, loosenings included, unless the user sets `CC_SAFETY_NET_PROJECT_TIGHTE
 within a team the committed file is the leader's legitimate artifact and git is its delivery
 mechanism, not an attack channel. Distinguishing a leader's file from a hostile one needs a trust
 gesture per repository, which was rejected: it defends against an adversary CC Safety Net does not
-claim to stop, since a hostile agent can uninstall the tool outright. With the switch set, every
-project weakening is ignored while the project file's tightenings still apply; project custom rules
-only ever add denials. `CC_SAFETY_NET_LEVEL` still raises the level for a session and is never
-lowered by a project file. Every weakening is listed in `status` and `doctor`, marked as ignored
-under the switch; the statusline and the GUI flag only weakenings in force.
+claim to stop, since a hostile agent can uninstall the tool outright. A weakening is measured
+against the user policy file with its level raised by `CC_SAFETY_NET_LEVEL`. With the switch set,
+every such weakening is ignored while the project file's tightenings still apply; project custom
+rules only ever add denials. A project level never lowers `CC_SAFETY_NET_LEVEL`, but without the
+switch a project `safety.overrides` entry can turn off a capability that level enables. The
+`CC_SAFETY_NET_STRICT` and `CC_SAFETY_NET_PARANOID*` flags apply after every policy override, so a
+project file never turns them off. Every weakening is listed in `status` and `doctor`, marked as
+ignored under the switch; the statusline and the GUI flag only weakenings in force.
 
 Adjudicated 2026-08-28. Sources: `TEAM-POLICY-DESIGN.md` threat model adjudication;
 `TEAM-POLICY-DESIGN.md` rejected alternatives (trust-gated weakening).

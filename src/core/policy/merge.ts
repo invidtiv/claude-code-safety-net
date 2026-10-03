@@ -33,8 +33,9 @@ export function mergeProjectPolicy(
   user: GuiPolicy,
   project: ProjectPolicyProjection,
   tightenOnly = false,
+  sessionLevel = user.safety.level,
 ): { policy: GuiPolicy; weakenings: readonly string[] } {
-  const weakenings = collectWeakenings(user, project);
+  const weakenings = collectWeakenings(user, project, sessionLevel);
   const ignored = new Set(tightenOnly ? weakenings.map((weakening) => weakening.field) : []);
   const kept = <T>(field: string, value: T | undefined) => (ignored.has(field) ? undefined : value);
   const keptEntries = <T>(field: string, entries: Record<string, T> | undefined) =>
@@ -104,9 +105,13 @@ function unionPaths(user: readonly string[], project: readonly string[] | undefi
   return [...new Set([...user, ...(project ?? [])])];
 }
 
-function collectWeakenings(user: GuiPolicy, project: ProjectPolicyProjection): Weakening[] {
+function collectWeakenings(
+  user: GuiPolicy,
+  project: ProjectPolicyProjection,
+  sessionLevel: PolicySafetyLevel,
+): Weakening[] {
   const level = project.safety?.level;
-  const capabilities = SAFETY_LEVEL_CAPABILITIES[user.safety.level];
+  const capabilities = SAFETY_LEVEL_CAPABILITIES[sessionLevel];
   return [
     ...(level && LEVEL_RANK[level] < LEVEL_RANK[user.safety.level]
       ? [

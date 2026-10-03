@@ -14,7 +14,7 @@ import {
   MIN_AUDIT_RETENTION_DAYS,
 } from './audit-retention-days';
 import { resolveEffectiveDestructiveCommandRules } from './effective-rules';
-import { ENV_FLAGS, envTruthy, getCCSafetyNetEnvModes } from './env';
+import { ENV_FLAGS, envTruthy, getCCSafetyNetEnvModes, sessionSafetyLevel } from './env';
 import { mergeProjectPolicy, type ProjectPolicyProjection } from './merge';
 import { getProjectPolicyPath, getUserPolicyPath, type RulesPolicyOptions } from './paths';
 import { custom, type Issue, renderIssuePath, typed } from './rules-config';
@@ -82,9 +82,15 @@ export function loadPolicyConfig(
   const projectFile = readPolicyFile(getProjectPolicyPath(options.cwd), environment.home);
   const project = projectPolicyProjection(projectFile.parsed, environment.home);
   const weakeningsIgnored = envTruthy(ENV_FLAGS.projectTightenOnly, environment.env);
+  const userPolicy = user.gui ?? DEFAULT_GUI_POLICY;
   const merged =
     Object.keys(project.policy).length > 0
-      ? mergeProjectPolicy(user.gui ?? DEFAULT_GUI_POLICY, project.policy, weakeningsIgnored)
+      ? mergeProjectPolicy(
+          userPolicy,
+          project.policy,
+          weakeningsIgnored,
+          sessionSafetyLevel(userPolicy.safety.level, environment.env),
+        )
       : undefined;
   const errors = [...user.errors, ...projectFile.errors, ...project.diagnostics];
 
