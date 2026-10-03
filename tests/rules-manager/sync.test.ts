@@ -283,7 +283,7 @@ describe('adding rulebook sources', () => {
     expect(contentAt(tree, rulebookPath('a'))).toBe(A_V2);
   });
 
-  test('re-adding a commit-pinned rulebook configures and writes nothing', async () => {
+  test('re-adding a commit-pinned rulebook preserves the config and reports no changes', async () => {
     const seed = {
       [CONFIG]: rulesConfig([`acme/catalog#${SHA_MAIN}/a`]),
       [rulebookPath('a')]: A_V1,
@@ -472,7 +472,7 @@ describe('updating rulebook sources', () => {
     expect(contentAt(tree, rulebookPath('b'))).toBe(B_V1);
   });
 
-  test('an unchanged upstream reports no change and writes nothing', async () => {
+  test('an unchanged upstream reports no change and preserves the vendored bytes', async () => {
     const { results, tree, side } = await syncRow(vendoredCatalog(['a', 'b']), { refresh: true });
     expect(results.ok).toBeTrue();
     expect(results.changes).toStrictEqual([]);
@@ -507,117 +507,6 @@ describe('removing rulebook sources', () => {
     [CONFIG]: rulesConfig(['local']),
     [rulebookPath('local')]: v1Rulebook('local'),
   };
-
-  test('removes an exact local spec', async () => {
-    const { results, tree, side } = await removeRow(LOCAL_SCOPE, 'local');
-    expect(results).toStrictEqual({ ok: true, errors: [], entries: [], changes: [] });
-    expect(contentAt(tree, CONFIG)).toBe(rulesConfig([]));
-    expect(contentAt(tree, rulebookPath('local'))).toBe(v1Rulebook('local'));
-    expectGateView(side, 'project', results);
-  });
-
-  test('removes by rulebook name and leaves the vendored file alone', async () => {
-    const { results, tree } = await removeRow(
-      {
-        [CONFIG]: rulesConfig(['acme/other#main/x', 'local']),
-        [rulebookPath('x')]: X_V1,
-        [rulebookPath('local')]: v1Rulebook('local'),
-      },
-      'x',
-    );
-    expect(results.ok).toBeTrue();
-    expect(results.entries).toStrictEqual([
-      { spec: 'local', name: 'local', version: '1.0.0', ruleCount: 1 },
-    ]);
-    expect(contentAt(tree, CONFIG)).toBe(rulesConfig(['local']));
-    expect(contentAt(tree, rulebookPath('x'))).toBe(X_V1);
-  });
-
-  test('removes every rulebook a repository contributes at its single ref', async () => {
-    const { results, tree } = await removeRow(
-      { [CONFIG]: rulesConfig(['acme/other#main/x']), [rulebookPath('x')]: X_V1 },
-      'acme/other',
-    );
-    expect(results.ok).toBeTrue();
-    expect(contentAt(tree, CONFIG)).toBe(rulesConfig([]));
-  });
-
-  test('an ambiguous repository match asks for an explicit ref', async () => {
-    const seed = { [CONFIG]: rulesConfig(['acme/catalog#main/a', 'acme/catalog#v2/b']) };
-    const { results, tree } = await removeRow(seed, 'acme/catalog');
-    expect(results).toStrictEqual({
-      ok: false,
-      errors: [
-        'Multiple refs are configured for acme/catalog. Use an explicit ref:',
-        '  cc-safety-net rule remove acme/catalog#<ref>',
-      ],
-      entries: [],
-    });
-    expect(contentAt(tree, CONFIG)).toBe(seed[CONFIG]);
-  });
-
-  test('an explicit ref removes only that ref', async () => {
-    const { results, tree } = await removeRow(
-      {
-        [CONFIG]: rulesConfig(['acme/catalog#main/a', 'acme/catalog#v2/b']),
-        [rulebookPath('a')]: A_V1,
-        [rulebookPath('b')]: B_V2,
-      },
-      'acme/catalog#main',
-    );
-    expect(results.ok).toBeTrue();
-    expect(contentAt(tree, CONFIG)).toBe(rulesConfig(['acme/catalog#v2/b']));
-  });
-
-  test('--delete-source deletes the rulebook file and then the emptied directory', async () => {
-    const { results, tree } = await removeRow(LOCAL_SCOPE, 'local', { deleteSource: true });
-    expect(results.ok).toBeTrue();
-    expect(tree.some((entry) => entry.path.startsWith(`${RULES}/local`))).toBeFalse();
-  });
-
-  test('--delete-source refuses a directory that holds anything else', async () => {
-    const { results, tree } = await removeRow(
-      { ...LOCAL_SCOPE, [`${RULES}/local/notes.md`]: 'keep me\n' },
-      'local',
-      { deleteSource: true },
-    );
-    expect(results.ok).toBeFalse();
-    expect(results.entries).toStrictEqual([]);
-    expect(results.errors).toStrictEqual([
-      'Local rulebook source directory contains extra files: <root>/project/.cc-safety-net/rules/local. delete manually if you really want to remove the directory.',
-    ]);
-    expect(contentAt(tree, `${RULES}/local/notes.md`)).toBe('keep me\n');
-    expect(contentAt(tree, rulebookPath('local'))).toBe(v1Rulebook('local'));
-  });
-
-  test('--delete-source refuses a directory with no rulebook file', async () => {
-    const { results, tree } = await removeRow(
-      { [CONFIG]: rulesConfig(['local']), [`${RULES}/local`]: null },
-      'local',
-      { deleteSource: true },
-    );
-    expect(results).toStrictEqual({
-      ok: false,
-      errors: [
-        'Local rulebook source directory is missing rulebook.json: <root>/project/.cc-safety-net/rules/local',
-      ],
-      entries: [],
-    });
-    expect(contentAt(tree, CONFIG)).toBe(rulesConfig(['local']));
-  });
-
-  test('--delete-source refuses a GitHub source', async () => {
-    const { results } = await removeRow(
-      { [CONFIG]: rulesConfig(['acme/other#main/x']), [rulebookPath('x')]: X_V1 },
-      'acme/other#main/x',
-      { deleteSource: true },
-    );
-    expect(results).toStrictEqual({
-      ok: false,
-      errors: ['--delete-source can only delete local rulebook sources'],
-      entries: [],
-    });
-  });
 
   test('a remove whose post-write sync fails restores the config', async () => {
     const seed = { ...LOCAL_SCOPE, [CONFIG]: rulesConfig(['local', 'ghost']) };

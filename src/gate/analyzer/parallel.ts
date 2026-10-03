@@ -33,6 +33,7 @@ import { hasRecursiveForceFlags } from './rm-flags';
 import {
   extractPositionalShellSource,
   extractShellScriptOperandSource,
+  quoteShellWord,
   shellSourceHasUnresolvedDynamicExecutionCarrier,
 } from './shell-execution';
 import { extractDashCArg, isShellSyntaxCheck } from './shell-wrappers';
@@ -48,6 +49,7 @@ const REASON_PARALLEL_UNSUPPORTED =
   'parallel command construction cannot be verified safely. Use the default ::: separator, literal arguments, and built-in replacement strings.';
 const PARALLEL_PLACEHOLDER_RE = /\{[^{}\s]*\}/g;
 const PARALLEL_RM_PLACEHOLDER_RE = /\{\}|\{-?\d+\}/g;
+const SHELL_SOURCE_CHARACTER_RE = /[\s;&|<>()$`\\"']/;
 const AWK_SOURCE_OPTION_INPUTS = ['e', 'f', 'source', 'file', '-e', '-f', '--source', '--file'];
 const INTERPRETER_SOURCE_OPTION_INPUTS = [
   'c',
@@ -202,7 +204,7 @@ function analyzeParallelChildCommand(
   context: ParallelAnalyzeContext,
   executionContext: ParallelAnalyzeContext,
 ): DestructiveCommandRuleMatch | null {
-  const { jobs, templateHasPlaceholder, runsRemotely, usesStdin } = parseResult;
+  const { templateHasPlaceholder, runsRemotely, usesStdin } = parseResult;
   const childTokens = childCommand.tokens;
   const childEnvValues = [...childCommand.envAssignments.values()];
   if (childEnvValues.some(hasUnsupportedParallelPlaceholder)) {
@@ -214,11 +216,56 @@ function analyzeParallelChildCommand(
   const envHasPlaceholder = childEnvValues.some(hasParallelPlaceholder);
   const hasPlaceholder = templateHasPlaceholder || envHasPlaceholder;
   const hasDynamicStdinPlaceholder = usesStdin && hasPlaceholder;
-  const nestedOverrides = buildNestedOverrides(
+  const childOverrides = buildNestedOverrides(
     childCommand.envAssignments,
     childCommand.wrapperCwd,
     runsRemotely || hasDynamicStdinPlaceholder,
   );
+  const nestedOverrides = hasPlaceholder
+    ? { ...childOverrides, worktreeMode: false }
+    : childOverrides;
+
+  const shellSource = childTokens.join(' ');
+  const jobValuesRunAsCommand = hasParallelPlaceholder(shellSource.split(/[ \t\n=]/, 1)[0] ?? '');
+  const runsAsShellSource =
+    !parseResult.quotesCommand &&
+    (jobValuesRunAsCommand || childTokens.some((token) => SHELL_SOURCE_CHARACTER_RE.test(token)));
+  const headIsShellSource =
+    jobValuesRunAsCommand || SHELL_SOURCE_CHARACTER_RE.test(childTokens[0] ?? '');
+  const wordsResult =
+    runsAsShellSource && headIsShellSource && parseResult.jobs.length > 0
+      ? null
+      : analyzeParallelChildWords(
+          childCommand,
+          parseResult,
+          context,
+          executionContext,
+          nestedOverrides,
+          envHasPlaceholder,
+        );
+  if (wordsResult || !runsAsShellSource) return wordsResult;
+  return analyzeParallelShellSource(
+    hasParallelPlaceholder(shellSource) ? shellSource : `${shellSource} {}`,
+    !jobValuesRunAsCommand,
+    childCommand,
+    parseResult,
+    context,
+    executionContext,
+    nestedOverrides,
+  );
+}
+
+function analyzeParallelChildWords(
+  childCommand: NormalizedChildCommand,
+  parseResult: ParallelParseResult,
+  context: ParallelAnalyzeContext,
+  executionContext: ParallelAnalyzeContext,
+  nestedOverrides: AnalyzeNestedOverrides | undefined,
+  envHasPlaceholder: boolean,
+): DestructiveCommandRuleMatch | null {
+  const { jobs, templateHasPlaceholder, runsRemotely, usesStdin } = parseResult;
+  const childTokens = childCommand.tokens;
+  const hasPlaceholder = templateHasPlaceholder || envHasPlaceholder;
 
   if (SHELL_WRAPPERS.has(childCommand.head)) {
     const analyzeExpandedShellArgv = () => {
@@ -246,44 +293,15 @@ function analyzeParallelChildCommand(
       }
 
       if (hasParallelPlaceholder(dashCArg)) {
-        if (jobs.length > 0) {
-          return firstMatch(jobs, (job) =>
-            context.analyzeNested(
-              expandParallelString(dashCArg, job, context.budget),
-              nestedOverrides,
-            ),
-          );
-        }
-
-        const scriptTokens = parseSimpleWords(dashCArg);
-        if (
-          scriptTokens?.[0] &&
-          normalizeCommandToken(scriptTokens[0]) === 'rm' &&
-          hasRecursiveForceFlags(scriptTokens)
-        ) {
-          const reason = parallelRmDynamicReason(context);
-          if (reason) {
-            return reason;
-          }
-        }
-        const dynamicReason = scriptTokens
-          ? context.analyzeChild(scriptTokens, {
-              ...childProvenance(childCommand, executionContext),
-              dynamicInput: usesStdin,
-              shellDynamicMatch: destructiveCommandMatch(
-                'parallel.shell-dynamic',
-                REASON_PARALLEL_SHELL,
-              ),
-              rmDynamicMatch: destructiveCommandMatch(
-                'parallel.rm-recursive-force-dynamic',
-                REASON_PARALLEL_RM,
-              ),
-            })
-          : null;
-        if (dynamicReason) {
-          return dynamicReason;
-        }
-        return context.analyzeNested(dashCArg, nestedOverrides);
+        return analyzeParallelShellSource(
+          dashCArg,
+          false,
+          childCommand,
+          parseResult,
+          context,
+          executionContext,
+          nestedOverrides,
+        );
       }
 
       const positionalSources =
@@ -443,6 +461,51 @@ function analyzeParallelChildCommand(
       result ?? dynamicCustomResult ?? checkPolicyRuleMatch(tokens, context.policy?.rules ?? [])
     );
   });
+}
+
+function analyzeParallelShellSource(
+  source: string,
+  quoteJobValues: boolean,
+  childCommand: NormalizedChildCommand,
+  parseResult: ParallelParseResult,
+  context: ParallelAnalyzeContext,
+  executionContext: ParallelAnalyzeContext,
+  nestedOverrides: AnalyzeNestedOverrides | undefined,
+): DestructiveCommandRuleMatch | null {
+  if (parseResult.jobs.length > 0) {
+    return firstMatch(parseResult.jobs, (job) =>
+      context.analyzeNested(
+        expandParallelString(
+          source,
+          quoteJobValues ? job.map(quoteShellWord) : job,
+          context.budget,
+        ),
+        nestedOverrides,
+      ),
+    );
+  }
+
+  const scriptTokens = parseSimpleWords(source);
+  if (
+    scriptTokens?.[0] &&
+    normalizeCommandToken(scriptTokens[0]) === 'rm' &&
+    hasRecursiveForceFlags(scriptTokens)
+  ) {
+    const reason = parallelRmDynamicReason(context);
+    if (reason) return reason;
+  }
+  const dynamicReason = scriptTokens
+    ? context.analyzeChild(scriptTokens, {
+        ...childProvenance(childCommand, executionContext),
+        dynamicInput: parseResult.usesStdin,
+        shellDynamicMatch: destructiveCommandMatch('parallel.shell-dynamic', REASON_PARALLEL_SHELL),
+        rmDynamicMatch: destructiveCommandMatch(
+          'parallel.rm-recursive-force-dynamic',
+          REASON_PARALLEL_RM,
+        ),
+      })
+    : null;
+  return dynamicReason ?? context.analyzeNested(source, nestedOverrides);
 }
 
 function parallelInputCanChangeExecutedSource(
@@ -717,6 +780,7 @@ interface ParallelParseResult {
   childStart: number;
   templateHasPlaceholder: boolean;
   runsRemotely: boolean;
+  quotesCommand: boolean;
   usesStdin: boolean;
   readsCommandsFromInput: boolean;
   unsupported: boolean;
@@ -818,6 +882,7 @@ function parseParallelCommand(tokens: readonly string[]): ParallelParseResult {
   let childStart = tokens.length;
   let markerIndex = -1;
   let runsRemotely = false;
+  let quotesCommand = false;
   let usesPipe = false;
   let workdir: string | undefined;
   let dryRun = false;
@@ -879,6 +944,11 @@ function parseParallelCommand(tokens: readonly string[]): ParallelParseResult {
     if (token === '-a' || PARALLEL_UNSUPPORTED_INPUT_OPTIONS.has(optionName)) {
       unsupported = true;
       i += attachedValue === undefined ? 2 : 1;
+      continue;
+    }
+    if (token === '-q' || token === '--quote') {
+      quotesCommand = true;
+      i++;
       continue;
     }
     if (token === '--pipe' || token === '--pipepart') {
@@ -959,6 +1029,7 @@ function parseParallelCommand(tokens: readonly string[]): ParallelParseResult {
     childStart,
     templateHasPlaceholder,
     runsRemotely,
+    quotesCommand,
     usesStdin: usesPipe || markerIndex === -1,
     readsCommandsFromInput,
     unsupported,

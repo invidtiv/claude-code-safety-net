@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { bindPolicyFilesystemScope } from '@/core/io/safe-read';
-import {
-  getRulesConfigRuntimeErrorsForConfig,
-  getUnknownOverrideErrorsForConfig,
-} from '@/core/policy/scope-policy';
+import { getRulesConfigRuntimeErrorsForConfig } from '@/core/policy/scope-policy';
 import { type TreeSpec, writeTree } from '../../helpers/fixture-tree';
 import { rulesConfig, v1Rulebook } from '../../helpers/rulebook-seeds';
 import {
@@ -31,19 +28,17 @@ const MISSING_RULEBOOK_ERROR =
 const SCOPES: readonly {
   readonly scope: string;
   readonly behavior: string;
-  readonly reports: { readonly runtime: readonly string[]; readonly overrides: readonly string[] };
+  readonly reports: readonly string[];
 }[] = [
   {
     scope: 'unknown-override',
-    behavior:
-      'an override naming no loaded rule is a warning both projections carry, and every other rule stays loaded',
-    reports: { runtime: [UNKNOWN_OVERRIDE_WARNING], overrides: [UNKNOWN_OVERRIDE_WARNING] },
+    behavior: 'an override naming no loaded rule reports how to repair the ignored override',
+    reports: [UNKNOWN_OVERRIDE_WARNING],
   },
   {
     scope: 'missing-rulebook',
-    behavior:
-      'a dropped source is a runtime error the override projection stays out of, because a source that failed to load leaves the rule ids unknown',
-    reports: { runtime: [MISSING_RULEBOOK_ERROR], overrides: [] },
+    behavior: 'a dropped source reports the missing rulebook and how to repair it',
+    reports: [MISSING_RULEBOOK_ERROR],
   },
 ];
 
@@ -57,33 +52,24 @@ function reportsFor(scope: string, bound: boolean) {
   const root = createTempRoot('scope-policy-');
   writeTree(root, TREE);
   const scopeBinding = bound ? bindPolicyFilesystemScope(root, 'project policy') : undefined;
-  return normalize(
-    {
-      runtime: getRulesConfigRuntimeErrorsForConfig(configPath(root, scope), scopeBinding),
-      overrides: getUnknownOverrideErrorsForConfig(configPath(root, scope), scopeBinding),
-    },
-    [[root, '<root>'], ...WINDOWS_SEPARATOR_FOLDS],
-  );
+  return normalize(getRulesConfigRuntimeErrorsForConfig(configPath(root, scope), scopeBinding), [
+    [root, '<root>'],
+    ...WINDOWS_SEPARATOR_FOLDS,
+  ]);
 }
 
 describe('a scope reload reports what the gate would find', () => {
   test.each(SCOPES.map((row) => [row.behavior, row.scope, row.reports] as const))(
     '%s',
     (_behavior, scope, reports) => {
-      expect(reportsFor(scope, false)).toEqual({
-        runtime: [...reports.runtime],
-        overrides: [...reports.overrides],
-      });
+      expect(reportsFor(scope, false)).toEqual([...reports]);
     },
   );
 
   test.each(SCOPES.map((row) => [row.scope, row.reports] as const))(
     'an explicit filesystem binding changes nothing about the %s scope',
     (scope, reports) => {
-      expect(reportsFor(scope, true)).toEqual({
-        runtime: [...reports.runtime],
-        overrides: [...reports.overrides],
-      });
+      expect(reportsFor(scope, true)).toEqual([...reports]);
     },
   );
 });

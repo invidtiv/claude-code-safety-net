@@ -1,9 +1,8 @@
 import { isAbsolute, posix, resolve, win32 } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AnalysisLimit, type Budget, createBudget } from '@/core/budget';
+import { AnalysisLimit, type Budget } from '@/core/budget';
 import { normalizeMsysDrivePath, resolveExistingPath } from '@/core/paths/canonicalization';
 import { parseRecursiveSecretAllowPath } from '@/core/policy/allow-paths';
-import type { SecretProtectionConfig } from '@/core/policy/types';
 import { AWK_INTERPRETERS, GIT_GLOBAL_OPTS_WITH_VALUE } from '@/core/rules/constants';
 import {
   SECRET_BASENAME_RULES,
@@ -32,12 +31,10 @@ import {
 } from '@/gate/guards/guard-walk';
 import { safetyNetSubcommandIndex } from '@/gate/guards/safety-net-invocation';
 import {
-  createSemanticFacts,
   getCommandSyntaxFact,
   projectSensitiveShellText,
   StructuralShellSyntaxLimitError,
 } from '@/gate/guards/semantic-facts';
-import { createToolInvocation, type ToolRoute } from '@/gate/invocation';
 
 export const REASON_SECRET_PROTECTION = 'Access to a sensitive path is not allowed.';
 
@@ -218,23 +215,6 @@ type PathExtractionOptions = {
   readonly displayOperandsAreCapturedOutput?: boolean;
 };
 
-/** @internal */
-export function findSensitivePathTarget(
-  targets: readonly string[],
-  cwd: string,
-  environment: EnvironmentContext,
-  config?: SecretProtectionConfig,
-  configCwd = cwd,
-): SecretTarget | null {
-  return findSensitivePolicyPathTarget(
-    targets.map((target) => ({ target, cwd })),
-    config,
-    configCwd,
-    environment,
-    createBudget(),
-  );
-}
-
 function findSensitivePolicyPathTarget(
   candidates: readonly SecretCandidate[],
   config: SecretProtectionPolicy | undefined,
@@ -300,43 +280,6 @@ function findSensitivePolicyPathTarget(
     }
   }
   return null;
-}
-
-/** @internal */
-export function findSensitiveTargetInCommand(
-  command: string,
-  cwd: string,
-  environment: EnvironmentContext,
-  config?: SecretProtectionConfig,
-  options: SecretInspectionOptions = {},
-): SecretTarget | null {
-  const facts = createSemanticFacts(
-    createToolInvocation(
-      '',
-      { command },
-      { kind: 'command', shell: 'posix' },
-      { executionCwd: cwd, configCwd: cwd },
-      command,
-    ),
-  );
-  return findSensitiveTargetInSemanticFacts(facts, config, environment, createBudget(), options);
-}
-
-/** @internal */
-export function findSensitiveTargetInToolInput(
-  input: unknown,
-  route: ToolRoute,
-  executionCwd: string,
-  environment: EnvironmentContext,
-  config?: SecretProtectionConfig,
-  configCwd = executionCwd,
-): SecretTarget | null {
-  return findSensitiveTargetInSemanticFacts(
-    createSemanticFacts(createToolInvocation('', input, route, { executionCwd, configCwd }, null)),
-    config,
-    environment,
-    createBudget(),
-  );
 }
 
 export function findSensitiveTargetInSemanticFacts(

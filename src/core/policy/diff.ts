@@ -7,8 +7,7 @@ import { salvageUserPolicy } from './user-policy-diagnostics';
 
 export type PolicyDiffRow = { field: string; before?: string; after?: string };
 
-/** @internal */
-export function flattenPolicy(policy: GuiPolicy, includeAudit: boolean): Record<string, string> {
+function flattenPolicy(policy: GuiPolicy, includeAudit: boolean): Record<string, string> {
   return {
     'safety.level': policy.safety.level,
     ...flattenSection('safety.overrides', policy.safety.overrides),

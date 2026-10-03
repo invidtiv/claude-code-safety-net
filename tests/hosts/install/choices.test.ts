@@ -2,13 +2,12 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import {
   applyInstallTargetState,
-  type BuildInstallTargetChoicesOptions,
   buildInstallTargetChoicesAsync,
   type InstallTargetChoice,
   probeInstallTarget,
 } from '@/hosts/install/choices';
 import type { NativeCommand } from '@/hosts/install/native';
-import { INSTALL_TARGETS, type InstallTarget } from '@/hosts/install/targets';
+import { type InstallTarget } from '@/hosts/install/targets';
 import { createFakeBin, type FakeScriptEntry } from '../../helpers/fake-bin';
 import { createTempRoot, removeTempRoots, withProcessEnv } from '../../helpers/temp-home';
 
@@ -23,13 +22,9 @@ const ANSWERING = ['cursor --version', 'pi --version'];
 
 const scriptedProbe = (command: NativeCommand) => ANSWERING.includes(command.join(' '));
 
-const OPTIONS: readonly BuildInstallTargetChoicesOptions[] = [
-  { configuredTargets: CONFIGURED },
-  { action: 'install', configuredTargets: CONFIGURED },
-  { action: 'uninstall', configuredTargets: CONFIGURED },
-];
-
-const groupedReasons = (choices: readonly InstallTargetChoice[]) => {
+const groupedReasons = (
+  choices: readonly InstallTargetChoice[],
+): { configured: readonly string[]; rest: readonly string[] } => {
   const distinct = (rows: readonly InstallTargetChoice[]) => [
     ...new Set(rows.map((row) => `${row.available} ${row.unavailableReason ?? ''}`.trim())),
   ];
@@ -68,32 +63,16 @@ describe('probing a host CLI', () => {
 });
 
 describe('the install picker rows', () => {
-  test('offer one row per install target, named as the catalog names it', async () => {
-    const rows = await buildInstallTargetChoicesAsync(scriptedProbe, OPTIONS[0]);
-
-    expect(rows.map((row) => [row.target, row.label, row.flag])).toEqual(
-      INSTALL_TARGETS.map((target) => [target.target, target.label, target.flag]),
-    );
-  });
-
-  test('read a configured host as installed, and an unprobed one as missing', async () => {
-    const rows = [];
-    for (const options of OPTIONS) {
-      rows.push(groupedReasons(await buildInstallTargetChoicesAsync(scriptedProbe, options)));
-    }
-    expect(rows).toEqual([
-      { configured: ['true'], rest: ['false CLI not installed'] },
-      { configured: ['false already installed'], rest: ['false CLI not installed'] },
-      { configured: ['true'], rest: ['false not installed'] },
-    ]);
-  });
-
-  test('re-decide an existing row from the state it already carries', async () => {
+  test.each([
+    [undefined, { configured: ['true'], rest: ['false CLI not installed'] }],
+    ['install', { configured: ['false already installed'], rest: ['false CLI not installed'] }],
+    ['uninstall', { configured: ['true'], rest: ['false not installed'] }],
+  ] as const)('uses independent availability reasons for %s', async (action, expected) => {
+    const options = { action, configuredTargets: CONFIGURED };
     const base = await buildInstallTargetChoicesAsync(scriptedProbe);
-    for (const options of OPTIONS) {
-      expect(applyInstallTargetState(base, options)).toEqual(
-        await buildInstallTargetChoicesAsync(scriptedProbe, options),
-      );
-    }
+    expect(groupedReasons(await buildInstallTargetChoicesAsync(scriptedProbe, options))).toEqual(
+      expected,
+    );
+    expect(groupedReasons(applyInstallTargetState(base, options))).toEqual(expected);
   });
 });

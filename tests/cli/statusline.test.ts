@@ -55,6 +55,7 @@ describe('statusline', () => {
         ...row,
       });
       expect(outcome.stdout).toBe(expected);
+      expect(outcome.stderr).toBe('');
     }, 60_000);
   }
 
@@ -74,6 +75,16 @@ describe('statusline', () => {
       seed: enabled(WEAKENED_BY_PROJECT),
     });
     expect(outcome.stdout).toBe('🛡️ CC Safety Net ✅🔻\n');
+  }, 60_000);
+
+  test('a weakening project policy under tighten-only adds no glyph', async () => {
+    const outcome = await runStatusline({
+      args: ['statusline', '-cc'],
+      stdin: HOST_PAYLOAD,
+      seed: enabled(WEAKENED_BY_PROJECT),
+      env: { CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY: '1' },
+    });
+    expect(outcome.stdout).toBe('🛡️ CC Safety Net 🔒\n');
   }, 60_000);
 
   test('the legacy top-level spelling prints the same line', async () => {

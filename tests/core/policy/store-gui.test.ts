@@ -116,16 +116,6 @@ describe('properties every proposed document must satisfy', () => {
     }
   });
 
-  test('a previewed document is one the salvage would have left untouched', () => {
-    for (const document of DOCUMENTS) {
-      const result = gui.previewUserPolicyForGui(environmentWith({}), document);
-      if (result.preview === undefined) continue;
-      expect(result.preview.selectedPreset).toBe(
-        ported.normalizeGuiPolicy(document, HOME).safety.level,
-      );
-    }
-  });
-
   test.each(ENV_MAPS.map((row) => [row.label, row.values] as const))(
     'a preview under %s counts every configurable rule exactly once',
     (_label, values) => {

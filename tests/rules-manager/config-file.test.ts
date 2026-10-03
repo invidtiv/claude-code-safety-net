@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import assert from 'node:assert/strict';
 import { lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import { assertValidRulebook } from '@/core/policy/rulebook';
+import { checkPolicyRuleMatch } from '@/core/rules/custom';
 import {
   readScopeRulesConfig,
   writeDefaultRulesConfig,
@@ -81,11 +83,20 @@ const WRITES = [
 
 function starterExample(written: unknown) {
   const rulebook = assertValidRulebook(written);
+  assert(rulebook.rulebook_version === 1);
+  expect(rulebook.version).toBe('1.0.0');
   expect(rulebook.allowed_commands).toEqual(['docker']);
   expect(rulebook.rules.map((rule) => rule.name)).toEqual(['block-docker-system-prune']);
   expect(rulebook.tests).toEqual([
     { command: 'docker system prune', expect: 'blocked', rule: 'block-docker-system-prune' },
   ]);
+  expect(checkPolicyRuleMatch(['docker', 'system', 'prune'], rulebook.rules)).toEqual({
+    id: 'custom.block-docker-system-prune',
+    reason: '[block-docker-system-prune] Use targeted cleanup instead.',
+    intent: 'manual_only',
+  });
+  expect(checkPolicyRuleMatch(['docker', 'container', 'prune'], rulebook.rules)).toBeNull();
+  expect(checkPolicyRuleMatch(['docker', 'system', 'df'], rulebook.rules)).toBeNull();
   return { name: rulebook.name, author: rulebook.author, description: rulebook.description };
 }
 

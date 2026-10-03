@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, sep } from 'node:path';
+import { join, parse, sep } from 'node:path';
+import { createTestEnvironment } from '@/core/environment';
 import type { ProtectedGitMetadata } from '@/core/git/metadata';
 import type { EffectiveDestructiveCommandRuleState } from '@/core/policy/types';
 import { parseCommand } from '@/core/shell/parse';
@@ -97,18 +98,6 @@ function optionCases(): readonly OptionCase[] {
       },
     },
     {
-      label: 'allow paths cover a sibling directory',
-      options: {
-        cwd: workspace,
-        originalCwd: workspace,
-        policy: {
-          destructiveCommandProtectionEnabled: true,
-          effectiveDestructiveCommandRules: {},
-          destructiveCommandAllowPaths: [join(root, 'allowed')],
-        },
-      },
-    },
-    {
       label: 'git metadata resolved',
       options: { cwd: workspace, originalCwd: workspace, protectedGitMetadata: gitMetadata },
     },
@@ -156,64 +145,6 @@ function optionCases(): readonly OptionCase[] {
     },
   ];
 }
-
-const RM_COMMANDS: readonly string[] = [
-  'rm',
-  'rm -rf',
-  'rm --',
-  'rm -rf --',
-  'rm file.txt',
-  'rm -r src',
-  'rm -rf src',
-  'rm -rf ./src',
-  'rm -fr src',
-  'rm -r -f src',
-  'rm --recursive --force src',
-  'rm --recursive src',
-  'rm -rf src other',
-  'rm -rf -- -weird-name',
-  'rm -rf -- ../outside',
-  'rm -rf ..',
-  'rm -rf .',
-  'rm -rf ./',
-  'rm -rf *',
-  'rm -rf /',
-  'rm -rf /*',
-  'rm -rf ~',
-  'rm -rf ~/keep',
-  'rm -rf $HOME',
-  'rm -rf "$HOME"',
-  'rm -rf ${HOME}/keep',
-  'rm -rf $UNKNOWN/x',
-  'rm -rf "$UNKNOWN"',
-  'rm -rf $TMPDIR',
-  'rm -rf $TMPDIR/build',
-  'rm -rf "$TMPDIR"/build',
-  'rm -rf ${TMPDIR}/build',
-  'rm -rf /tmp/scratch-dir',
-  'rm -rf /var/tmp/scratch-dir',
-  'rm -rf {a,b}',
-  'rm -rf {a,b}/{c,d}',
-  'rm -rf x{1..3}',
-  'rm -rf {a,b}{c,d}{e,f}{g,h}{i,j}{k,l}{m,n}',
-  'rm -rf "quoted dir"',
-  "rm -rf 'quoted dir'",
-  'rm -rf escaped\\ dir',
-  'rm .git',
-  'rm .git/HEAD',
-  'rm -f .git/hooks/pre-commit',
-  'rm -rf .git',
-  'rm -rf .git/hooks',
-  'rm -rf .git/*',
-  'rm -r .git',
-  'rm -rf ../work',
-  'rm -rf /nonexistent/elsewhere',
-  'rm -rf -- "$(pwd)"',
-  'rm -rf `pwd`',
-  'rmdir src',
-  'rm -rf allowed',
-  'rm -rf allowed/inner',
-];
 
 function rmWords(source: string) {
   return projectCommandViews(parseCommand(source, 'posix')).flatMap((view) =>
@@ -286,9 +217,16 @@ describe('rm rule set', () => {
       { source: 'rm -rf {a,b}', id: null },
       { source: 'rm -rf {a,b}/{c,d}', id: null },
       { source: 'rm -rf x{1..3}', id: 'rm.recursive-force-outside-cwd' },
+      { source: 'rm -r ..', id: 'rm.recursive-force-outside-cwd' },
+      { source: 'rm -R -- ../outside', id: 'rm.recursive-force-outside-cwd' },
+      { source: 'rm --recursive /nonexistent/elsewhere', id: 'rm.recursive-force-outside-cwd' },
+      { source: 'rm -rv .', id: 'rm.recursive-force-cwd-self' },
+      { source: 'rm -r x{1..3}', id: 'rm.recursive-force-outside-cwd' },
     ];
     for (const row of rows)
       expect(ruleIdFor(row.source, 'plain workspace'), row.source).toBe(row.id);
+    expect(ruleIdFor('rm -r "$X"', 'strict')).toBe('rm.recursive-force-dynamic-target');
+    expect(ruleIdFor('rm -r src', 'paranoid rm')).toBe('rm.recursive-force-paranoid');
   });
 
   test('the temp roots and $TMPDIR are trusted unless word splitting can escape them', () => {
@@ -372,33 +310,41 @@ describe('rm rule set', () => {
   });
 
   test('an allow path and the system temp root are both trusted', () => {
-    for (const label of ['plain workspace', 'allow paths cover a sibling directory'])
-      for (const target of [join(root, 'allowed'), join(root, 'allowed', 'inner')])
-        expect(ruleIdFor(`rm -rf ${target}`, label), `${label}: ${target}`).toBeNull();
-    expect(ruleIdFor('rm -rf /nonexistent/allowed', 'allow paths cover a sibling directory')).toBe(
-      'rm.recursive-force-outside-cwd',
-    );
-  });
-
-  test('the table reaches every rm rule the analyzer can report', () => {
-    const reported = new Set(
-      optionCases().flatMap((row) =>
-        RM_COMMANDS.flatMap((source) =>
-          runPair(source, row).flatMap((outcome) =>
-            outcome.ok && outcome.value ? [outcome.value.id] : [],
-          ),
-        ),
-      ),
-    );
-    expect([...reported].sort()).toStrictEqual([
-      'rm.git-metadata',
-      'rm.recursive-force-cwd-self',
-      'rm.recursive-force-dynamic-target',
-      'rm.recursive-force-home-cwd',
-      'rm.recursive-force-outside-cwd',
-      'rm.recursive-force-paranoid',
-      'rm.recursive-force-root-or-home',
-    ]);
+    expect(
+      ruleIdFor(`rm -rf "${join(root, 'allowed').split(sep).join('/')}"`, 'plain workspace'),
+    ).toBeNull();
+    const allowed = join(parse(root).root, 'ccsn-allowed');
+    const environment = createTestEnvironment({
+      home,
+      entries: new Map([[allowed, 'directory']]),
+    });
+    for (const target of [
+      { path: allowed, allowedId: null },
+      { path: join(allowed, 'inner'), allowedId: null },
+      { path: `${allowed}-sibling`, allowedId: 'rm.recursive-force-outside-cwd' },
+    ]) {
+      const words = rmWords(`rm -rf "${target.path.split(sep).join('/')}"`)[0];
+      if (!words) throw new Error('missing allow-path command');
+      for (const row of [
+        { allowPaths: [], id: 'rm.recursive-force-outside-cwd' },
+        { allowPaths: [allowed], id: target.allowedId },
+      ]) {
+        expect(
+          analyzeRmMatch(words, {
+            cwd: workspace,
+            originalCwd: workspace,
+            environment,
+            protectedGitMetadata: null,
+            policy: {
+              destructiveCommandProtectionEnabled: true,
+              effectiveDestructiveCommandRules: {},
+              destructiveCommandAllowPaths: row.allowPaths,
+            },
+          })?.id ?? null,
+          `${target.path}: ${row.allowPaths.join(', ')}`,
+        ).toBe(row.id);
+      }
+    }
   });
 
   test('a brace expansion that overflows the limit is treated as outside the anchored cwd', () => {

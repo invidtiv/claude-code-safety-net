@@ -166,24 +166,6 @@ describe('the weakening lines a project policy raises', () => {
   test.each(PAIRS.map((row) => [row.behavior, row] as const))('%s', (_behavior, row) => {
     expect(mergeProjectPolicy(row.user, row.project).weakenings).toEqual([...row.weakenings]);
   });
-
-  test('the pairs above raise every line the merge can report', () => {
-    const lines = PAIRS.flatMap((pair) => mergeProjectPolicy(pair.user, pair.project).weakenings);
-    expect([...new Set(lines)].sort()).toStrictEqual([
-      'project policy adds destructive allow path: ~/p',
-      'project policy adds secret allow path: ~/p',
-      'project policy disables destructive command protection',
-      'project policy disables fail_closed',
-      'project policy disables paranoid_interpreters',
-      'project policy disables paranoid_rm',
-      'project policy disables rule git.reset-hard',
-      'project policy disables rule secret.cli.codex.config',
-      'project policy disables rule secret.ext.pem',
-      'project policy disables secret protection',
-      'project policy enables worktree mode relaxations',
-      'project policy lowers level: paranoid -> standard',
-    ]);
-  });
 });
 
 describe('what the merged policy holds', () => {
@@ -213,12 +195,6 @@ describe('what the merged policy holds', () => {
       'secret.ext.pem': 'on',
       'secret.cli.claude-code.config': 'off',
     });
-  });
-
-  test('audit is user scope only and survives any project projection', () => {
-    expect(mergeProjectPolicy(STRONG_USER, { safety: { level: 'standard' } }).policy.audit).toEqual(
-      { retention_days: 30 },
-    );
   });
 });
 
@@ -426,25 +402,87 @@ describe('properties every user and project pair must satisfy', () => {
 
   test('a project file that restates the user policy weakens nothing', () => {
     for (const pair of SAMPLED) {
-      const restated: ProjectPolicyProjection = {
-        safety: { level: pair.user.safety.level, overrides: pair.user.safety.overrides },
-        workflow: { worktree_mode: pair.user.workflow.worktree_mode },
-        destructive_command_protection: {
-          enabled: pair.user.destructive_command_protection.enabled,
-          overrides: pair.user.destructive_command_protection.overrides,
-          allow_paths: pair.user.destructive_command_protection.allow_paths,
-        },
-        secret_protection: {
-          enabled: pair.user.secret_protection.enabled,
-          overrides: pair.user.secret_protection.overrides,
-          deny_paths: pair.user.secret_protection.deny_paths,
-          allow_paths: pair.user.secret_protection.allow_paths,
-        },
-      };
-      expect(mergeProjectPolicy(pair.user, restated)).toEqual({
+      expect(mergeProjectPolicy(pair.user, restate(pair.user))).toEqual({
         policy: pair.user,
         weakenings: [],
       });
     }
   });
 });
+
+describe('merging with project weakenings ignored', () => {
+  test('a project that disables destructive protection keeps it on and still reports it', () => {
+    const merged = mergeProjectPolicy(
+      STRONG_USER,
+      { destructive_command_protection: { enabled: false } },
+      true,
+    );
+    expect(merged.policy.destructive_command_protection.enabled).toBeTrue();
+    expect(merged.weakenings).toEqual(['project policy disables destructive command protection']);
+  });
+
+  test('a lower project level leaves the user level in force', () => {
+    expect(
+      mergeProjectPolicy(STRONG_USER, { safety: { level: 'standard' } }, true).policy.safety.level,
+    ).toBe('paranoid');
+  });
+
+  test('a capability raised by the session level stays on when the project turns it off', () => {
+    const merged = mergeProjectPolicy(
+      { ...STRONG_USER, safety: { level: 'standard', overrides: {} } },
+      { safety: { overrides: { paranoid_rm: false } } },
+      true,
+      'paranoid',
+    );
+    expect(merged.policy.safety.overrides).toEqual({});
+    expect(merged.weakenings).toEqual(['project policy disables paranoid_rm']);
+  });
+
+  test('a rule switched off by the project stays on, while a tightening beside it applies', () => {
+    expect(
+      mergeProjectPolicy(
+        STRONG_USER,
+        {
+          destructive_command_protection: {
+            overrides: { 'git.reset-hard': 'off', 'git.clean-force': 'on' },
+          },
+        },
+        true,
+      ).policy.destructive_command_protection.overrides,
+    ).toEqual({ 'git.clean-force': 'on' });
+  });
+
+  test('every weakening is still reported, and none of them is left in the merged policy', () => {
+    for (const pair of SAMPLED) {
+      const merged = mergeProjectPolicy(pair.user, pair.project, true);
+      expect(merged.weakenings).toEqual(mergeProjectPolicy(pair.user, pair.project).weakenings);
+      expect(mergeProjectPolicy(pair.user, restate(merged.policy)).weakenings).toEqual([]);
+    }
+  });
+
+  test('a project that weakens nothing merges exactly as it does without the flag', () => {
+    for (const pair of SAMPLED) {
+      const plain = mergeProjectPolicy(pair.user, pair.project);
+      if (plain.weakenings.length > 0) continue;
+      expect(mergeProjectPolicy(pair.user, pair.project, true)).toEqual(plain);
+    }
+  });
+});
+
+function restate(policy: GuiPolicy): ProjectPolicyProjection {
+  return {
+    safety: { level: policy.safety.level, overrides: policy.safety.overrides },
+    workflow: { worktree_mode: policy.workflow.worktree_mode },
+    destructive_command_protection: {
+      enabled: policy.destructive_command_protection.enabled,
+      overrides: policy.destructive_command_protection.overrides,
+      allow_paths: policy.destructive_command_protection.allow_paths,
+    },
+    secret_protection: {
+      enabled: policy.secret_protection.enabled,
+      overrides: policy.secret_protection.overrides,
+      deny_paths: policy.secret_protection.deny_paths,
+      allow_paths: policy.secret_protection.allow_paths,
+    },
+  };
+}

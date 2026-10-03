@@ -229,7 +229,9 @@ async function handleRequest(
         ? {
             projectPolicy: {
               path: getProjectPolicyPath(options.cwd ?? process.cwd()),
-              weakenings: snapshot.policyScopes.weakenings,
+              weakenings: snapshot.policyScopes.weakeningsIgnored
+                ? []
+                : snapshot.policyScopes.weakenings,
             },
           }
         : {}),

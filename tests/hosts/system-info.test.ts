@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { installIntegrationMetadata } from '@/hosts/catalog';
 import {
   defaultVersionFetcher,
   getPackageVersion,
@@ -20,8 +19,6 @@ const SCRIPT: readonly FakeScriptEntry[] = [
   { command: 'broken', args: ['--version'], stdout: 'v9.9.9\n', exit: 1 },
   { command: 'stalled', args: ['--version'], delayMs: 2000 },
 ];
-
-const FETCHED_OUTPUTS = ['Claude Code 1.2.3', 'v2.0.0-beta.1', 'no digits\nsecond', null];
 
 afterEach(removeTempRoots);
 
@@ -81,30 +78,65 @@ describe('the default version probe', () => {
 
 describe('the system report', () => {
   test('probes every host once and parses whatever each one printed', async () => {
-    const record = async (report: typeof getSystemInfo) => {
-      const calls: { args: string[]; timeoutMs: number | undefined }[] = [];
-      const info = await report(
-        () => false,
-        async (args, timeoutMs) => {
-          calls.push({ args, timeoutMs });
-          return FETCHED_OUTPUTS[calls.length % FETCHED_OUTPUTS.length] ?? null;
-        },
-      );
-      return { calls, info };
+    const outputs: Record<string, string | null> = {
+      'agy --version': 'v1.0.1',
+      'claude --version': 'Claude Code 1.2.3',
+      'codex --version': 'v2.0.0-beta.1',
+      'copilot --binary-version': 'no digits\nsecond',
+      'gemini --version': null,
+      'grok --version': 'grok 1.0.6',
+      'hermes --version': 'Hermes 1.0.7',
+      'kimi --version': 'Kimi 1.0.8',
+      'openclaw --version': '1.0.9',
+      'opencode --version': '1.0.10',
+      'pi --version': '1.0.11',
+      'cursor --version': '1.0.12',
+      'npx --offline --no-install @deepseek-ai/dsh --version': '1.0.13',
+      'amp --version': '1.0.14',
+      'codex plugin list': 'codex plugins',
+      'amp plugins list': 'amp plugins',
+      'node --version': 'v22.0.0',
+      'npm --version': '10.0.0',
+      'bun --version': '1.3.0',
     };
-    const ported = await record(getSystemInfo);
-    expect(Object.keys(ported.info.versions)).toEqual(
-      installIntegrationMetadata.map((integration) => integration.id),
+    const calls: { args: string[]; timeoutMs: number | undefined }[] = [];
+    const info = await getSystemInfo(
+      () => false,
+      async (args, timeoutMs) => {
+        calls.push({ args, timeoutMs });
+        return outputs[args.join(' ')] ?? null;
+      },
     );
-    expect(ported.calls.filter((call) => call.timeoutMs !== undefined)).toEqual([
+    expect(calls.map((call) => call.args.join(' ')).sort()).toEqual(Object.keys(outputs).sort());
+    expect(calls.filter((call) => call.timeoutMs !== undefined)).toEqual([
       { args: ['codex', 'plugin', 'list'], timeoutMs: 30_000 },
       { args: ['amp', 'plugins', 'list'], timeoutMs: 30_000 },
     ]);
-    expect(new Set(Object.values(ported.info.versions))).toEqual(
-      new Set(['1.2.3', '2.0.0-beta.1', 'no digits', null]),
-    );
-    expect(ported.info.version).toBe('dev');
-    expect(ported.info.platform).toBe(`${process.platform} ${process.arch}`);
+    expect(info.versions).toEqual({
+      'antigravity-cli': '1.0.1',
+      'claude-code': '1.2.3',
+      codex: '2.0.0-beta.1',
+      'copilot-cli': 'no digits',
+      'gemini-cli': null,
+      'grok-build': '1.0.6',
+      'hermes-agent': '1.0.7',
+      'kimi-code': '1.0.8',
+      openclaw: '1.0.9',
+      opencode: '1.0.10',
+      pi: '1.0.11',
+      cursor: '1.0.12',
+      'deepseek-harness': '1.0.13',
+      amp: '1.0.14',
+    });
+    expect(info).toMatchObject({
+      nodeVersion: '22.0.0',
+      npmVersion: '10.0.0',
+      bunVersion: '1.3.0',
+      codexPluginListOutput: 'codex plugins',
+      ampPluginListOutput: 'amp plugins',
+    });
+    expect(info.version).toBe('dev');
+    expect(info.platform).toBe(`${process.platform} ${process.arch}`);
   });
 
   test.each([

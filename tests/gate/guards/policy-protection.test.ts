@@ -3,10 +3,7 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import { createBudget } from '@/core/budget';
-import {
-  findPolicyConfigMutationTargetInSemanticFacts,
-  findPolicyConfigMutationTargetInToolInput,
-} from '@/gate/guards/policy-protection';
+import { findPolicyConfigMutationTargetInSemanticFacts } from '@/gate/guards/policy-protection';
 import { createSemanticFacts } from '@/gate/guards/semantic-facts';
 import type { ToolRoute } from '@/gate/invocation';
 import { createToolInvocation } from '@/gate/invocation';
@@ -60,7 +57,11 @@ function toolContext() {
 function guardPair(toolName: string, input: unknown, route: ToolRoute) {
   const paired = guardEnvironments();
   return describeOutcome(() =>
-    findPolicyConfigMutationTargetInToolInput(toolName, input, route, toolContext(), paired),
+    findPolicyConfigMutationTargetInSemanticFacts(
+      createSemanticFacts(createToolInvocation(toolName, input, route, toolContext(), null)),
+      paired,
+      createBudget(),
+    ),
   );
 }
 
@@ -84,6 +85,12 @@ describe('policy config protection through the shell', () => {
     const tildePolicy = `${TILDE}/.cc-safety-net/policy.json`;
     const rows: readonly { readonly command: string; readonly blocked: boolean }[] = [
       { command: `less ${sh(userPolicy)}`, blocked: false },
+      { command: `sed -i s/a/b/ ${sh(userPolicy)}`, blocked: true },
+      { command: `echo {} > ${sh(projectPolicy)}`, blocked: true },
+      { command: `mv ${sh(userPolicy)} ${sh(join(root, 'other'))}`, blocked: true },
+      { command: `find ${sh(safetyHome)} -delete`, blocked: true },
+      { command: `P=${sh(userPolicy)}; cp /dev/null "$P"`, blocked: true },
+      { command: `truncate -s 0 ${sh(join(workspace, 'alias', 'policy.json'))}`, blocked: true },
       { command: `sed s/a/b/ ${sh(userPolicy)}`, blocked: false },
       { command: `jq . ${sh(userPolicy)}`, blocked: false },
       { command: `echo {} >> ${sh(userPolicy)}`, blocked: true },
@@ -113,23 +120,6 @@ describe('policy config protection through the shell', () => {
       { command: '', blocked: false },
     ];
     expectBlocked(rows);
-  });
-
-  test('the table separates reads from writes and covers both scopes', () => {
-    const blocked = (command: string) => {
-      const outcome = guardPair('Bash', { command }, { kind: 'command', shell: 'posix' });
-      return outcome.ok && outcome.value !== null;
-    };
-    expect(blocked(`cat ${sh(userPolicy)}`)).toBeFalse();
-    expect(blocked(`sed -i s/a/b/ ${sh(userPolicy)}`)).toBeTrue();
-    expect(blocked(`echo {} > ${sh(projectPolicy)}`)).toBeTrue();
-    expect(blocked(`rm -rf ${sh(safetyHome)}`)).toBeTrue();
-    expect(blocked(`mv ${sh(userPolicy)} ${sh(join(root, 'other'))}`)).toBeTrue();
-    expect(blocked(`find ${sh(safetyHome)} -delete`)).toBeTrue();
-    expect(blocked(`P=${sh(userPolicy)}; cp /dev/null "$P"`)).toBeTrue();
-    expect(blocked(`truncate -s 0 ${sh(join(workspace, 'alias', 'policy.json'))}`)).toBeTrue();
-    expect(blocked(`rm -rf ${sh(join(root, 'other'))}`)).toBeFalse();
-    expect(blocked('echo hello')).toBeFalse();
   });
 
   test('a command that only mentions the policy path, or cannot be read, writes nothing', () => {
@@ -242,42 +232,5 @@ describe('policy config protection through tool inputs', () => {
         `${row.toolName} ${row.route.kind} ${JSON.stringify(row.input)}`,
       ).toStrictEqual({ ok: true, value: row.target === null ? null : { target: row.target } });
     }
-  });
-
-  test('a write to either policy file is blocked while a read of it is not', () => {
-    const target = (toolName: string, input: unknown, route: ToolRoute) => {
-      const outcome = guardPair(toolName, input, route);
-      return outcome.ok ? (outcome.value?.target ?? null) : 'threw';
-    };
-    expect(target('Write', { file_path: userPolicy }, { kind: 'path' })).toBe(userPolicy);
-    expect(target('Write', { file_path: projectPolicy }, { kind: 'path' })).toBe(projectPolicy);
-    expect(target('Read', { file_path: userPolicy }, { kind: 'path' })).toBeNull();
-    expect(target('Glob', { path: safetyHome, pattern: '*' }, { kind: 'glob' })).toBeNull();
-    expect(
-      target('Write', { file_path: join(workspace, 'src', 'a.ts') }, { kind: 'path' }),
-    ).toBeNull();
-  });
-});
-
-describe('policy config protection over prepared facts', () => {
-  test('a declared command reaches the same verdict through the facts entry point', () => {
-    const paired = guardEnvironments();
-    const target = (command: string) =>
-      findPolicyConfigMutationTargetInSemanticFacts(
-        createSemanticFacts(
-          createToolInvocation(
-            'Bash',
-            { command },
-            { kind: 'command', shell: 'posix' },
-            toolContext(),
-            command,
-          ),
-        ),
-        paired,
-        createBudget(),
-      );
-    expect(target(`cp /dev/null ${sh(userPolicy)}`)).toStrictEqual({ target: sh(userPolicy) });
-    expect(target(`rm -rf ${sh(safetyHome)}`)).toStrictEqual({ target: sh(safetyHome) });
-    expect(target(`cat ${sh(userPolicy)}`)).toBeNull();
   });
 });

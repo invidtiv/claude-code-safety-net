@@ -1,5 +1,5 @@
 import { dirname } from 'node:path';
-import { type Budget, createBudget } from '@/core/budget';
+import type { Budget } from '@/core/budget';
 import {
   normalizeProtectedFileCandidate,
   normalizeProtectedPathCandidate,
@@ -16,7 +16,7 @@ import {
 } from '@/gate/analyzer/find';
 import { stripWrappersForPathScan } from '@/gate/analyzer/wrapper-prelude';
 import type { SemanticFacts } from '@/gate/facts';
-import { createToolInvocation, type ToolCallContext, type ToolRoute } from '@/gate/invocation';
+import type { ToolCallContext } from '@/gate/invocation';
 import {
   expandTrackedShellVariables,
   type GuardSyntax,
@@ -27,7 +27,7 @@ import {
   extractMvOperandPaths,
   findProtectedPathMutationInCommand,
 } from './protected-path-scanner';
-import { createSemanticFacts, getCommandSyntaxFact } from './semantic-facts';
+import { getCommandSyntaxFact } from './semantic-facts';
 
 export const REASON_POLICY_CONFIG_PROTECTION =
   'This path contains the protected policy config and you must not modify or delete it.';
@@ -57,21 +57,6 @@ type PolicyPathIdentity = {
   readonly files: ReadonlySet<string>;
   readonly directoriesAndAncestors: ReadonlySet<string>;
 };
-
-/** @internal */
-export function findPolicyConfigMutationTargetInToolInput(
-  toolName: string,
-  input: unknown,
-  route: ToolRoute,
-  context: ToolCallContext,
-  environment: EnvironmentContext,
-): PolicyConfigTarget | null {
-  return findPolicyConfigMutationTargetInSemanticFacts(
-    createSemanticFacts(createToolInvocation(toolName, input, route, context, null)),
-    environment,
-    createBudget(),
-  );
-}
 
 export function findPolicyConfigMutationTargetInSemanticFacts(
   facts: SemanticFacts,

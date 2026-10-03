@@ -38,6 +38,28 @@ describe('help', () => {
       const outcome = await differential({ args: ['help', name] });
       expect(outcome.exitCode).toBe(0);
       expect(outcome.stdout.split('\n')[0]).toBe(`cc-safety-net ${name}`);
+      if (name === 'install' || name === 'uninstall') {
+        expect(outcome.stdout).toContain(`USAGE:\n  cc-safety-net ${name} [TARGET_FLAG]\n`);
+        expect(outcome.stdout).toContain(
+          name === 'install'
+            ? 'Install CC Safety Net into a coding agent CLI'
+            : 'Uninstall CC Safety Net from a coding agent CLI',
+        );
+        expect(outcome.stdout).toMatch(
+          name === 'install'
+            ? /--cursor\s+Install Cursor hook/
+            : /--cursor\s+Uninstall Cursor hook/,
+        );
+        expect(outcome.stdout).toContain(`cc-safety-net ${name} --cursor`);
+      }
+      if (name === 'update') {
+        expect(outcome.stdout).toContain(
+          'Update every installed CC Safety Net integration to the latest version',
+        );
+        expect(outcome.stdout).toContain('USAGE:\n  cc-safety-net update\n');
+        expect(outcome.stdout).toContain('OPTIONS:\n  -h, --help  Show this help\n\nEXAMPLES:');
+        expect(outcome.stdout).toContain('EXAMPLES:\n  cc-safety-net update\n');
+      }
     }, 60_000);
   }
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { buildHermesAgentPluginFiles } from '@/hosts/hermes-agent/artifact';
-import { detect as detectHermes, isHermesAgentPluginEnabled } from '@/hosts/hermes-agent/detect';
+import { detect as detectHermes } from '@/hosts/hermes-agent/detect';
 import type { TreeSpec } from '../../helpers/fixture-tree';
 import { differential } from '../../helpers/host-differential';
 import { removeTempRoots } from '../../helpers/temp-home';
@@ -48,19 +48,6 @@ const detection = async (seed: TreeSpec) =>
 afterEach(removeTempRoots);
 
 describe('reading whether Hermes would load the plugin', () => {
-  test.each(CONFIGS)('reads %s', async (_case, config, enabled) => {
-    expect(
-      (
-        await differential(
-          {
-            seed: configSeed(config),
-          },
-          (environment) => isHermesAgentPluginEnabled(environment),
-        )
-      ).outcome,
-    ).toEqual({ kind: 'returned', value: enabled });
-  });
-
   test.each(CONFIGS)('carries %s into the reported status', async (_case, config, enabled) => {
     expect(await detection({ ...managedFiles('dev'), ...configSeed(config) })).toEqual({
       kind: 'returned',

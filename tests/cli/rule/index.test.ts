@@ -371,6 +371,7 @@ describe('remove', () => {
       'Local rulebook source directory contains extra files: <root>/project/.cc-safety-net/rules/team. delete manually if you really want to remove the directory.\n',
     );
     expect(fileAt(outcome, `${P}/rule.json`)).toBe(rulesConfig(['team']));
+    expect(fileAt(outcome, `${P}/team/rulebook.json`)).toBe(TEAM);
     expect(fileAt(outcome, `${P}/team/notes.md`)).toBe('kept by hand\n');
   }, 60_000);
 
@@ -434,9 +435,10 @@ describe('remove', () => {
 
   test('owner/repo#ref removes that ref and leaves its sibling active', async () => {
     const outcome = await rule(['remove', 'acme/repo#v2'], {
-      [`${P}/rule.json`]: rulesConfig(['acme/repo#main/x', 'acme/repo#v2/y']),
+      [`${P}/rule.json`]: rulesConfig(['acme/repo#main/x', 'acme/repo#v2/y', 'acme/repo#v2/z']),
       [`${P}/x/rulebook.json`]: VENDORED_X,
       [`${P}/y/rulebook.json`]: VENDORED_Y,
+      [`${P}/z/rulebook.json`]: v1Rulebook('z'),
     });
     expect(outcome.exitCode).toBe(0);
     expect(outcome.stdout).toBe(
@@ -794,27 +796,44 @@ describe('migrate', () => {
         '',
       ].join('\n'),
     );
+    expect(outcome.stderr).toBe('');
+    expect(outcome.tree.map((entry) => entry.path)).toEqual(['home', 'home/tmp', 'project']);
   }, 60_000);
 
   test('a project legacy config becomes a rulebook and --cleanup deletes the original', async () => {
+    const legacyRule = {
+      name: 'block-docker-system-prune',
+      command: 'docker',
+      subcommand: 'system',
+      block_args: ['prune'],
+      reason: 'Use targeted cleanup instead.',
+    };
     const outcome = await rule(['migrate', '--cleanup'], {
-      'project/.safety-net.json': legacyConfig([
-        {
-          name: 'block-docker-system-prune',
-          command: 'docker',
-          subcommand: 'system',
-          block_args: ['prune'],
-          reason: 'Use targeted cleanup instead.',
-        },
-      ]),
+      'project/.safety-net.json': legacyConfig([legacyRule]),
     });
     expect(outcome.exitCode).toBe(0);
     expect(outcome.stdout.split('\n')[0]).toBe(
       'Deleted legacy config at <root>/project/.safety-net.json',
     );
     expect(fileAt(outcome, `${P}/rule.json`)).toBe(rulesConfig(['project-rules']));
-    expect(fileAt(outcome, `${P}/project-rules/rulebook.json`)).toContain(
-      '"name": "project-rules"',
+    expect(fileAt(outcome, `${P}/project-rules/rulebook.json`)).toBe(
+      json({
+        rulebook_version: 1,
+        name: 'project-rules',
+        version: '1.0.0',
+        description: 'Migrated CC Safety Net rules.',
+        author: 'project',
+        migrated_from: '.safety-net.json',
+        allowed_commands: ['docker'],
+        rules: [legacyRule],
+        tests: [
+          {
+            command: 'docker system prune',
+            expect: 'blocked',
+            rule: 'block-docker-system-prune',
+          },
+        ],
+      }),
     );
     expect(holds(outcome, '.safety-net.json')).toBeFalse();
   }, 60_000);
@@ -850,6 +869,8 @@ describe('sync', () => {
         '',
       ].join('\n'),
     );
+    expect(outcome.stderr).toBe('');
+    expect(holds(outcome, 'rules/x')).toBeFalse();
   }, 60_000);
 
   test('a cached copy that still matches its digest is vendored and the leftovers go', async () => {
@@ -877,6 +898,8 @@ describe('sync', () => {
     const outcome = await rule(['sync'], {
       [`${P}/rule.json`]: '{ not json',
       [`${P}/rule.lock`]: v2Lock([LOCK_ENTRY]),
+      [`project/.cc-safety-net/cache/rulebooks/${v2CacheDir(LOCK_ENTRY)}/rulebook.json`]:
+        VENDORED_X,
     });
     expect(outcome.exitCode).toBe(1);
     expect(outcome.stdout).toBe(`${DEPRECATION}\n`);
@@ -884,6 +907,12 @@ describe('sync', () => {
       'Cannot migrate: the rules config in <root>/project/.cc-safety-net is missing or unreadable while v2 leftovers remain. Restore rule.json, then re-run rule sync.\n',
     );
     expect(fileAt(outcome, `${P}/rule.lock`)).toBe(v2Lock([LOCK_ENTRY]));
+    expect(
+      fileAt(
+        outcome,
+        `project/.cc-safety-net/cache/rulebooks/${v2CacheDir(LOCK_ENTRY)}/rulebook.json`,
+      ),
+    ).toBe(VENDORED_X);
   }, 60_000);
 });
 
@@ -891,7 +920,16 @@ describe('verify and doc', () => {
   test('verify over a machine with no config reports the built-in rules', async () => {
     const outcome = await rule(['verify']);
     expect(outcome.exitCode).toBe(0);
-    expect(outcome.stdout).toContain('No config files found. Using built-in rules only.');
+    expect(outcome.stdout).toBe(
+      [
+        'CC Safety Net Config',
+        '════════════════════',
+        '',
+        'No config files found. Using built-in rules only.',
+        '',
+      ].join('\n'),
+    );
+    expect(outcome.stderr).toBe('');
   }, 60_000);
 
   test('doc prints the authoring guide and nothing else', async () => {

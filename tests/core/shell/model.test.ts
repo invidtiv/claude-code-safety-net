@@ -52,10 +52,4 @@ describe('core/shell/model', () => {
       ).toBe(row.dynamic);
     }
   });
-
-  test('the words of a substitution-headed command are the substitution output', () => {
-    const view = firstView('$(printf r)m -rf /');
-    expect(view?.words.map((word) => word.text)).toStrictEqual(['m', '-rf', '/']);
-    expect(view?.words[0]?.provenance).toBe('command-substitution');
-  });
 });

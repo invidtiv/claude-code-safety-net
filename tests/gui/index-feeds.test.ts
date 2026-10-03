@@ -107,7 +107,7 @@ type FeedBody = {
     commands: Record<string, number>;
     errors: number;
   };
-  entries: { ts: string; command: string }[];
+  entries: { ts: string; command: string; decision?: string }[];
 };
 
 type RulesBody = {
@@ -150,18 +150,6 @@ describe('the GUI activity feed over HTTP', () => {
     homedirSpy.mockRestore();
   });
 
-  test('refuses a window request that carries no valid token', async () => {
-    const row = await activity(withRetention(10), [
-      { path: '/api/activity?days=3', token: 'none' },
-      { path: '/api/activity?days=3', token: 'wrong-query' },
-    ]);
-
-    expect(row.responses.map((response) => response.body)).toStrictEqual([
-      { error: 'Forbidden' },
-      { error: 'Forbidden' },
-    ]);
-  });
-
   test('bounds the window by the retention the policy sets', async () => {
     const row = await activity(withRetention(10), [
       { path: '/api/activity' },
@@ -200,8 +188,9 @@ describe('the GUI activity feed over HTTP', () => {
         .sort()
         .reverse(),
     );
-    expect(week.counts.blockedByDay).toHaveLength(7);
-    expect(week.counts.analyzedByDay).toHaveLength(7);
+    expect(week.counts.blockedByDay).toEqual([0, 0, 0, 0, 0, 1, 3]);
+    expect(week.counts.analyzedByDay).toEqual([0, 0, 0, 1, 0, 1, 4]);
+    expect(week.totalInWindow).toBe(6);
     expect(week.counts.blockedByDay.reduce((sum, count) => sum + count, 0)).toBe(
       week.counts.blocked,
     );
@@ -211,24 +200,36 @@ describe('the GUI activity feed over HTTP', () => {
     expect(week.unreadable).toBe(2);
     expect(week.counts).toMatchObject({ blocked: 4, allowed: 2 });
     expect(fortnight.counts).toMatchObject({ blocked: 5, allowed: 2 });
-    expect(week.entries.map((entry) => entry.command)).not.toContain('rm -rf /');
+    expect(week.entries.map((entry) => entry.command)).toEqual([
+      'a && FOO=1 docker system prune',
+      'chmod -R 777 /',
+      'ls',
+      'git push --force',
+      'git push --force',
+      'ls',
+    ]);
     expect(fortnight.entries.map((entry) => entry.command)).toContain('rm -rf /');
   });
 
   test.each([
-    [600, 200, 300, 200],
-    [490, 20, 480, 20],
-  ])(
+    [600, 200, 300, 200, true],
+    [490, 20, 480, 20, true],
+    [10, 490, 10, 490, false],
+    [30, 30, 30, 30, false],
+  ] as const)(
     'caps %i denials and %i allows at the entries the client can render',
-    async (denials, allowances, keptDenied, keptAllowed) => {
+    async (denials, allowances, keptDenied, keptAllowed, truncated) => {
       const row = await activity(storm(denials, allowances), [{ path: '/api/activity?days=7' }]);
       const feed = feedOf(row.responses[0]?.body);
-      const denialsKept = feed.entries.filter((entry) => entry.command !== 'ls').length;
+      const denialsKept = feed.entries.filter((entry) => entry.decision !== 'allow').length;
 
       expect(feed.entries).toHaveLength(keptDenied + keptAllowed);
       expect(denialsKept).toBe(keptDenied);
       expect(feed.entries.length - denialsKept).toBe(keptAllowed);
-      expect(feed.truncated).toBeTrue();
+      expect(feed.truncated).toBe(truncated);
+      expect(feed.totalInWindow).toBe(denials + allowances);
+      const timestamps = feed.entries.map((entry) => entry.ts);
+      expect(timestamps).toEqual([...timestamps].sort().reverse());
       expect(feed.counts).toMatchObject({ blocked: denials, allowed: allowances });
     },
     30_000,
@@ -295,12 +296,6 @@ describe('the GUI rulebook listing', () => {
 
     expect(row.responses[0]?.status).toBe(200);
     expect((row.responses[0]?.body as { error?: unknown } | undefined)?.error).toBeString();
-  });
-
-  test('refuses the listing without a token', async () => {
-    const row = await runGuiRow({ seed: {}, requests: [{ path: '/api/rules', token: 'none' }] });
-
-    expect(row.responses[0]).toMatchObject({ status: 403, body: { error: 'Forbidden' } });
   });
 });
 

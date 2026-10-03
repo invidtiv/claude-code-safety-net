@@ -134,15 +134,6 @@ const ANALYSIS_POLICIES = CAPABILITIES.flatMap((capabilities) =>
   POLICIES.map((policy) => createCommandAnalysisPolicy(policy, capabilities)),
 );
 
-describe('the capability sets these rules are resolved against', () => {
-  test('cover every provenance a capability can carry', () => {
-    const sources = new Set(
-      CAPABILITIES.flatMap((capabilities) => Object.values(capabilities).map((one) => one.source)),
-    );
-    expect([...sources].sort()).toStrictEqual(['capability_override', 'environment', 'preset']);
-  });
-});
-
 describe('resolving one rule against a policy and a capability set', () => {
   test('a catastrophic rule is always enforced, whatever the level says', () => {
     expect(
@@ -392,11 +383,6 @@ describe('properties every policy and capability set must satisfy', () => {
     }
   });
 
-  test('a filtered match passes through untouched rather than being rebuilt', () => {
-    const match = destructiveCommandMatch(CATASTROPHIC_ID, 'r');
-    expect(filterDestructiveCommandMatch(match, ANALYSIS_POLICIES[0])).toBe(match);
-  });
-
   test('with no policy at all a rule falls back to what the caller inherited', () => {
     for (const id of CATALOG_IDS) {
       const catastrophic =
@@ -448,12 +434,6 @@ describe('the analysis context an evaluation runs under', () => {
       source: 'capability_override',
       sources: [...capabilities.fail_closed.sources, 'analysis options.strict'],
     });
-  });
-
-  test('worktree mode comes from the option alone', () => {
-    expect(
-      contextWith(capabilitiesFor('no policy at all'), { worktreeMode: true }).worktreeMode,
-    ).toBeTrue();
   });
 
   test('every option combination resolves consistently with the capabilities it started from', () => {

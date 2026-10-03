@@ -10,7 +10,7 @@ import { runGrokBuildHook } from '@/hosts/grok-build/hook';
 import { runHermesAgentHook } from '@/hosts/hermes-agent/hook';
 import { runKimiCodeHook } from '@/hosts/kimi-code/hook';
 
-export type HookIntegration = {
+type HookIntegration = {
   id: RuntimeHookIntegrationId;
   displayName: string;
   flags: readonly [string, string];
@@ -32,8 +32,7 @@ const hookRunners = {
   'kimi-code': runKimiCodeHook,
 } satisfies Record<RuntimeHookIntegrationId, () => Promise<void>>;
 
-/** @internal */
-export const hookIntegrations: readonly HookIntegration[] = runtimeHookIntegrationMetadata.map(
+const hookIntegrations: readonly HookIntegration[] = runtimeHookIntegrationMetadata.map(
   (integration) => ({
     ...integration,
     run: hookRunners[integration.id],

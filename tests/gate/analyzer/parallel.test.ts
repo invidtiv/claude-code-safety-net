@@ -60,23 +60,6 @@ type ParallelRow = {
   readonly disabledRule?: string;
 };
 
-const ROWS: readonly ParallelRow[] = [
-  { label: 'bare' },
-  { label: 'custom rules', rules: RULES },
-  { label: 'strict', strict: true, rules: RULES },
-  { label: 'paranoid rm', paranoidRm: true },
-  { label: 'worktree mode', worktreeMode: true },
-  { label: 'PARALLEL in the environment', env: { PARALLEL: '-j4' } },
-  { label: 'PARALLEL blank in the environment', env: { PARALLEL: '   ' } },
-  { label: 'PARALLEL assigned in the shell', assignments: new Map([['PARALLEL', '--tag']]) },
-  {
-    label: 'PARALLEL assigned empty over an environment value',
-    env: { PARALLEL: '-j4' },
-    assignments: new Map([['PARALLEL', '']]),
-  },
-  { label: 'command-stream disabled', disabledRule: 'parallel.command-stream-dynamic' },
-];
-
 function bothAnalyzers(tokens: readonly string[], row: ParallelRow) {
   const paired = pairedEnvironments({ HOME: home, ...row.env }, home);
   const budget = createBudget();
@@ -136,136 +119,6 @@ function bothAnalyzers(tokens: readonly string[], row: ParallelRow) {
   };
 }
 
-const ARGUMENT_SHAPES: readonly (readonly string[])[] = [
-  ['parallel'],
-  ['parallel', '--version'],
-  ['parallel', '--help'],
-  ['parallel', 'echo', ':::', 'a', 'b'],
-  ['parallel', 'echo', '{}', ':::', 'a', 'b'],
-  ['parallel', 'echo', '{1}', '{2}', ':::', 'a', 'b', ':::', 'c', 'd'],
-  ['parallel', 'echo', '{2}', ':::', 'a'],
-  ['parallel', 'echo', '{-1}', ':::', 'a', 'b'],
-  ['parallel', 'echo', '{0}', ':::', 'a'],
-  ['parallel', 'echo', '{.}', ':::', 'a'],
-  ['parallel', 'echo', '{/}', '{//}', ':::', 'a'],
-  ['parallel', 'echo', '{= s/a/b/ =}', ':::', 'a'],
-  ['parallel', 'echo', ':::', 'a', ':::', 'b', 'c'],
-  ['parallel', 'echo', ':::'],
-  ['parallel', '::::', 'file'],
-  ['parallel', ':::+', 'a'],
-  ['parallel', ':::', 'rm -rf /tmp/x', 'echo hi'],
-  ['parallel', ':::', 'echo BOOM'],
-  ['parallel', ':::', 'a', 'b'],
-  ['parallel', '--', 'rm', '-rf', '{}', ':::', 'a'],
-  ['parallel', '-I', '{}', 'echo', '{}', ':::', 'a'],
-  ['parallel', '-I', '%', 'echo', '%', ':::', 'a'],
-  ['parallel', '-I%', 'echo', '%', ':::', 'a'],
-  ['parallel', '--replace', 'echo', ':::', 'a'],
-  ['parallel', '--replace=', 'echo', '{}', ':::', 'a'],
-  ['parallel', '-i', 'echo', ':::', 'a'],
-  ['parallel', '-j', '4', 'echo', ':::', 'a'],
-  ['parallel', '-j4', 'echo', ':::', 'a'],
-  ['parallel', '--jobs', '4', 'echo', ':::', 'a'],
-  ['parallel', '-n', '2', 'echo', ':::', 'a', 'b'],
-  ['parallel', '-n', ':::', 'a'],
-  ['parallel', '--delay', '1', 'echo', ':::', 'a'],
-  ['parallel', '--tagstring', '{}', 'echo', ':::', 'a'],
-  ['parallel', '--dry-run', 'rm', '-rf', '{}', ':::', 'a'],
-  ['parallel', '--dry-run', 'FOO={= x =}', 'echo', ':::', 'a'],
-  ['parallel', '--dry-run', 'FOO={}', 'echo', ':::', 'a'],
-  ['parallel', '--pipe', 'rm', '-rf', '{}'],
-  ['parallel', '--pipepart', 'cat'],
-  ['parallel', '-a', 'list', 'echo'],
-  ['parallel', '--arg-file', 'list', 'echo'],
-  ['parallel', '--colsep', ',', 'echo', ':::', 'a'],
-  ['parallel', '--rpl', '{x}', 'echo', ':::', 'a'],
-  ['parallel', '--env', 'FOO', 'echo', ':::', 'a'],
-  ['parallel', '--env=FOO', 'echo', ':::', 'a'],
-  ['parallel', '-S', 'host', 'rm', '-rf', '{}', ':::', 'a'],
-  ['parallel', '-Shost', 'rm', '-rf', ':::', 'a'],
-  ['parallel', '--sshlogin', 'host', 'rm', '-rf', ':::', 'a'],
-  ['parallel', '--workdir', '/tmp', 'rm', '-rf', 'x', ':::', 'a'],
-  ['parallel', '--workdir', '...', 'rm', '-rf', 'x', ':::', 'a'],
-  ['parallel', '--workdir', '{}', 'rm', '-rf', 'x', ':::', 'a'],
-  ['parallel', '--wd=', 'rm', '-rf', 'x', ':::', 'a'],
-  ['parallel', '--workdir', ':::', 'a'],
-  ['parallel', '--workdir', 'relative', 'rm', '-rf', 'x', ':::', 'a'],
-  ['parallel', '--workdir', '/tmp', '-S', 'host', 'rm', '-rf', 'x'],
-];
-
-const TEMPLATE_SHAPES: readonly (readonly string[])[] = [
-  ['parallel', 'rm', '-rf', '{}', ':::', 'build', 'dist'],
-  ['parallel', 'rm', '-rf', '{}'],
-  ['parallel', 'rm', '-rf', ':::', 'build'],
-  ['parallel', 'rm', '-rf'],
-  ['parallel', 'rm', '-rf', '{}', '--', ':::', 'a'],
-  ['parallel', 'rm', '-rf', '-{}', ':::', 'a'],
-  ['parallel', 'rm', '-rf', '/', ':::', 'a'],
-  ['parallel', 'rm', '-rf', '{1}', ':::', 'a', ':::', 'b'],
-  ['parallel', 'rm', 'build', ':::', 'a'],
-  ['parallel', 'bash', '-c', 'rm -rf {}', ':::', 'a'],
-  ['parallel', 'bash', '-c', '{}', ':::', 'rm -rf /tmp/x'],
-  ['parallel', 'bash', '-c', '{}'],
-  ['parallel', 'bash', '-c', 'echo hi', ':::', 'a'],
-  ['parallel', 'bash', '-c', 'echo BOOM'],
-  ['parallel', 'bash', '-c', 'rm -rf /tmp/x'],
-  ['parallel', 'bash', '-c', 'eval "$FOO"'],
-  ['parallel', 'sh', '-c', 'echo "$1"', '_', ':::', 'a'],
-  ['parallel', 'sh', '-c', 'echo "$1"', '{}', ':::', 'a'],
-  ['parallel', 'sh', '-n', '-c', 'rm -rf {}', ':::', 'a'],
-  ['parallel', 'sh', '-n', '-c', 'rm -rf x'],
-  ['parallel', 'bash', 'script.sh', ':::', 'a'],
-  ['parallel', 'bash', '{}', ':::', 'script.sh'],
-  ['parallel', 'bash', ':::', 'rm -rf /tmp/x'],
-  ['parallel', 'bash', ':::', 'echo BOOM'],
-  ['parallel', 'bash', '{}'],
-  ['parallel', 'bash'],
-  ['parallel', 'sh', '-c'],
-  ['parallel', 'git', 'reset', '--hard', ':::', 'a'],
-  ['parallel', 'git', 'reset', '--hard'],
-  ['parallel', 'git', '{}', ':::', 'status'],
-  ['parallel', 'git', 'checkout', '{}', ':::', '.'],
-  ['parallel', 'git', 'checkout', '--', '{}', ':::', '.'],
-  ['parallel', 'git', '-c', '{}', 'status', ':::', 'a'],
-  ['parallel', 'git', '-c', 'core.pager=x', 'status', ':::', 'a'],
-  ['parallel', 'git', 'status', ':::', 'a'],
-  ['parallel', 'find', '.', '-delete', ':::', 'a'],
-  ['parallel', 'find', '{}', '-delete'],
-  ['parallel', 'find', '.', '-name', '{}'],
-  ['parallel', 'find', '.', '-exec', 'rm', '-rf', '{}', ';'],
-  ['parallel', 'find', '.', '-exec', 'rm', '-{}', 'x', ';'],
-  ['parallel', 'find', '.', '-exec', 'sh', '-c', '{}', ';'],
-  ['parallel', 'find', '.', '-newermt', '{}', '-print'],
-  ['parallel', 'xargs', 'rm', '-rf'],
-  ['parallel', 'xargs', '-I', '{}', 'rm', '-rf', '{}'],
-  ['parallel', 'xargs', 'echo'],
-  ['parallel', 'awk', '{}'],
-  ['parallel', 'awk', '-f', '{}'],
-  ['parallel', 'awk', '{ print }', ':::', 'a'],
-  ['parallel', 'python3', '-c', '{}'],
-  ['parallel', 'python3', '{}'],
-  ['parallel', 'python3', '-c', 'print(1)', ':::', 'a'],
-  ['parallel', 'node', '--eval={}'],
-  ['parallel', 'eval', '{}'],
-  ['parallel', 'source', '{}'],
-  ['parallel', '.', '{}'],
-  ['parallel', 'parallel', 'rm', '-rf'],
-  ['parallel', '{}', 'arg'],
-  ['parallel', 'deploy-tool', '{}', ':::', '--prod'],
-  ['parallel', 'deploy-tool', '--prod'],
-  ['parallel', 'deploy-tool', '{}'],
-  ['parallel', 'npm', 'publish', '{}'],
-  ['parallel', 'echo', '{}'],
-  ['parallel', 'uv', 'run', 'rm', '-rf', '{}', ':::', 'a'],
-  ['parallel', 'FOO=bar', 'echo', ':::', 'a'],
-  ['parallel', 'FOO=rm -rf /', 'echo', ':::', 'a'],
-  ['parallel', 'FOO={}', 'echo', ':::', 'a'],
-  ['parallel', 'FOO={.}', 'echo', ':::', 'a'],
-  ['parallel', 'FOO={= x =}', 'echo', ':::', 'a'],
-];
-
-const ALL_SHAPES = [...ARGUMENT_SHAPES, ...TEMPLATE_SHAPES];
-
 describe('parallel command parsing', () => {
   test('the child command starts after the options and their values', () => {
     const rows: readonly { readonly tokens: readonly string[]; readonly start: number }[] = [
@@ -322,6 +175,10 @@ describe('parallel analysis', () => {
     for (const row of rows) {
       expect(idFor(row.tokens), row.tokens.join(' ')).toBe(row.id);
     }
+    const template = bothAnalyzers(['parallel', 'rm', '-rf', '{}'], { label: 'bare' }).match;
+    expect(template.ok && template.value?.reason).toBe(REASON_PARALLEL_RM);
+    const script = bothAnalyzers(['parallel', 'bash', '-c', '{}'], { label: 'bare' }).match;
+    expect(script.ok && script.value?.reason).toBe(REASON_PARALLEL_SHELL);
   });
 
   test('a job with no placeholder is analyzed as the command it runs', () => {
@@ -462,31 +319,25 @@ describe('parallel analysis', () => {
     expect(pair.match.ok && pair.match.value).toStrictEqual(NESTED);
   });
 
-  test('the shapes reach the shell, rm, command-stream and unsupported verdicts', () => {
-    const seen = new Set(
-      ROWS.flatMap((row) =>
-        ALL_SHAPES.flatMap((tokens) => {
-          const outcome = bothAnalyzers(tokens, row).match;
-          return outcome.ok && outcome.value ? [outcome.value.id] : [];
-        }),
-      ),
-    );
-    for (const id of [
-      'parallel.shell-dynamic',
-      'parallel.rm-recursive-force-dynamic',
-      'parallel.command-stream-dynamic',
-      'custom.no-prod-deploy',
-      'find.delete',
-      'git.reset-hard',
-    ]) {
-      expect([...seen].sort(), id).toContain(id);
+  test('a quoted command is handed to the caller as the shell source each job runs', () => {
+    const rows: readonly { readonly tokens: readonly string[]; readonly jobs: string[] }[] = [
+      { tokens: ['parallel', 'rm -rf {}', ':::', '../other'], jobs: ["rm -rf '../other'"] },
+      { tokens: ['parallel', 'rm -rf', ':::', '/'], jobs: ["rm -rf '/'"] },
+      { tokens: ['parallel', 'git reset --hard', ':::', 'x'], jobs: ["git reset --hard 'x'"] },
+      { tokens: ['parallel', 'echo {}', ':::', 'a', 'b'], jobs: ["echo 'a'", "echo 'b'"] },
+      { tokens: ['parallel', 'echo {}', ':::', "it's"], jobs: [`echo 'it'"'"'s'`] },
+      { tokens: ['parallel', '{}', ':::', 'rm -rf /'], jobs: ['rm -rf /'] },
+      { tokens: ['parallel', '{} x', ':::', 'rm -rf'], jobs: ['rm -rf x'] },
+    ];
+    for (const row of rows) {
+      expect(bothAnalyzers(row.tokens, { label: 'bare' }).jobs, row.tokens.join(' ')).toStrictEqual(
+        row.jobs.map((job) => `${job} @ ${project}`),
+      );
     }
-    const stream = bothAnalyzers(['parallel'], { label: 'bare' }).match;
-    expect(stream.ok && stream.value?.id).toBe('parallel.command-stream-dynamic');
-    const template = bothAnalyzers(['parallel', 'rm', '-rf', '{}'], { label: 'bare' }).match;
-    expect(template.ok && template.value?.reason).toBe(REASON_PARALLEL_RM);
-    const script = bothAnalyzers(['parallel', 'bash', '-c', '{}'], { label: 'bare' }).match;
-    expect(script.ok && script.value?.reason).toBe(REASON_PARALLEL_SHELL);
+    expect(idFor(['parallel', 'rm -rf {}'])).toBe('parallel.shell-dynamic');
+    expect(idFor(['parallel', 'rm -rf', '{}'])).toBe('parallel.rm-recursive-force-dynamic');
+    expect(idFor(['parallel', 'git reset --hard'])).toBe('git.reset-hard');
+    expect(idFor(['parallel', 'echo {}', ':::', 'a'])).toBeNull();
   });
 
   test('a PARALLEL value in the environment makes the construction unverifiable', () => {

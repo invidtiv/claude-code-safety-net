@@ -55,7 +55,8 @@ describe('clearing the bunx cache', () => {
   });
 
   test('does nothing when the temp dir does not exist', () => {
-    const [ported] = sweep(false, undefined, undefined);
-    expect(ported?.entries).toEqual([]);
+    expect(() =>
+      clearBunxSafetyNetCache(join(createTempRoot('bunx-absent-'), 'missing')),
+    ).not.toThrow();
   });
 });

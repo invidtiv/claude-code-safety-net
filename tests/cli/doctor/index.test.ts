@@ -128,6 +128,9 @@ describe('doctor --json', () => {
       'integration.none-configured',
     ]);
     expect(report.engineSelfTest.passed).toBe(3);
+    expect(
+      report.environment.find((variable) => variable.name === 'CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY'),
+    ).toMatchObject({ isSet: false, defaultBehavior: 'off' });
   }, 120_000);
 
   test('an installed Cursor hook clears the none-configured finding', async () => {

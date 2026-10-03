@@ -1,12 +1,7 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadBuiltinCommands as portedLoad } from '@/hosts/opencode/builtin-commands/commands';
-import {
-  buildSafetyNetCommandPrompt as portedPrompt,
-  registerBuiltinCommands as portedRegister,
-} from '@/hosts/pi/builtin-commands/commands';
-import { CC_SAFETY_NET_TEMPLATE } from '@/hosts/templates/cc-safety-net';
+import { registerBuiltinCommands as portedRegister } from '@/hosts/pi/builtin-commands/commands';
 
 const DEFAULT_REQUEST = 'Help me with CC Safety Net.';
 
@@ -30,42 +25,20 @@ async function recordPiCommand(
   return recorded;
 }
 
-test('the OpenCode builtin command carries the same template on both sides', () => {
-  const ported = portedLoad();
+test.each([
+  { isIdle: true, args: '', request: DEFAULT_REQUEST },
+  { isIdle: false, args: 'explain rm', request: 'explain rm' },
+])('the registered Pi command delivers the request with isIdle $isIdle', async (row) => {
+  const ported = await recordPiCommand(portedRegister, row.args, row.isIdle);
 
-  expect(Object.keys(ported)).toStrictEqual(['cc-safety-net']);
-  expect(ported['cc-safety-net']?.description).toBe(
-    'Operate CC Safety Net: explain blocks, rules, integrations, diagnostics',
-  );
-  expect(ported['cc-safety-net']?.template).toStartWith('# CC Safety Net');
-  expect(ported['cc-safety-net']?.template).toBe(
-    CC_SAFETY_NET_TEMPLATE.slice(CC_SAFETY_NET_TEMPLATE.indexOf('# CC Safety Net')),
-  );
+  expect(ported.commands).toStrictEqual([
+    ['cc-safety-net', 'Operate CC Safety Net: explain blocks, rules, integrations, diagnostics'],
+  ]);
+  expect(ported.messages).toHaveLength(1);
+  expect(ported.messages[0]?.[0]).toStartWith('# CC Safety Net');
+  expect(ported.messages[0]?.[0]).toEndWith(`## User request\n\n${row.request}`);
+  expect(ported.messages[0]?.[1]).toStrictEqual(row.isIdle ? undefined : { deliverAs: 'followUp' });
 });
-
-test('the Pi prompt is the same for an empty and for a filled request', () => {
-  const empty = portedPrompt('');
-  const filled = portedPrompt('explain rm');
-
-  expect(empty).toEndWith(`## User request\n\n${DEFAULT_REQUEST}`);
-  expect(filled).toEndWith('## User request\n\nexplain rm');
-  expect(empty.slice(0, empty.lastIndexOf('## User request'))).toBe(
-    filled.slice(0, filled.lastIndexOf('## User request')),
-  );
-  expect(empty).toStartWith('# CC Safety Net');
-});
-
-test.each([true, false])(
-  'registering the Pi command with isIdle %p records the same call',
-  async (isIdle) => {
-    const ported = await recordPiCommand(portedRegister, 'explain rm', isIdle);
-
-    expect(ported.commands).toStrictEqual([
-      ['cc-safety-net', 'Operate CC Safety Net: explain blocks, rules, integrations, diagnostics'],
-    ]);
-    expect(ported.messages[0]?.[1]).toStrictEqual(isIdle ? undefined : { deliverAs: 'followUp' });
-  },
-);
 
 test('the skill document the template is built from keeps its expected shape', () => {
   const skill = readFileSync(join(import.meta.dir, '../../skills/cc-safety-net/SKILL.md'), 'utf-8');

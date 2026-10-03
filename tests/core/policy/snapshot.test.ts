@@ -7,6 +7,7 @@ import {
   createTestEnvironment,
   processPathResolver,
 } from '@/core/environment';
+import { getCCSafetyNetEnvModes } from '@/core/policy/env';
 import type { RulesPolicyOptions } from '@/core/policy/paths';
 import { loadPolicySnapshot as loadPortedSnapshot } from '@/core/policy/snapshot';
 import type { PolicySnapshot } from '@/core/policy/types';
@@ -271,6 +272,86 @@ const ROWS: readonly Row[] = [
       expect(snapshot.policy.secretProtection.enabled).toBeFalse();
       expect(snapshot.policyScopes?.levelScope).toBe('project');
       expect(snapshot.policyScopes?.weakenings.length).toBeGreaterThan(0);
+      expect(snapshot.policyScopes?.weakeningsIgnored).toBeFalse();
+    },
+  },
+  {
+    name: 'a project policy that weakens the user policy under tighten-only',
+    tree: {
+      [USER_POLICY]: json({ version: 1, safety: { level: 'strict' } }),
+      [PROJECT_POLICY]: json({
+        version: 1,
+        safety: { level: 'standard' },
+        workflow: { worktree_mode: true },
+        destructive_command_protection: { enabled: false },
+        secret_protection: { overrides: { 'secret.ext.pem': 'off' } },
+      }),
+    },
+    env: () => ({ CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY: '1' }),
+    check: (snapshot) => {
+      expect(snapshot.state).toBe('ready');
+      expect(snapshot.policy.safety.level).toBe('strict');
+      expect(snapshot.policy.worktreeMode).toBeFalse();
+      expect(snapshot.policy.destructiveCommandProtectionEnabled).toBeTrue();
+      expect(snapshot.policy.secretProtection.disabledRules).not.toContain('secret.ext.pem');
+      expect(snapshot.policyScopes).toEqual({
+        levelScope: 'user',
+        weakenings: [
+          'project policy lowers level: strict -> standard',
+          'project policy enables worktree mode relaxations',
+          'project policy disables destructive command protection',
+          'project policy disables rule secret.ext.pem',
+        ],
+        weakeningsIgnored: true,
+      });
+    },
+  },
+  {
+    name: 'a project override that disables a capability the environment level raised, under tighten-only',
+    tree: {
+      [PROJECT_POLICY]: json({ version: 1, safety: { overrides: { paranoid_rm: false } } }),
+    },
+    env: () => ({ CC_SAFETY_NET_LEVEL: 'paranoid', CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY: '1' }),
+    check: (snapshot) => {
+      expect(
+        getCCSafetyNetEnvModes(snapshot.policy, new Map([['CC_SAFETY_NET_LEVEL', 'paranoid']]))
+          .paranoidRm,
+      ).toBeTrue();
+      expect(snapshot.policyScopes).toEqual({
+        levelScope: 'default',
+        weakenings: ['project policy disables paranoid_rm'],
+        weakeningsIgnored: true,
+      });
+    },
+  },
+  {
+    name: 'a project override that disables a capability the environment level raised',
+    tree: {
+      [PROJECT_POLICY]: json({ version: 1, safety: { overrides: { paranoid_rm: false } } }),
+    },
+    env: () => ({ CC_SAFETY_NET_LEVEL: 'paranoid' }),
+    check: (snapshot) => {
+      expect(
+        getCCSafetyNetEnvModes(snapshot.policy, new Map([['CC_SAFETY_NET_LEVEL', 'paranoid']]))
+          .paranoidRm,
+      ).toBeFalse();
+      expect(snapshot.policyScopes?.weakenings).toEqual(['project policy disables paranoid_rm']);
+    },
+  },
+  {
+    name: 'a project policy that raises the level under tighten-only',
+    tree: {
+      [USER_POLICY]: json({ version: 1, safety: { level: 'standard' } }),
+      [PROJECT_POLICY]: json({ version: 1, safety: { level: 'paranoid' } }),
+    },
+    env: () => ({ CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY: 'true' }),
+    check: (snapshot) => {
+      expect(snapshot.policy.safety.level).toBe('paranoid');
+      expect(snapshot.policyScopes).toEqual({
+        levelScope: 'project',
+        weakenings: [],
+        weakeningsIgnored: true,
+      });
     },
   },
   {
@@ -359,7 +440,11 @@ const ROWS: readonly Row[] = [
       const reason = reasonOf(snapshot);
       expect(reason).toContain('Invalid JSON');
       expect(reason).toContain('Enforcing built-in protective defaults');
-      expect(snapshot.policyScopes).toEqual({ levelScope: 'default', weakenings: [] });
+      expect(snapshot.policyScopes).toEqual({
+        levelScope: 'default',
+        weakenings: [],
+        weakeningsIgnored: false,
+      });
     },
   },
   {
@@ -370,7 +455,11 @@ const ROWS: readonly Row[] = [
     },
     check: (snapshot) => {
       expect(snapshot.state).toBe('ready');
-      expect(snapshot.policyScopes).toEqual({ levelScope: 'project', weakenings: [] });
+      expect(snapshot.policyScopes).toEqual({
+        levelScope: 'project',
+        weakenings: [],
+        weakeningsIgnored: false,
+      });
     },
   },
   {
@@ -390,6 +479,9 @@ const ROWS: readonly Row[] = [
     },
     check: (snapshot) => {
       const reason = reasonOf(snapshot);
+      expect(reason).toContain(DROPPED_SOURCE_ADVICE);
+      expect(reason).toContain('unknown override key');
+      expect(reason).toContain('invalid policy config:');
       expect(reason.indexOf(DROPPED_SOURCE_ADVICE)).toBeLessThan(
         reason.indexOf('unknown override key'),
       );

@@ -2,7 +2,6 @@ import { afterEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { getActivitySummary } from '@/cli/doctor/activity';
 import { getConfigInfo } from '@/cli/doctor/config';
-import { formatRulesTable } from '@/cli/doctor/format';
 import { writeTree } from '../../helpers/fixture-tree';
 import { rulesConfig, v1Rulebook } from '../../helpers/rulebook-seeds';
 import {
@@ -30,11 +29,6 @@ test('doctor attributes each active local rulebook to its configuration scope', 
     ['user', 'user-team/block-docker-system-prune'],
     ['project', 'project-team/block-docker-system-prune'],
   ]);
-  const table = formatRulesTable(info.effectiveRules);
-  expect(table).toContain('docker system');
-  expect(table).toContain('prune');
-  expect(table).toContain('user-team/block-docker-system-prune');
-  expect(table).toContain('project-team/block-docker-system-prune');
 });
 
 test('doctor keeps the newest three denials from an out-of-order audit file', () => {

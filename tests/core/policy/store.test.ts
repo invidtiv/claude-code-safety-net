@@ -484,29 +484,11 @@ describe('which secret rules end up disabled', () => {
     expect(ported.resolveSecretDisabledRules({}).sort()).toEqual([...DEFAULT_OFF_IDS].sort());
   });
 
-  test('an explicit on opts a default-off rule back in', () => {
-    const id = DEFAULT_OFF_IDS[0] as string;
-    expect(ported.resolveSecretDisabledRules({ [id]: 'on' })).not.toContain(id);
-  });
-
-  test('an explicit off disables a rule that was on by default', () => {
-    const id = [...SECRET_PROTECTION_RULE_ID_SET].find(
-      (candidate) => !SECRET_DEFAULT_OFF_RULE_ID_SET.has(candidate),
-    ) as string;
-    expect(ported.resolveSecretDisabledRules({ [id]: 'off' })).toContain(id);
-  });
-
-  test('a rule named twice over is listed once', () => {
-    const id = DEFAULT_OFF_IDS[0] as string;
-    expect(ported.resolveSecretDisabledRules({ [id]: 'off' }).filter((one) => one === id)).toEqual([
-      id,
-    ]);
-  });
-
   test('every override map resolves to a list with no duplicates and no opted-in rule', () => {
     const maps = [
       {},
       ...DEFAULT_OFF_IDS.slice(0, 3).map((id) => ({ [id]: 'on' as const })),
+      ...DEFAULT_OFF_IDS.slice(0, 1).map((id) => ({ [id]: 'off' as const })),
       ...[...SECRET_PROTECTION_RULE_ID_SET].slice(0, 3).map((id) => ({ [id]: 'off' as const })),
       Object.fromEntries(
         DEFAULT_OFF_IDS.slice(0, 4).map(

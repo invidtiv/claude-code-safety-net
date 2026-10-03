@@ -135,8 +135,7 @@ export async function verifyBuildArtifacts(): Promise<string[]> {
   return files;
 }
 
-/** @internal */
-export function verifyManagedArtifact(label: string, header: string, source: string): void {
+function verifyManagedArtifact(label: string, header: string, source: string): void {
   if (!source.startsWith(header)) {
     throw new Error(`${label} artifact is missing the managed-file header`);
   }

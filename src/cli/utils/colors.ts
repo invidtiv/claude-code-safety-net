@@ -1,5 +1,4 @@
-/** @internal */
-export function shouldUseColor(): boolean {
+function shouldUseColor(): boolean {
   return Boolean(process.stdout.isTTY && !process.env.NO_COLOR);
 }
 
@@ -49,8 +48,7 @@ function getShuffledPalette(seed: number): number[] {
   return palette;
 }
 
-/** @internal */
-export function generateDistinctColor(index: number, seed = 0): string {
+function generateDistinctColor(index: number, seed = 0): string {
   if (!shouldUseColor()) return '';
 
   const palette = getShuffledPalette(seed);

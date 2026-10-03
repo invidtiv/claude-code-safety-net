@@ -4,7 +4,6 @@ import { connect } from 'node:net';
 import { join } from 'node:path';
 import { createPolicyGuiServer as createPortedServer } from '@/gui/index';
 import { snapshotTree, type TreeSpec, writeTree } from './fixture-tree';
-import { normalizePage } from './gui-page';
 import {
   BLANKED_ENV_NAMES,
   createTempRoot,
@@ -42,7 +41,7 @@ export type GuiHookOptions = Omit<
   'cwd' | 'userConfigDir' | 'userConfigPath' | 'projectConfigPath'
 >;
 
-function seedSide(prefix: string, seed: TreeSpec): GuiSide {
+function seedSide(prefix: string, seed: TreeSpec, env: Record<string, string> = {}): GuiSide {
   const root = createTempRoot(prefix);
   const home = join(root, 'home');
   mkdirSync(join(root, 'project'), { recursive: true });
@@ -52,10 +51,10 @@ function seedSide(prefix: string, seed: TreeSpec): GuiSide {
     root,
     home,
     project: join(root, 'project'),
-    values: isolationEnv(
-      home,
-      Object.fromEntries(BLANKED_ENV_NAMES.map((name) => [name, undefined])),
-    ),
+    values: isolationEnv(home, {
+      ...Object.fromEntries(BLANKED_ENV_NAMES.map((name) => [name, undefined])),
+      ...env,
+    }),
   };
 }
 
@@ -78,7 +77,7 @@ const observeBody = (contentType: string | null, text: string, token: string): u
   contentType?.startsWith('application/json')
     ? (JSON.parse(text) as unknown)
     : contentType?.startsWith('text/html')
-      ? normalizePage(text, token)
+      ? text.replaceAll(token, '<token>')
       : text;
 
 async function send(origin: string, token: string, request: GuiRequest): Promise<GuiResponse> {
@@ -190,10 +189,11 @@ function observe(side: GuiSide, responses: readonly GuiResponse[]) {
 
 export async function runGuiRow(row: {
   seed: TreeSpec;
+  env?: Record<string, string>;
   options?: (side: GuiSide) => GuiHookOptions;
   requests: readonly GuiRequest[];
 }) {
-  const portedSide = seedSide('gui-ported-', row.seed);
+  const portedSide = seedSide('gui-ported-', row.seed, row.env);
 
   const portedServer = await createPortedServer(
     () => environmentFor(portedSide.home, portedSide.values),

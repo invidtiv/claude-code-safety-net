@@ -12,7 +12,7 @@ export interface BehavioralContractCase {
     | { kind: 'allow' }
     | {
         kind: 'block';
-        ruleId: string | undefined;
+        ruleId: string;
         intent: BlockIntent | undefined;
         reasonIncludes: string;
         segment?: string;
@@ -197,6 +197,18 @@ export function behavioralContractCases(paths: {
       },
     },
     {
+      name: 'blocks recursive removal without force outside the workspace',
+      command: 'rm -r ../outside',
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'rm.recursive-force-outside-cwd',
+        intent: 'scope_down',
+        reasonIncludes: 'outside cwd is blocked',
+        segment: 'rm -r ../outside',
+      },
+    },
+    {
       name: 'blocks destructive Git nested in a shell',
       command: "sh -c 'git reset --hard'",
       options: options({ cwd: paths.cwd }),
@@ -234,6 +246,36 @@ export function behavioralContractCases(paths: {
         intent: 'scope_down',
         reasonIncludes: 'Use -print first',
         segment: 'find . -delete',
+      },
+    },
+    {
+      name: 'allows find delete of a workspace subdirectory',
+      command: 'find build -type f -delete',
+      options: options({ cwd: paths.cwd }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'blocks find delete of a workspace subdirectory under paranoid rm',
+      command: 'find build -type f -delete',
+      options: options({ cwd: paths.cwd, paranoidRm: true }),
+      expected: {
+        kind: 'block',
+        ruleId: 'find.delete',
+        intent: 'scope_down',
+        reasonIncludes: 'Use -print first',
+        segment: 'find build -type f -delete',
+      },
+    },
+    {
+      name: 'blocks find delete of a starting point that climbs out of the workspace',
+      command: 'find build/../.. -delete',
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'find.delete',
+        intent: 'scope_down',
+        reasonIncludes: 'Use -print first',
+        segment: 'find build/../.. -delete',
       },
     },
     {
@@ -429,7 +471,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd, strict: true }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.strict-unparseable',
         intent: 'stop_and_explain',
         reasonIncludes: 'could not be safely analyzed (strict mode)',
         segment: "echo 'unterminated",
@@ -453,7 +495,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.recursion-limit',
         intent: 'stop_and_explain',
         reasonIncludes: 'exceeds maximum recursion depth',
       },
@@ -613,7 +655,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.dynamic-shell-source',
         intent: 'stop_and_explain',
         reasonIncludes: 'shell execution source cannot be verified',
         segment: 'bash',
@@ -677,7 +719,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd, strict: true }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.unsupported-heredoc',
         intent: 'stop_and_explain',
         reasonIncludes: 'heredoc',
       },
@@ -786,7 +828,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd, strict: true }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.unsupported-heredoc',
         intent: 'stop_and_explain',
         reasonIncludes: 'heredoc',
       },
@@ -797,7 +839,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd, strict: true }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.unsupported-heredoc',
         intent: 'stop_and_explain',
         reasonIncludes: 'Unquoted heredoc',
       },
@@ -1096,7 +1138,7 @@ export function behavioralContractCases(paths: {
       options: options({ cwd: paths.cwd }),
       expected: {
         kind: 'block',
-        ruleId: undefined,
+        ruleId: 'analysis.dynamic-shell-source',
         intent: 'stop_and_explain',
         reasonIncludes: 'shell execution source cannot be verified',
       },

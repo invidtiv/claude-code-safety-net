@@ -60,6 +60,24 @@ describe('user policy diagnostics', () => {
       { version: 1, destructive_command_protection: { overrides: { 'git.no-such-rule': 'on' } } },
       ['unknown destructive command rule id "git.no-such-rule"'],
     ],
+    [
+      'an override cannot turn off the fixed guard, analysis, or directory denials',
+      {
+        version: 1,
+        destructive_command_protection: {
+          overrides: {
+            'guard.policy-config': 'off',
+            'analysis.dynamic-shell-source': 'off',
+            'cwd.requested-unusable': 'off',
+          },
+        },
+      },
+      [
+        'unknown destructive command rule id "guard.policy-config"',
+        'unknown destructive command rule id "analysis.dynamic-shell-source"',
+        'unknown destructive command rule id "cwd.requested-unusable"',
+      ],
+    ],
   ] as const)('%s', (_behavior, document, expected) => {
     expect(getUserPolicyDiagnostics(document, HOME)).toEqual([...expected]);
   });

@@ -29,45 +29,6 @@ const CUSTOM_RULES: readonly CustomRule[] = [
   },
 ];
 
-const CHILD_COMMANDS: readonly (readonly string[])[] = [
-  [],
-  [''],
-  ['echo', 'hello'],
-  ['eval', 'rm -rf /'],
-  ['eval', '$COMMAND'],
-  ['eval'],
-  ['bash', '-c', 'rm -rf /'],
-  ['bash', '-c', '$COMMAND'],
-  ['bash', '-n', '-c', 'rm -rf /'],
-  ['bash', 'script.sh'],
-  ['bash'],
-  ['sh', '-c'],
-  ['zsh', '-c', 'git reset --hard'],
-  ['awk', 'BEGIN { system("rm -rf /") }'],
-  ['awk', '{ print }'],
-  ['gawk', '-f', 'prog.awk'],
-  ['python3', '-c', 'import os; os.system("rm -rf /")'],
-  ['python3', '-c', 'print("hello")'],
-  ['python3', 'script.py'],
-  ['node', '-e', 'require("fs").rmSync("/", {recursive: true})'],
-  ['perl', '-e', 'print 1'],
-  ['ruby', '-e', 'puts 1'],
-  ['rm', '-rf', 'build'],
-  ['rm', '-rf', '/'],
-  ['rm', '-rf', '/nonexistent/elsewhere'],
-  ['rm', 'notes'],
-  ['rmdir', 'build'],
-  ['find', '.', '-delete'],
-  ['find', '.', '-exec', 'rm', '-rf', '{}', ';'],
-  ['git', 'reset', '--hard'],
-  ['git', 'clean', '-fd'],
-  ['git', 'status'],
-  ['git', 'push', '--force'],
-  ['deploy-tool', '--prod'],
-  ['deploy-tool', '--dry-run'],
-  ['unknown-tool', 'arg'],
-];
-
 const DYNAMIC_MATCH = {
   id: 'shell.dynamic-input',
   reason: 'dynamic shell input',
@@ -98,21 +59,6 @@ type ChildInput = Partial<
   >
 >;
 
-const ANALYSIS_OPTIONS: readonly ChildInput[] = [
-  {},
-  { dynamicInput: true, shellDynamicMatch: DYNAMIC_MATCH },
-  { dynamicSourceInput: true, dynamicSourceMatch: SOURCE_MATCH },
-  { dynamicRmInput: true, rmDynamicMatch: RM_MATCH, dynamicInput: true },
-  {
-    dynamicInput: true,
-    dynamicSourceInput: true,
-    dynamicRmInput: true,
-    shellDynamicMatch: DYNAMIC_MATCH,
-    dynamicSourceMatch: SOURCE_MATCH,
-    rmDynamicMatch: RM_MATCH,
-  },
-];
-
 type ChildAnalysisCase = {
   readonly label: string;
   readonly strict?: boolean;
@@ -120,14 +66,6 @@ type ChildAnalysisCase = {
   readonly paranoidInterpreters?: boolean;
   readonly worktreeMode?: boolean;
 };
-
-const ANALYSIS_CASES: readonly ChildAnalysisCase[] = [
-  { label: 'standard' },
-  { label: 'strict', strict: true },
-  { label: 'paranoid rm', paranoidRm: true },
-  { label: 'paranoid interpreters', paranoidInterpreters: true },
-  { label: 'worktree mode', worktreeMode: true },
-];
 
 function dispatchPair(tokens: readonly string[], row: ChildAnalysisCase, input: ChildInput) {
   const snapshot = policySnapshot({ rules: CUSTOM_RULES });
@@ -277,32 +215,6 @@ describe('synthesized child dispatch', () => {
     expect(idFor(['rm', '-rf', 'build'], { label: 'paranoid rm', paranoidRm: true })).toBe(
       'rm.recursive-force-paranoid',
     );
-  });
-
-  test('the table reaches the interpreter, rm, find, git, custom and dynamic reasons', () => {
-    const reported = new Set(
-      ANALYSIS_CASES.flatMap((row) =>
-        ANALYSIS_OPTIONS.flatMap((input) =>
-          CHILD_COMMANDS.flatMap((tokens) => {
-            const outcome = dispatchPair(tokens, row, input).match;
-            return outcome.ok && outcome.value ? [outcome.value.id] : [];
-          }),
-        ),
-      ),
-    );
-    for (const id of [
-      'custom.block-deploy',
-      'find.delete',
-      'git.reset-hard',
-      'interpreter.dangerous-command',
-      'interpreter.one-liner-paranoid',
-      'rm.recursive-force-outside-cwd',
-      'rm.recursive-force-root-or-home',
-      'shell.dynamic-input',
-      'shell.dynamic-source',
-    ]) {
-      expect([...reported].sort(), id).toContain(id);
-    }
   });
 
   test('a nested source is handed to the caller for eval, shells and interpreters', () => {

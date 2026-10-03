@@ -15,14 +15,4 @@ describe('the managed hook command', () => {
       'kimi-code': 'npx -y cc-safety-net hook --kimi-code',
     });
   });
-
-  test('splits into the argv the Hermes shim spawns', () => {
-    expect(managedHookCommands['hermes-agent'].split(' ')).toEqual([
-      'npx',
-      '-y',
-      'cc-safety-net',
-      'hook',
-      '--hermes-agent',
-    ]);
-  });
 });

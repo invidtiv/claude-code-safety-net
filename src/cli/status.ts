@@ -73,7 +73,9 @@ export function printStatus(environment: Environment): void {
       ...(weakenings.length === 0
         ? []
         : [
-            '  Project policy',
+            snapshot.policyScopes?.weakeningsIgnored
+              ? '  Project policy (ignored)'
+              : '  Project policy',
             ...weakenings.flatMap((weakening) =>
               wrapReason(weakening, '      ', width - 6).map((line, index) =>
                 index === 0 ? `    ${line}` : line,

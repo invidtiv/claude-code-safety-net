@@ -9,6 +9,7 @@ import {
 } from '@/core/paths/tmpdir';
 import {
   type DestructiveCommandRulePolicy,
+  destructiveCommandRuleIsEnabled,
   filterDestructiveCommandMatch,
 } from '@/core/policy/effective-rules';
 import type { EffectivePolicy } from '@/core/policy/types';
@@ -17,7 +18,7 @@ import { destructiveCommandMatch } from '@/core/rules/destructive';
 import type { DestructiveCommandRuleMatch } from '@/core/rules/types';
 import type { CommandWord } from '@/core/shell/model';
 import { getBasename } from '@/core/shell/tokens';
-import type { AnalyzeNestedOverrides, EnvironmentContext } from '@/gate/analysis';
+import type { EnvironmentContext } from '@/gate/analysis';
 import {
   isProtectedGitHookNameSelection,
   mayHaveGitMetadataEntryNamed,
@@ -93,6 +94,7 @@ const FIND_PRIMARY_ARITY = new Map<string, number>([
 ]);
 
 export interface AnalyzeFindContext extends RecursiveDeleteTargetTrustOptions {
+  paranoid?: boolean;
   budget?: Budget;
   envAssignments?: ReadonlyMap<string, string>;
   policy?: DestructiveCommandRulePolicy &
@@ -100,10 +102,6 @@ export interface AnalyzeFindContext extends RecursiveDeleteTargetTrustOptions {
   analyzeTokens?: (
     tokens: readonly string[],
     cwd: string | null | undefined,
-  ) => DestructiveCommandRuleMatch | null;
-  analyzeNested?: (
-    command: string,
-    overrides?: AnalyzeNestedOverrides,
   ) => DestructiveCommandRuleMatch | null;
 }
 
@@ -115,7 +113,7 @@ export function analyzeFindMatch(
   const catastrophicMatch = findCatastrophicDeleteMatch(words, tokens, context);
   if (catastrophicMatch) return catastrophicMatch;
 
-  if (findHasDelete(tokens, 1) && !hasOnlyTrustedTempDeleteTargets(words, tokens, context)) {
+  if (findHasDelete(tokens, 1) && !hasOnlyScopedDeleteTargets(words, tokens, context)) {
     const match = filterDestructiveCommandMatch(
       destructiveCommandMatch('find.delete', REASON_FIND_DELETE),
       context.policy,
@@ -148,14 +146,8 @@ export function analyzeFindMatch(
     }
 
     const directoryRelative = token === '-execdir' || token === '-okdir';
-    const nestedMatch = context.analyzeTokens
-      ? context.analyzeTokens(execCommand.tokens, directoryRelative ? null : context.cwd)
-      : context.analyzeNested
-        ? context.analyzeNested(execCommand.tokens.join(' '), {
-            effectiveCwd: directoryRelative ? undefined : context.cwd,
-            envAssignments: context.envAssignments,
-          })
-        : null;
+    const nestedMatch =
+      context.analyzeTokens?.(execCommand.tokens, directoryRelative ? null : context.cwd) ?? null;
     const match = nestedMatch?.id.startsWith('custom.')
       ? nestedMatch
       : filterDestructiveCommandMatch(nestedMatch, context.policy);
@@ -332,7 +324,7 @@ function findSelectsHooksByName(tokens: readonly string[]): boolean {
   });
 }
 
-function hasOnlyTrustedTempDeleteTargets(
+function hasOnlyScopedDeleteTargets(
   words: readonly CommandWord[],
   tokens: readonly string[],
   context: AnalyzeFindContext,
@@ -379,13 +371,28 @@ function hasOnlyTrustedTempDeleteTargets(
     return (facts.expandedTargets ?? [analysisWordText(target)]).every((expandedTarget) => {
       const trackedCwd = /^\.\/*$/.test(expandedTarget) ? cwdOutsideWorkspace : undefined;
       const startingPoint = trackedCwd ?? expandedTarget;
+      const classificationOptions = {
+        targetIsLiteral: facts.expandedTargets !== undefined || facts.targetIsLiteral,
+        tmpdirWordSplittingProtected: facts.tmpdirWordSplittingProtected,
+      };
+      if (
+        !destructiveCommandRuleIsEnabled(
+          context.policy,
+          'rm.recursive-force-paranoid',
+          context.paranoid ?? false,
+        ) &&
+        !trackedCwd &&
+        classifyRecursiveDeleteTarget(startingPoint, targetContext, classificationOptions).kind ===
+          'within_anchored_cwd'
+      ) {
+        return true;
+      }
       return isTrustedTempDescendantTarget(
         startingPoint,
         trackedCwd ? workspaceContext : targetContext,
         {
+          ...classificationOptions,
           containmentTarget: expandTmpdirTarget(startingPoint, effectiveTmpdirValue),
-          targetIsLiteral: facts.expandedTargets !== undefined || facts.targetIsLiteral,
-          tmpdirWordSplittingProtected: facts.tmpdirWordSplittingProtected,
         },
       );
     });

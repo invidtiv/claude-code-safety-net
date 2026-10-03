@@ -202,6 +202,12 @@ exports[`doctor --json a fresh home reports no configured integration and exits 
       "defaultBehavior": "all"
     },
     {
+      "name": "CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY",
+      "isSet": false,
+      "description": "Ignore project policy settings that weaken the user policy",
+      "defaultBehavior": "off"
+    },
+    {
       "name": "CC_SAFETY_NET_HOME",
       "value": "<root>/home/.cc-safety-net",
       "isSet": true,
@@ -517,6 +523,12 @@ exports[`doctor --json an installed Cursor hook clears the none-configured findi
       "defaultBehavior": "all"
     },
     {
+      "name": "CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY",
+      "isSet": false,
+      "description": "Ignore project policy settings that weaken the user policy",
+      "defaultBehavior": "off"
+    },
+    {
       "name": "CC_SAFETY_NET_HOME",
       "value": "<root>/home/.cc-safety-net",
       "isSet": true,
@@ -828,6 +840,12 @@ exports[`doctor --json both scopes report their own invalid rule config: invalid
       "isSet": false,
       "description": "Command decisions recorded: all, or blocked (privacy-minimizing, denials only)",
       "defaultBehavior": "all"
+    },
+    {
+      "name": "CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY",
+      "isSet": false,
+      "description": "Ignore project policy settings that weaken the user policy",
+      "defaultBehavior": "off"
     },
     {
       "name": "CC_SAFETY_NET_HOME",
@@ -1167,6 +1185,12 @@ exports[`doctor --json a v2 lock and cache are reported once, naming both scopes
       "defaultBehavior": "all"
     },
     {
+      "name": "CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY",
+      "isSet": false,
+      "description": "Ignore project policy settings that weaken the user policy",
+      "defaultBehavior": "off"
+    },
+    {
       "name": "CC_SAFETY_NET_HOME",
       "value": "<root>/home/.cc-safety-net",
       "isSet": true,
@@ -1494,6 +1518,12 @@ exports[`doctor --json a regular file where the config directory belongs is an u
       "isSet": false,
       "description": "Command decisions recorded: all, or blocked (privacy-minimizing, denials only)",
       "defaultBehavior": "all"
+    },
+    {
+      "name": "CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY",
+      "isSet": false,
+      "description": "Ignore project policy settings that weaken the user policy",
+      "defaultBehavior": "off"
     },
     {
       "name": "CC_SAFETY_NET_HOME",
@@ -1835,6 +1865,12 @@ exports[`doctor --json a seeded audit tree is summarised over the denials alone:
       "defaultBehavior": "all"
     },
     {
+      "name": "CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY",
+      "isSet": false,
+      "description": "Ignore project policy settings that weaken the user policy",
+      "defaultBehavior": "off"
+    },
+    {
       "name": "CC_SAFETY_NET_HOME",
       "value": "<root>/home/.cc-safety-net",
       "isSet": true,
@@ -2173,6 +2209,12 @@ exports[`doctor --json an invalid audit scope and a legacy flag are both reporte
       "defaultBehavior": "all"
     },
     {
+      "name": "CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY",
+      "isSet": false,
+      "description": "Ignore project policy settings that weaken the user policy",
+      "defaultBehavior": "off"
+    },
+    {
       "name": "CC_SAFETY_NET_HOME",
       "value": "<root>/home/.cc-safety-net",
       "isSet": true,
@@ -2493,6 +2535,12 @@ exports[`doctor --json legacy inline rule configs are reported once as ignored, 
       "isSet": false,
       "description": "Command decisions recorded: all, or blocked (privacy-minimizing, denials only)",
       "defaultBehavior": "all"
+    },
+    {
+      "name": "CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY",
+      "isSet": false,
+      "description": "Ignore project policy settings that weaken the user policy",
+      "defaultBehavior": "off"
     },
     {
       "name": "CC_SAFETY_NET_HOME",

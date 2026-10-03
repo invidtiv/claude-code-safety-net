@@ -14,7 +14,7 @@ import {
   MIN_AUDIT_RETENTION_DAYS,
 } from './audit-retention-days';
 import { resolveEffectiveDestructiveCommandRules } from './effective-rules';
-import { getCCSafetyNetEnvModes } from './env';
+import { ENV_FLAGS, envTruthy, getCCSafetyNetEnvModes, sessionSafetyLevel } from './env';
 import { mergeProjectPolicy, type ProjectPolicyProjection } from './merge';
 import { getProjectPolicyPath, getUserPolicyPath, type RulesPolicyOptions } from './paths';
 import { custom, type Issue, renderIssuePath, typed } from './rules-config';
@@ -81,9 +81,16 @@ export function loadPolicyConfig(
   const user = readPolicyConfig(getUserPolicyPath(environment, options), environment.home);
   const projectFile = readPolicyFile(getProjectPolicyPath(options.cwd), environment.home);
   const project = projectPolicyProjection(projectFile.parsed, environment.home);
+  const weakeningsIgnored = envTruthy(ENV_FLAGS.projectTightenOnly, environment.env);
+  const userPolicy = user.gui ?? DEFAULT_GUI_POLICY;
   const merged =
     Object.keys(project.policy).length > 0
-      ? mergeProjectPolicy(user.gui ?? DEFAULT_GUI_POLICY, project.policy)
+      ? mergeProjectPolicy(
+          userPolicy,
+          project.policy,
+          weakeningsIgnored,
+          sessionSafetyLevel(userPolicy.safety.level, environment.env),
+        )
       : undefined;
   const errors = [...user.errors, ...projectFile.errors, ...project.diagnostics];
 
@@ -92,18 +99,21 @@ export function loadPolicyConfig(
     (user.gui ? undefined : projectFile.fallback) ??
     (errors.length > 0 ? 'salvaged' : undefined);
 
-  const levelScope = project.policy.safety?.level
-    ? 'project'
-    : user.levelPresent
-      ? 'user'
-      : 'default';
+  const levelScope =
+    project.policy.safety?.level && merged?.policy.safety.level === project.policy.safety.level
+      ? 'project'
+      : user.levelPresent
+        ? 'user'
+        : 'default';
   return {
     ...(merged ? normalizePolicyConfig(merged.policy) : user.policy),
     errors,
     ...(fallback ? { fallback } : {}),
 
     ...(projectFile.exists
-      ? { policyScopes: { levelScope, weakenings: merged?.weakenings ?? [] } }
+      ? {
+          policyScopes: { levelScope, weakenings: merged?.weakenings ?? [], weakeningsIgnored },
+        }
       : {}),
   };
 }

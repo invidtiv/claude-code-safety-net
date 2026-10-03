@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { AMP_MANAGED_HEADER } from '@/hosts/amp/artifact';
 import { buildOpenClawArtifactHeader } from '@/hosts/openclaw/artifact';
+import type { InstallTargetChoice } from '@/hosts/install/choices';
 import type { InstallTarget } from '@/hosts/install/targets';
 import { type FlowSpec, openCodeV2Script, runSide } from '../../helpers/command-flow';
 import { type TreeSpec, writeTree } from '../../helpers/fixture-tree';
@@ -643,6 +644,26 @@ test('OpenCode installs only when the cached plugin actually exports a factory',
   });
 });
 
+test.each([
+  [
+    'no package',
+    { '.keep': '' },
+    `The OpenCode plugin cache at <home>/${OPENCODE_CACHE}/node_modules/cc-safety-net is missing its package, so OpenCode would load nothing and fail open. Run \`opencode plugin -g -f cc-safety-net@latest\` for details.`,
+  ],
+  [
+    'no main entry',
+    { 'node_modules/cc-safety-net/package.json': '{"name":"cc-safety-net"}' },
+    `The cached OpenCode plugin at <home>/${OPENCODE_CACHE}/node_modules/cc-safety-net declares no "main" entry.`,
+  ],
+])('OpenCode refuses an installed cache with %s', async (_case, seed, message) => {
+  const result = await flow({
+    invoke: 'install',
+    args: ['--opencode'],
+    script: opencodeScript(fixtureDir(seed)),
+  });
+  expect(result).toMatchObject({ exitCode: 1, errors: [message] });
+});
+
 const OPENCODE_V2_ACTIVATION_LOG = [
   'opencode api integration.list --param location[directory]=<root>\t<root>',
   'opencode api plugin.list --param location[directory]=<root>\t<root>',
@@ -1079,7 +1100,15 @@ test('the selector can cancel, install several targets in order, or hand over to
   const selection = (targets: readonly InstallTarget[] | null | 'update') => () => ({
     probeTargets: () => true,
     detectConfiguredTargets: async () => [],
-    selectTargets: async () => targets,
+    selectTargets: async (_action: string, choices: readonly InstallTargetChoice[]) => {
+      expect(choices).toContainEqual({
+        target: 'cursor',
+        label: 'Cursor',
+        flag: '--cursor',
+        available: true,
+      });
+      return targets;
+    },
     selectKimiInstallMethod: async () => 'global-hook' as const,
     runUpdate: async () => 7,
   });

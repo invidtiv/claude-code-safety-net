@@ -23,6 +23,7 @@ export const ENV_FLAGS = {
   worktree: { name: 'CC_SAFETY_NET_WORKTREE', legacyName: 'SAFETY_NET_WORKTREE' },
   debug: { name: 'CC_SAFETY_NET_DEBUG' },
   auditScope: { name: 'CC_SAFETY_NET_AUDIT_SCOPE' },
+  projectTightenOnly: { name: 'CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY' },
 } as const satisfies Record<string, EnvFlag>;
 
 const SAFETY_LEVELS: PolicySafetyLevel[] = ['standard', 'strict', 'paranoid'];
@@ -36,10 +37,23 @@ function maxSafetyLevel(policyLevel: PolicySafetyLevel, envLevel: PolicySafetyLe
     : policyLevel;
 }
 
+function envSafetyLevel(env: ReadonlyMap<string, string>) {
+  const value = getEnvFlagValue(ENV_FLAGS.level, env);
+  return SAFETY_LEVELS.find((level) => level === value);
+}
+
+export function sessionSafetyLevel(
+  policyLevel: PolicySafetyLevel,
+  env: ReadonlyMap<string, string>,
+) {
+  return maxSafetyLevel(policyLevel, envSafetyLevel(env));
+}
+
 function parseEnvLevel(env: ReadonlyMap<string, string>): PolicySafetyLevel | undefined {
   const value = getEnvFlagValue(ENV_FLAGS.level, env);
-  if (value === undefined || value === '') return undefined;
-  if (SAFETY_LEVELS.includes(value as PolicySafetyLevel)) return value as PolicySafetyLevel;
+  if (!value) return undefined;
+  const level = envSafetyLevel(env);
+  if (level) return level;
   console.error(
     `CC Safety Net: ignored invalid ${ENV_FLAGS.level.name}=${JSON.stringify(value.slice(0, 40))}. Use ${SAFETY_LEVELS.join(', ')}.`,
   );

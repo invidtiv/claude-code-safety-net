@@ -50,11 +50,14 @@ void named;
 void server;
 // @ts-expect-error Root helper exports were intentionally removed.
 import { resolveOpenCodeShellRoute } from 'cc-safety-net';
+// @ts-expect-error Root helper exports were intentionally removed.
+import { normalizeOpenCodeWindowsWorkdir } from 'cc-safety-net';
 // @ts-expect-error The library function lives on the api subpath, not the root.
 import { checkCommand as rootCheckCommand } from 'cc-safety-net';
 // @ts-expect-error Deep imports are intentionally rejected by package exports.
 import { analyzeCommand } from 'cc-safety-net/dist/core/analyze/index.js';
 void resolveOpenCodeShellRoute;
+void normalizeOpenCodeWindowsWorkdir;
 void rootCheckCommand;
 void analyzeCommand;
 `,

@@ -66,26 +66,7 @@ type AnalyzerRule = {
 export const ANALYZER_RULES: readonly AnalyzerRule[] = [
   {
     heads: new Set(['rm', 'rmdir']),
-    analyze: (context) =>
-      analyzeRmMatch(context.words, {
-        environment: context.options.environment,
-        cwd: context.cwd,
-        originalCwd: context.originalCwd,
-        strict: context.options.strict,
-        paranoid: context.options.paranoidRm,
-        allowTmpdirVar: context.allowTmpdirVar,
-        tmpdirWordSplittingUnsafe: hasUnsafeTmpdirWordSplitting(
-          context.envAssignments,
-          context.options.environment,
-        ),
-        trustedTmpdirValue: isTmpdirValueTrusted(
-          context.envAssignments,
-          context.options.environment,
-        ),
-        protectedGitMetadata: context.options.protectedGitMetadata,
-        policy: context.options.policy,
-        budget: context.options.budget,
-      }),
+    analyze: (context) => analyzeRmMatch(context.words, recursiveDeleteAnalyzeOptions(context)),
   },
   {
     heads: new Set(['git']),
@@ -95,26 +76,9 @@ export const ANALYZER_RULES: readonly AnalyzerRule[] = [
     heads: new Set(['find']),
     analyze: (context) =>
       analyzeFindMatch(context.words, {
-        environment: context.options.environment,
-        cwd: context.cwd,
-        originalCwd: context.originalCwd,
-        strict: context.options.strict,
-        allowTmpdirVar: context.allowTmpdirVar,
-        tmpdirWordSplittingUnsafe: hasUnsafeTmpdirWordSplitting(
-          context.envAssignments,
-          context.options.environment,
-        ),
-        trustedTmpdirValue: isTmpdirValueTrusted(
-          context.envAssignments,
-          context.options.environment,
-        ),
-        protectedGitMetadata: context.options.protectedGitMetadata,
-        budget: context.options.budget,
+        ...recursiveDeleteAnalyzeOptions(context),
         envAssignments: context.envAssignments,
-        policy: context.options.policy,
         analyzeTokens: context.analyzeChildTokens,
-        analyzeNested: (command, overrides) =>
-          matchFromBlockResult(context.options.analyzeNested(command, overrides)),
       }),
   },
   {
@@ -160,8 +124,27 @@ export function matchFromBlockResult(
   result: Omit<AnalyzeResult, 'segment'> | null,
 ): DestructiveCommandRuleMatch | null {
   return result
-    ? { id: result.ruleId ?? '', reason: result.reason, intent: result.intent ?? 'manual_only' }
+    ? { id: result.ruleId, reason: result.reason, intent: result.intent ?? 'manual_only' }
     : null;
+}
+
+function recursiveDeleteAnalyzeOptions(context: AnalyzerRuleContext) {
+  return {
+    environment: context.options.environment,
+    cwd: context.cwd,
+    originalCwd: context.originalCwd,
+    strict: context.options.strict,
+    paranoid: context.options.paranoidRm,
+    allowTmpdirVar: context.allowTmpdirVar,
+    tmpdirWordSplittingUnsafe: hasUnsafeTmpdirWordSplitting(
+      context.envAssignments,
+      context.options.environment,
+    ),
+    trustedTmpdirValue: isTmpdirValueTrusted(context.envAssignments, context.options.environment),
+    protectedGitMetadata: context.options.protectedGitMetadata,
+    policy: context.options.policy,
+    budget: context.options.budget,
+  };
 }
 
 export function gitAnalyzeOptions(context: AnalyzerRuleContext) {

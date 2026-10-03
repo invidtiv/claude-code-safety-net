@@ -101,8 +101,8 @@ describe('cli/startup/banner', () => {
     });
   });
 
-  test('a non-TTY sink passes the value through on both implementations', async () => {
-    const ported = await driveSpinner({ frames: 0, isTTY: false });
+  test('a non-TTY sink stays silent while work remains pending', async () => {
+    const ported = await driveSpinner({ frames: 3, isTTY: false });
     expect(ported).toEqual({
       chunks: [],
       outcome: { kind: 'returned', value: 'ready-value' },

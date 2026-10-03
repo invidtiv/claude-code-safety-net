@@ -1,23 +1,17 @@
 import { describe, expect, test } from 'bun:test';
-import { chmodSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AMP_MANAGED_HEADER, buildAmpArtifactHeader } from '@/hosts/amp/artifact';
 import {
   buildOpenClawArtifactHeader,
   buildOpenClawPluginManifests,
-  OPENCLAW_MANAGED_HEADER,
 } from '@/hosts/openclaw/artifact';
 import pkg from '../../package.json';
-import {
-  buildAmpBundle,
-  buildOpenClawBundle,
-  buildRuntimeBundles,
-} from '../../scripts/build-runtime';
+import { buildRuntimeBundles } from '../../scripts/build-runtime';
 import {
   getRuntimeImportSpecifiers,
   unbundledRuntimeImports,
   verifyBuildArtifacts,
-  verifyManagedArtifact,
 } from '../../scripts/verify-build';
 import { withTempDir } from '../helpers';
 
@@ -59,36 +53,6 @@ function writeBuildFixture(directory: string) {
 }
 
 describe('generated artifact contract', () => {
-  test('builds the managed Amp artifact from the current source', async () => {
-    await withTempDir('cc-safety-net-build-amp-source-', async (directory) => {
-      const result = await buildAmpBundle(join(directory, 'dist'));
-      const path = join(directory, 'dist', 'amp', 'cc-safety-net', 'index.ts');
-      const artifact = readFileSync(path, 'utf8');
-
-      expect(result.success).toBeTrue();
-      expect(artifact.startsWith(buildAmpArtifactHeader(pkg.version))).toBeTrue();
-      expect(unbundledRuntimeImports(artifact)).toEqual([]);
-    });
-  });
-
-  test('builds the complete OpenClaw plugin directory from the current source', async () => {
-    await withTempDir('cc-safety-net-build-openclaw-source-', async (directory) => {
-      const result = await buildOpenClawBundle(join(directory, 'dist'));
-      const pluginDir = join(directory, 'dist', 'openclaw', 'cc-safety-net');
-      const artifact = readFileSync(join(pluginDir, 'index.js'), 'utf8');
-
-      expect(result.success).toBeTrue();
-      expect(artifact.startsWith(buildOpenClawArtifactHeader(pkg.version))).toBeTrue();
-      expect(unbundledRuntimeImports(artifact)).toEqual([]);
-      expect(JSON.parse(readFileSync(join(pluginDir, 'openclaw.plugin.json'), 'utf8')).id).toBe(
-        'cc-safety-net',
-      );
-      expect(
-        JSON.parse(readFileSync(join(pluginDir, 'package.json'), 'utf8')).openclaw.extensions,
-      ).toEqual(['./index.js']);
-    });
-  });
-
   test('built runtime bundles enforce custom rules without node_modules', async () => {
     await withTempDir('cc-safety-net-build-standalone-', async (directory) => {
       const result = await buildRuntimeBundles(join(directory, 'dist'));
@@ -147,49 +111,6 @@ describe('generated artifact contract', () => {
     });
   });
 
-  test('tracks required entry artifacts and their shared chunks', async () => {
-    const files = await verifyBuildArtifacts();
-    expect(files).toContain('dist/api.d.ts');
-    expect(files).toContain('dist/api.js');
-    expect(files).toContain('dist/bin/cc-safety-net.js');
-    expect(files).toContain('dist/bin/hook.js');
-    expect(files).toContain('dist/bin/package.json');
-    expect(files).toContain('dist/cli.js');
-    expect(files).toContain('dist/index.d.ts');
-    expect(files).toContain('dist/index.js');
-    expect(files).toContain('dist/pi/index.js');
-    expect(files).toContain('dist/amp/cc-safety-net/index.ts');
-    expect(files).toContain('dist/openclaw/cc-safety-net/index.js');
-    expect(files).toContain('dist/openclaw/cc-safety-net/openclaw.plugin.json');
-    expect(files).toContain('dist/openclaw/cc-safety-net/package.json');
-    expect(files.some((path) => path.startsWith('dist/chunks/'))).toBeTrue();
-  });
-
-  test('root declaration exposes only the plugin', () => {
-    const declaration = readFileSync('dist/index.d.ts', 'utf8');
-    expect(declaration).toContain('CCSafetyNetPlugin');
-    expect(declaration).not.toContain('resolveOpenCodeShellRoute');
-    expect(declaration).not.toContain('normalizeOpenCodeWindowsWorkdir');
-    expect(declaration).not.toContain('checkCommand');
-  });
-
-  test('api declaration is self-contained and exposes only the check contract', () => {
-    const declaration = readFileSync('dist/api.d.ts', 'utf8');
-    expect(declaration).toContain('checkCommand');
-    expect(declaration).toContain('CheckCommandInput');
-    expect(declaration).toContain('CheckCommandResult');
-    expect(declaration).not.toMatch(/from ["']/);
-    expect(declaration).not.toContain('@opencode-ai/plugin');
-  });
-
-  test('ships a self-contained Amp artifact with the managed header and package version', () => {
-    const artifact = readFileSync('dist/amp/cc-safety-net/index.ts', 'utf8');
-    expect(() => verifyManagedArtifact('Amp', AMP_MANAGED_HEADER, artifact)).not.toThrow();
-    expect(artifact.startsWith(AMP_MANAGED_HEADER)).toBeTrue();
-    expect(artifact).toContain(`// version: ${pkg.version}`);
-    expect(unbundledRuntimeImports(artifact)).toEqual([]);
-  });
-
   test('only matches real import, dynamic-import, and require positions', () => {
     expect(getRuntimeImportSpecifiers('import{x}from"node:fs";').sort()).toEqual(['node:fs']);
     expect(getRuntimeImportSpecifiers('const z=require("zod")')).toEqual(['zod']);
@@ -204,23 +125,7 @@ describe('generated artifact contract', () => {
     expect(unbundledRuntimeImports('import x from"@/core/foo"')).toEqual(['@/core/foo']);
   });
 
-  test('rejects a managed artifact missing the header, version, or self-containment', () => {
-    expect(() => verifyManagedArtifact('Amp', AMP_MANAGED_HEADER, 'export {};\n')).toThrow(
-      'managed-file header',
-    );
-    expect(() =>
-      verifyManagedArtifact('Amp', AMP_MANAGED_HEADER, `${AMP_MANAGED_HEADER}\nexport {};\n`),
-    ).toThrow('package version');
-    expect(() =>
-      verifyManagedArtifact(
-        'OpenClaw',
-        OPENCLAW_MANAGED_HEADER,
-        `${buildOpenClawArtifactHeader(pkg.version)}import z from "zod";\n`,
-      ),
-    ).toThrow('unresolved runtime imports');
-  });
-
-  test('rejects a build whose Amp artifact lost its managed header', async () => {
+  test('rejects managed artifacts missing their header, version, or self-containment', async () => {
     await withTempDir('cc-safety-net-build-amp-', async (directory) => {
       writeBuildFixture(directory);
       const originalCwd = process.cwd();
@@ -228,13 +133,26 @@ describe('generated artifact contract', () => {
       try {
         writeFileSync('dist/amp/cc-safety-net/index.ts', 'export {};\n');
         await expect(verifyBuildArtifacts()).rejects.toThrow('managed-file header');
+
+        writeFileSync('dist/amp/cc-safety-net/index.ts', `${AMP_MANAGED_HEADER}\nexport {};\n`);
+        await expect(verifyBuildArtifacts()).rejects.toThrow('package version');
+
+        writeFileSync(
+          'dist/amp/cc-safety-net/index.ts',
+          `${buildAmpArtifactHeader(pkg.version)}export {};\n`,
+        );
+        writeFileSync(
+          'dist/openclaw/cc-safety-net/index.js',
+          `${buildOpenClawArtifactHeader(pkg.version)}import z from "zod";\n`,
+        );
+        await expect(verifyBuildArtifacts()).rejects.toThrow('unresolved runtime imports');
       } finally {
         process.chdir(originalCwd);
       }
     });
   });
 
-  test('rejects unexpected, orphaned, missing, non-executable, malformed, and unresolved artifacts', async () => {
+  test('rejects unexpected files, orphaned or missing chunks, and a non-executable bin or wrong shebang', async () => {
     await withTempDir('cc-safety-net-build-contract-', async (directory) => {
       writeBuildFixture(directory);
       const originalCwd = process.cwd();

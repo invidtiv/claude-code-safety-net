@@ -85,10 +85,6 @@ test('reports a regular file occupying the Copilot hooks directory', async () =>
 });
 
 describe('the version gate on each hook source', () => {
-  test.each(VERSIONS)('reports an untouched home as absent at version %s', async (version) => {
-    expect(await detection({}, version)).toEqual(absent());
-  });
-
   test.each(VERSIONS)(
     'honours a repository hook file at every version, here %s',
     async (version) => {

@@ -120,6 +120,7 @@ export function evaluateGuard(invocation: ToolInvocation, options: GuardOptions)
       decision: {
         kind: 'deny',
         reason: REASON_RECURSION_LIMIT,
+        ruleId: 'analysis.recursion-limit',
         intent: 'stop_and_explain',
         evidence: { command: invocation.command, segment: invocation.command },
       },
@@ -131,6 +132,7 @@ export function evaluateGuard(invocation: ToolInvocation, options: GuardOptions)
       decision: {
         kind: 'deny',
         reason: REASON_STRUCTURAL_COMMAND_VALIDATION_LIMIT,
+        ruleId: 'analysis.structural-limit',
         intent: 'stop_and_explain',
       },
     };
@@ -153,6 +155,7 @@ export function evaluateGuard(invocation: ToolInvocation, options: GuardOptions)
       decision: {
         kind: 'deny',
         reason: REASON_POLICY_CONFIG_PROTECTION,
+        ruleId: 'guard.policy-config',
         intent: 'hard_stop',
         evidence: { command: displayCommand, segment: policyTarget.target },
       },
@@ -169,6 +172,7 @@ export function evaluateGuard(invocation: ToolInvocation, options: GuardOptions)
       decision: {
         kind: 'deny',
         reason: REASON_POLICY_APPLY_PROTECTION,
+        ruleId: 'guard.policy-apply',
         intent: 'hard_stop',
         evidence: { command: displayCommand, segment: policyApplyTarget.target },
       },
@@ -185,6 +189,7 @@ export function evaluateGuard(invocation: ToolInvocation, options: GuardOptions)
       decision: {
         kind: 'deny',
         reason: REASON_GIT_METADATA_PROTECTION,
+        ruleId: 'guard.git-metadata',
         intent: 'hard_stop',
         evidence: { command: displayCommand, segment: gitMetadataTarget.target },
       },
@@ -366,6 +371,7 @@ function failedClosedEvaluation(
     decision: {
       kind: 'deny',
       reason: isAnalysisLimit ? REASON_COMMAND_ANALYSIS_LIMIT : REASON_SAFETY_NET_FAILED_CLOSED,
+      ruleId: isAnalysisLimit ? 'analysis.limit' : 'analysis.failed-closed',
       intent: 'stop_and_explain',
       ...(command ? { evidence: { command, segment: command } } : {}),
     },

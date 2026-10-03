@@ -45,9 +45,5 @@
   ],
   "tests/helpers/fake-bin.ts": [
     "/**\n * @internal Called from the run-wide afterAll in tests/setup.ts: bun evaluates this module once per\n * process, so a module-scope afterAll would fire after the first file that imported it and delete\n * the stub every later file links to.\n */"
-  ],
-  "tests/hosts/openclaw/install.test.ts": [
-    "// OpenClaw >= 2026.8.1 refuses a non-interactive path install without capability consent,",
-    "// and install itself enables the plugin; a separate enable races the Gateway's reload."
   ]
 }

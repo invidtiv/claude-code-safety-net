@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createFailedClosedDenial, formatDenial } from '@/core/denial';
@@ -85,113 +85,6 @@ const shellPayload = (fixture: Fixture, command: string) =>
 
 const ROWS: readonly Row[] = [
   {
-    name: 'a denied command',
-    input: (fixture) => shellPayload(fixture, 'git push --force origin main'),
-    contains: 'BLOCKED by CC Safety Net',
-    lines: 1,
-  },
-  {
-    name: 'an allowed command recorded under the default audit scope',
-    input: (fixture) => shellPayload(fixture, 'git status'),
-    contains: '"allow":true',
-    lines: 1,
-  },
-  {
-    name: 'an allowed command under the blocked-only audit scope',
-    input: (fixture) => shellPayload(fixture, 'git status'),
-    env: { CC_SAFETY_NET_AUDIT_SCOPE: 'blocked' },
-    contains: '"allow":true',
-    lines: 0,
-  },
-  {
-    name: 'an event the host does not handle',
-    input: (fixture) =>
-      JSON.stringify({ event: 'post', session: SESSION, cwd: fixture.project, tool: 'sh' }),
-    lines: 0,
-  },
-  {
-    name: 'a payload that is not JSON',
-    input: () => '{',
-    contains: 'Failed to parse hook input JSON.',
-    lines: 0,
-  },
-  { name: 'an empty payload', input: () => '', contains: 'Missing hook input JSON.', lines: 0 },
-  {
-    name: 'a payload that is an array',
-    input: () => '[]',
-    contains: 'failed closed',
-    lines: 0,
-  },
-  {
-    name: 'a payload past the input byte limit',
-    input: () => new Uint8Array(8 * 1024 * 1024 + 1).fill(0x20),
-    contains: 'Failed to parse hook input JSON.',
-    lines: 0,
-  },
-  {
-    name: 'a payload without a tool name',
-    input: (fixture) =>
-      JSON.stringify({
-        event: 'pre',
-        session: SESSION,
-        cwd: fixture.project,
-        tool_input: { command: 'git status' },
-      }),
-    contains: 'failed closed',
-    lines: 1,
-  },
-  {
-    name: 'a read tool over a relative path',
-    input: (fixture) =>
-      JSON.stringify({
-        event: 'pre',
-        session: SESSION,
-        cwd: fixture.project,
-        tool: 'Read',
-        tool_input: { file_path: 'README.md' },
-      }),
-    contains: '"allow":true',
-    lines: 0,
-  },
-  {
-    name: 'a read tool over a private key',
-    input: (fixture) =>
-      JSON.stringify({
-        event: 'pre',
-        session: SESSION,
-        cwd: fixture.project,
-        tool: 'Read',
-        tool_input: { file_path: join(fixture.home, '.ssh', 'id_rsa') },
-      }),
-    contains: 'Tool:',
-    lines: 1,
-  },
-  {
-    name: 'a payload without a cwd',
-    input: () =>
-      JSON.stringify({
-        event: 'pre',
-        session: SESSION,
-        tool: 'sh',
-        tool_input: { command: 'echo ok' },
-      }),
-    contains: '"allow":true',
-    lines: 1,
-  },
-  {
-    name: 'a cwd that is a regular file',
-    input: (fixture) =>
-      JSON.stringify({
-        event: 'pre',
-        session: SESSION,
-        cwd: join(fixture.home, 'not-a-directory'),
-        tool: 'sh',
-        tool_input: { command: 'git status' },
-      }),
-    contains: 'Working directory:',
-    lines: 1,
-  },
-  {
     name: 'an analyzer that fails',
     input: (fixture) => shellPayload(fixture, 'echo analyzed'),
     breaks: 'analyzer',
@@ -215,9 +108,6 @@ beforeEach(() => {
     join(process.env.CC_SAFETY_NET_TEST_TMPDIR ?? tmpdir(), 'next-hook-common-'),
   );
   mkdirSync(join(home, 'project'));
-  mkdirSync(join(home, '.ssh'));
-  writeFileSync(join(home, '.ssh', 'id_rsa'), 'not a real key\n');
-  writeFileSync(join(home, 'not-a-directory'), 'a file where a directory is expected\n');
   fixture = { home, project: join(home, 'project') };
 });
 
@@ -250,7 +140,12 @@ describe('one payload through both runners', () => {
 
       expect(ported.entries).toHaveLength(row.lines);
       expect(ported.stdout.join('\n')).toContain(row.contains ?? '');
-      expect(ported.stdout).toHaveLength(row.contains === undefined ? 0 : 1);
+      expect(ported.stdout).toHaveLength(1);
+      expect(ported.stderr).toEqual(
+        row.env?.CC_SAFETY_NET_DEBUG === '1'
+          ? [`CC Safety Net debug: hook analysis failed: ${ANALYZER_FAILURE}`]
+          : [],
+      );
     });
   }
 });

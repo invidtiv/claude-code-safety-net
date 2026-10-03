@@ -58,20 +58,27 @@ describe('protected git delete targets', () => {
     if (!repository) throw new Error('missing fixture');
     const paired = environments();
     const budget = createBudget();
-    const protect = (target: string, recursive: boolean) =>
+    const protect = (
+      target: string,
+      recursive: boolean,
+      dotEntryGlobs = false,
+      metadata = repository.metadata,
+    ) =>
       isProtectedGitDeleteTarget(
         target,
         repository.cwd,
-        repository.metadata,
+        metadata,
         recursive,
         paired,
         budget,
-        false,
+        dotEntryGlobs,
       );
     const rows: readonly {
       readonly target: string;
       readonly recursive: boolean;
       readonly expected: boolean;
+      readonly dotEntryGlobs?: boolean;
+      readonly withoutMetadata?: boolean;
     }[] = [
       { target: '.git', recursive: false, expected: true },
       { target: '.git/', recursive: false, expected: true },
@@ -88,11 +95,21 @@ describe('protected git delete targets', () => {
       { target: '..', recursive: true, expected: true },
       { target: '..', recursive: false, expected: false },
       { target: '../*', recursive: true, expected: true },
+      { target: '*', recursive: true, expected: false },
+      { target: '.*', recursive: true, expected: true },
+      { target: '*', recursive: true, dotEntryGlobs: true, expected: true },
+      { target: '.git', recursive: true, withoutMetadata: true, expected: false },
     ];
     for (const row of rows) {
-      expect(protect(row.target, row.recursive), `${row.target} recursive=${row.recursive}`).toBe(
-        row.expected,
-      );
+      expect(
+        protect(
+          row.target,
+          row.recursive,
+          row.dotEntryGlobs,
+          row.withoutMetadata ? null : repository.metadata,
+        ),
+        `${row.target} recursive=${row.recursive}`,
+      ).toBe(row.expected);
     }
   });
 
@@ -132,34 +149,6 @@ describe('protected git delete targets', () => {
       ),
     ).toStrictEqual({ target: '.git' });
   });
-
-  test('the table separates protected targets from the rest', () => {
-    const repository = repositories[0];
-    if (!repository) throw new Error('missing fixture');
-    const paired = environments();
-    const budget = createBudget();
-    const protect = (target: string, recursive: boolean, dotEntryGlobs = false) =>
-      isProtectedGitDeleteTarget(
-        target,
-        repository.cwd,
-        repository.metadata,
-        recursive,
-        paired,
-        budget,
-        dotEntryGlobs,
-      );
-    expect(protect('.git', false)).toBeTrue();
-    expect(protect('.git/hooks/pre-commit', false)).toBeTrue();
-    expect(protect('file.txt', true)).toBeFalse();
-    expect(protect('*', true)).toBeFalse();
-    expect(protect('.*', true)).toBeTrue();
-    expect(protect('*', true, true)).toBeTrue();
-    expect(protect('..', true)).toBeTrue();
-    expect(protect('..', false)).toBeFalse();
-    expect(
-      isProtectedGitDeleteTarget('.git', repository.cwd, null, true, paired, budget),
-    ).toBeFalse();
-  });
 });
 
 describe('protected git hook name selection', () => {
@@ -197,26 +186,6 @@ describe('protected git hook name selection', () => {
         ).toBe(row.selectedIn.includes(repository.label));
       }
     }
-  });
-
-  test('a selection rooted at or above the hooks directory is protected', () => {
-    const repository = repositories[0];
-    if (!repository) throw new Error('missing fixture');
-    const paired = environments();
-    const budget = createBudget();
-    const select = (startingPoints: readonly string[]) =>
-      isProtectedGitHookNameSelection(
-        startingPoints,
-        repository.cwd,
-        repository.metadata,
-        paired,
-        budget,
-      );
-    expect(select(['.'])).toBeTrue();
-    expect(select(['.git/hooks'])).toBeTrue();
-    expect(select(['.git/hooks/pre-commit'])).toBeFalse();
-    expect(select(['file.txt'])).toBeFalse();
-    expect(select([])).toBeFalse();
   });
 });
 
@@ -272,6 +241,7 @@ describe('git metadata mutation targets in semantic facts', () => {
       { command: 'env -i mv .git /tmp/stash', target: '.git' },
       { command: 'echo payload > .git', target: null },
       { command: 'echo payload >> .git/hooks/pre-commit', target: '.git/hooks/pre-commit' },
+      { command: 'echo payload > .git/hooks/post-commit', target: '.git/hooks/post-commit' },
       { command: 'echo payload > .git/config', target: null },
       { command: 'echo payload > file.txt', target: null },
       { command: 'mv file.txt other.txt', target: null },
@@ -292,9 +262,11 @@ describe('git metadata mutation targets in semantic facts', () => {
     const rows: readonly {
       readonly toolName: string;
       readonly input: Record<string, string>;
+      readonly withoutMetadata?: boolean;
       readonly target: string | null;
     }[] = [
       { toolName: 'Write', input: { file_path: '.git' }, target: '.git' },
+      { toolName: 'Write', input: { file_path: '.git' }, withoutMetadata: true, target: null },
       {
         toolName: 'Write',
         input: { file_path: '.git/hooks/pre-commit' },
@@ -321,47 +293,17 @@ describe('git metadata mutation targets in semantic facts', () => {
         const carriesPaths =
           route.kind === 'patch' || route.kind === 'path' || route.kind === 'unknown';
         expect(
-          nextMutation(row.toolName, row.input, route, null, repository),
+          nextMutation(
+            row.toolName,
+            row.input,
+            route,
+            null,
+            row.withoutMetadata ? { ...repository, metadata: null } : repository,
+          ),
           `${route.kind}: ${row.toolName} ${JSON.stringify(row.input)}`,
         ).toStrictEqual(carriesPaths && row.target !== null ? { target: row.target } : null);
       }
     }
-  });
-
-  test('the command table denies the control plane and allows ordinary files', () => {
-    const repository = repositories[0];
-    if (!repository) throw new Error('missing fixture');
-    const route: ToolRoute = { kind: 'command', shell: 'posix' };
-    const find = (command: string) => nextMutation('Bash', { command }, route, command, repository);
-    expect(find('mv .git /tmp/stash')).toStrictEqual({ target: '.git' });
-    expect(find('echo payload > .git/hooks/post-commit')).toStrictEqual({
-      target: '.git/hooks/post-commit',
-    });
-    expect(find('mv file.txt other.txt')).toBeNull();
-    expect(
-      nextMutation('Read', { file_path: '.git/config' }, { kind: 'path' }, null, repository),
-    ).toBeNull();
-    expect(
-      nextMutation('Write', { file_path: '.git/config' }, { kind: 'path' }, null, repository),
-    ).toBeNull();
-    expect(
-      nextMutation('Write', { file_path: '.git' }, { kind: 'path' }, null, repository),
-    ).toStrictEqual({ target: '.git' });
-    expect(
-      nextMutation(
-        'Write',
-        { file_path: '.git/hooks/pre-commit' },
-        { kind: 'path' },
-        null,
-        repository,
-      ),
-    ).toStrictEqual({ target: '.git/hooks/pre-commit' });
-    expect(
-      nextMutation('Write', { file_path: '.git' }, { kind: 'path' }, null, {
-        ...repository,
-        metadata: null,
-      }),
-    ).toBeNull();
   });
 
   test('the denial asks the user before the control plane is touched', () => {

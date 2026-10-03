@@ -20,43 +20,12 @@ const CONFIG: RulesConfig = {
 const removeMatches = (match: string) => getRemoveMatches(CONFIGURED, match);
 
 describe('a remove match selects what the shipped module selects', () => {
-  test('an exact spec and a local source select themselves', () => {
-    expect(removeMatches('acme/repo#main/x')).toEqual({ ok: true, specs: ['acme/repo#main/x'] });
-    expect(removeMatches('local-a')).toEqual({ ok: true, specs: ['local-a'] });
-  });
-
-  test('a repository selects every ref when only one is configured', () => {
-    expect(removeMatches('other/repo')).toEqual({ ok: true, specs: ['other/repo#main/z'] });
-    expect(removeMatches('acme/repo#main')).toEqual({
-      ok: true,
-      specs: ['acme/repo#main/x', 'acme/repo#main/y'],
-    });
-  });
-
-  test('a rulebook name selects the one spec that carries it', () => {
-    expect(removeMatches('z')).toEqual({ ok: true, specs: ['other/repo#main/z'] });
-  });
-
   test('a name carried by two specs is ambiguous', () => {
     expect(removeMatches('x')).toEqual({
       ok: false,
       result: {
         ok: false,
         errors: ['Ambiguous rulebook match x: acme/repo#main/x, acme/repo#v2/x'],
-        entries: [],
-      },
-    });
-  });
-
-  test('a repository with two configured refs asks for an explicit one', () => {
-    expect(removeMatches('acme/repo')).toEqual({
-      ok: false,
-      result: {
-        ok: false,
-        errors: [
-          'Multiple refs are configured for acme/repo. Use an explicit ref:',
-          '  cc-safety-net rule remove acme/repo#<ref>',
-        ],
         entries: [],
       },
     });

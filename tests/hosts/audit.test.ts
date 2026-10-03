@@ -60,11 +60,6 @@ const ROWS = [
   evaluatedRow('echo ok', true),
 ];
 
-test('the rows carry one allow and three denials on both sides', () => {
-  const kinds = ['allow', 'deny', 'deny', 'deny'] as const;
-  expect(ROWS.map((row) => row.ported.decision.kind)).toStrictEqual([...kinds]);
-});
-
 const DESCRIPTORS: Readonly<Record<string, Record<string, unknown>>> = {
   'git status': {
     decision: 'allow',
@@ -106,40 +101,10 @@ const DESCRIPTORS: Readonly<Record<string, Record<string, unknown>>> = {
       'CC Safety Net failed closed because command analysis failed unexpectedly. This is not caused by your command. Report it to the user.',
     cwd: tree.workspace,
     toolName: 'Bash',
+    ruleId: 'analysis.failed-closed',
     intent: 'stop_and_explain',
   },
 };
-
-describe('an evaluation projected as an audit descriptor', () => {
-  for (const row of ROWS) {
-    for (const auditAllowed of [true, false]) {
-      for (const includeCommand of [true, false]) {
-        for (const failure of [undefined, FAILURE]) {
-          test(`${row.command} (allowed ${auditAllowed}, command ${includeCommand}, failure ${failure !== undefined})`, () => {
-            const projected = portedProjectGuardAudit(
-              row.call,
-              row.ported,
-              auditAllowed,
-              includeCommand,
-              failure,
-            );
-            const descriptor = DESCRIPTORS[row.command];
-
-            if (descriptor?.decision === 'allow') {
-              expect(projected).toEqual((auditAllowed ? descriptor : undefined) as never);
-              return;
-            }
-            expect(projected).toEqual({
-              ...descriptor,
-              failureStage: failure?.stage,
-              errorCode: failure?.errorCode,
-            } as never);
-          });
-        }
-      }
-    }
-  }
-});
 
 const descriptorOf = (row: (typeof ROWS)[number]) =>
   portedProjectGuardAudit(row.call, row.ported, true, true, row.failure);

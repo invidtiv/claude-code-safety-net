@@ -15,7 +15,7 @@ export interface AnalyzeResult {
 
   segment: string;
 
-  ruleId?: string;
+  ruleId: string;
 
   intent?: BlockIntent;
 }

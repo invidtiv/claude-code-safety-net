@@ -22,14 +22,13 @@ const bothSides = async (run: (start: typeof portedRun) => Promise<unknown>) => 
 const capturedRun = (start: typeof portedRun, args: readonly string[], options: Options = {}) => {
   const log: string[] = [];
   const error: string[] = [];
-  const fold = (message: string) => message.replace(URL_LINE, '<url>');
   return {
     log,
     error,
     exitCode: start(args, {
       keepAlive: false,
-      log: (message) => log.push(fold(message)),
-      error: (message) => error.push(fold(message)),
+      log: (message) => log.push(message),
+      error: (message) => error.push(message),
       ...options,
     }),
   };
@@ -37,15 +36,26 @@ const capturedRun = (start: typeof portedRun, args: readonly string[], options: 
 
 const settled = async (run: ReturnType<typeof capturedRun>) => ({
   exitCode: await run.exitCode,
-  log: run.log,
-  error: run.error,
+  log: run.log.map((message) => message.replace(URL_LINE, '<url>')),
+  error: run.error.map((message) => message.replace(URL_LINE, '<url>')),
 });
 
 describe('the gui command', () => {
   afterEach(removeTempRoots);
 
   test('prints the URL it is serving and opens nothing when told not to', async () => {
-    const result = await bothSides((start) => settled(capturedRun(start, ['--no-open'])));
+    const opened: string[] = [];
+    const result = await bothSides((start) =>
+      settled(
+        capturedRun(start, ['--no-open'], {
+          openBrowser: (url) => {
+            opened.push(url);
+          },
+        }),
+      ),
+    );
+
+    expect(opened).toEqual([]);
 
     expect(result).toStrictEqual({
       exitCode: 0,
@@ -59,17 +69,20 @@ describe('the gui command', () => {
       const opened: string[] = [];
       const run = capturedRun(start, [], {
         openBrowser: (url) => {
-          opened.push(url.replace(URL_LINE, '<url>'));
+          opened.push(url);
         },
       });
-      return { ...(await settled(run)), opened };
+      const result = await settled(run);
+      expect(opened).toHaveLength(1);
+      expect(opened[0]).toMatch(URL_LINE);
+      expect(run.log).toEqual([`CC Safety Net policy GUI: ${opened[0]}`]);
+      return result;
     });
 
     expect(result).toStrictEqual({
       exitCode: 0,
       log: ['CC Safety Net policy GUI: <url>'],
       error: [],
-      opened: ['<url>'],
     });
   });
 

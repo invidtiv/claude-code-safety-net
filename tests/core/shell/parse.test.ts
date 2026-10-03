@@ -71,13 +71,21 @@ describe('core/shell/parse', () => {
   });
 
   test('joins quoted and unquoted spans into one word, and pins each word to its span', () => {
-    const rows: readonly { readonly source: string; readonly words: readonly string[] }[] = [
+    const rows: readonly {
+      readonly source: string;
+      readonly words: readonly string[];
+      readonly firstProvenance?: 'command-substitution';
+    }[] = [
       { source: "printf '' a\"\"b 'c'd", words: ['printf', '', 'ab', 'cd'] },
       {
         source: '"C:\\Program Files\\Git\\bin\\git.exe" reset --hard',
         words: ['C:\\Program Files\\Git\\bin\\git.exe', 'reset', '--hard'],
       },
-      { source: '$(printf r)m -rf /', words: ['m', '-rf', '/'] },
+      {
+        source: '$(printf r)m -rf /',
+        words: ['m', '-rf', '/'],
+        firstProvenance: 'command-substitution',
+      },
     ];
     for (const row of rows) {
       const view = projectCommandViews(parseCommand(row.source, 'posix'))[0];
@@ -85,6 +93,7 @@ describe('core/shell/parse', () => {
         view?.words.map((word) => word.text),
         row.source,
       ).toStrictEqual([...row.words]);
+      if (row.firstProvenance) expect(view?.words[0]?.provenance).toBe(row.firstProvenance);
       for (const word of view?.words ?? []) {
         expect(row.source.slice(word.span.start, word.span.end), word.text).toBe(word.raw);
       }

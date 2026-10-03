@@ -1,5 +1,4 @@
 import { afterEach, expect, test } from 'bun:test';
-import { getActivitySummary } from '@/cli/doctor/activity';
 import { getEnvironmentInfo } from '@/cli/doctor/environment';
 import {
   formatActivitySection,
@@ -97,13 +96,6 @@ test('failed hook inspection distinguishes configured warnings from unconfigured
   expect(text).toContain('Error (Codex): cannot read config');
   expect(text).toContain('Not inspected');
   expect(text).toContain('Unknown');
-});
-
-test('an empty local audit tree reports no denials', () => {
-  const home = createTempRoot('doctor-activity-');
-  const summary = getActivitySummary(environmentFor(home, isolationEnv(home)));
-  expect(summary.totalBlocked).toBe(0);
-  expect(formatActivitySection(summary)).toContain('No blocked commands in the last 7 days');
 });
 
 test('activity display marks unreadable sources and flattens multiline commands', () => {

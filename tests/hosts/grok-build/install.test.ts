@@ -32,7 +32,12 @@ afterEach(removeTempRoots);
 
 describe('the Grok Build hook config differential', () => {
   test('writes the canonical entry when the host has no hook file', async () => {
-    expectRow((await row({})).steps, {
+    const { steps } = await row({});
+    expect(steps?.uninstall.result).toEqual({
+      ok: true,
+      value: { path: HOOKS_PATH, alreadyInstalled: true },
+    });
+    expectRow(steps, {
       file: HOOKS,
       alreadyInstalled: false,
       wrote: grokConfig([CANONICAL_ENTRY]),
@@ -60,24 +65,6 @@ describe('the Grok Build hook config differential', () => {
       wrote: grokConfig([FOREIGN_ENTRY, CANONICAL_ENTRY], { note: 1 }),
       detected: CONFIGURED,
       left: grokConfig([FOREIGN_ENTRY], { note: 1 }),
-    });
-  });
-
-  test('reports a canonical file without touching it, then deletes what was only ours', async () => {
-    const seed = grokConfig([CANONICAL_ENTRY]);
-    const { steps, tree } = await row({ [HOOKS]: seed });
-
-    expect(steps?.uninstall.result).toEqual({
-      ok: true,
-      value: { path: HOOKS_PATH, alreadyInstalled: true },
-    });
-    expect(fileAt(tree, HOOKS)).toBeUndefined();
-    expectRow(steps, {
-      file: HOOKS,
-      alreadyInstalled: true,
-      wrote: seed,
-      detected: CONFIGURED,
-      left: undefined,
     });
   });
 
@@ -113,13 +100,6 @@ describe('the Grok Build hook config differential', () => {
 });
 
 describe('the Grok Build detector differential', () => {
-  test('finds the managed entry', async () => {
-    expect(await detection({ [HOOKS]: grokConfig([CANONICAL_ENTRY]) })).toEqual({
-      kind: 'returned',
-      value: CONFIGURED,
-    });
-  });
-
   test.each([
     [
       { matcher: 'Bash', hooks: CANONICAL_ENTRY.hooks },

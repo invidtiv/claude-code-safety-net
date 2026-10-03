@@ -187,16 +187,6 @@ describe('every stage exit agrees', () => {
     });
   }
 
-  test('the table reaches every stage the guard can exit at', () => {
-    expect([...new Set(STAGE_EXITS.map((exit) => exit.stage))].sort()).toStrictEqual([
-      'command-analysis',
-      'command-validation',
-      'non-command',
-      'policy-protection',
-      'secret-protection',
-    ]);
-  });
-
   test('a degraded snapshot reports its fallback reason and the level in force', () => {
     const degraded = policySnapshot({
       configFallbackReason: 'invalid policy config: fix the file named in the diagnostic.',
@@ -224,21 +214,25 @@ const INJECTED_CAUSES: readonly {
   readonly label: string;
   readonly ported: () => never;
   readonly reasonIncludes: string;
+  readonly ruleId: string;
 }[] = [
   {
     label: 'an unexpected fault',
     ported: throwing(new Error('injected dependency fault')),
     reasonIncludes: 'failed closed',
+    ruleId: 'analysis.failed-closed',
   },
   {
     label: 'a path canonicalization breach',
     ported: throwing(new AnalysisLimit('realpathAttempts')),
     reasonIncludes: 'exceeds safe analysis limits',
+    ruleId: 'analysis.limit',
   },
   {
     label: 'a structural shell syntax breach',
     ported: throwing(new PortedStructuralLimit()),
     reasonIncludes: 'exceeds safe analysis limits',
+    ruleId: 'analysis.limit',
   },
 ];
 
@@ -270,6 +264,7 @@ describe('a failing dependency fails closed the same way', () => {
           decision: {
             kind: 'deny',
             reason: expect.stringContaining(cause.reasonIncludes),
+            ruleId: cause.ruleId,
             intent: 'stop_and_explain',
             evidence: { command: 'git status', segment: 'git status' },
           },
@@ -289,6 +284,7 @@ describe('a failing dependency fails closed the same way', () => {
       decision: {
         kind: 'deny',
         reason: expect.stringContaining('failed closed'),
+        ruleId: 'analysis.failed-closed',
         intent: 'stop_and_explain',
       },
     });
@@ -302,36 +298,6 @@ describe('a failing dependency fails closed the same way', () => {
         dependencies: { loadPolicySnapshot: () => readySnapshot, analyzeCommand: throwing(cause) },
       }),
     ).toThrow(expect.objectContaining({ cause }));
-  });
-});
-
-describe('the analyzer receives the same input from both pipelines', () => {
-  test('one call, one set of analysis options', () => {
-    const captured: Record<string, unknown> = {};
-    const budgets: Record<string, unknown> = {};
-    const capture =
-      (side: string) => (command: string, options: { environment: unknown; budget?: unknown }) => {
-        const { environment: _processState, budget, ...rest } = options;
-        captured[side] = { command, options: rest };
-        budgets[side] = budget;
-        return null;
-      };
-    portedEvaluateGuard(bash('rm -rf build', project), {
-      environment,
-      dependencies: {
-        loadPolicySnapshot: () => readySnapshot,
-        analyzeCommand: capture('ported'),
-      },
-    });
-    expect(captured.ported).toMatchObject({
-      command: 'rm -rf build',
-      options: { cwd: project, shell: 'posix', strict: false, worktreeMode: false },
-    });
-    expect(budgets.ported).toMatchObject({
-      counters: expect.any(Map),
-      resolvedPaths: expect.any(Map),
-      charge: expect.any(Function),
-    });
   });
 });
 

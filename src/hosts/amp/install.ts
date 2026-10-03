@@ -22,8 +22,7 @@ import { getPackageVersion } from '@/hosts/system-info';
 const AMP_LEGACY_PLUGIN_FILE = 'cc-safety-net.ts';
 const AMP_ARTIFACT_RELATIVE = join('amp', AMP_PLUGIN_ENTRY);
 
-/** @internal */
-export function getMaskingLocalFilePath(environment: Environment): string {
+function getMaskingLocalFilePath(environment: Environment): string {
   return join(environment.home, '.config', 'amp', 'plugins', 'cc-safety-net.ts');
 }
 

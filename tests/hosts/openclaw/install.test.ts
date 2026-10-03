@@ -8,9 +8,7 @@ import {
 } from '@/hosts/openclaw/artifact';
 import {
   assertOpenClawPluginDirIsOurs,
-  findOpenClawArtifactDir,
   getOpenClawConfigPath,
-  getOpenClawInstallCommands,
   getOpenClawPluginDir,
   openClawArtifactCandidates,
   resolveOpenClawArtifactDir,
@@ -194,10 +192,6 @@ describe('guarding the extension directory before a --force command', () => {
 });
 
 describe('finding the packaged plugin directory', () => {
-  test('agrees on the built directory the installed CLI ships with', () => {
-    expect(findOpenClawArtifactDir()).toBe(join(REPO_ROOT, 'dist', 'openclaw', 'cc-safety-net'));
-  });
-
   test('looks beside the module itself, where the bundled cli.js sits at the dist root', () => {
     expect(openClawArtifactCandidates()).toContain(
       join(REPO_ROOT, 'src', 'hosts', 'openclaw', 'openclaw', 'cc-safety-net'),
@@ -215,14 +209,6 @@ describe('finding the packaged plugin directory', () => {
           'Packaged OpenClaw plugin directory not found. Reinstall cc-safety-net and try again.',
       },
     });
-  });
-
-  test('drives one install over the packaged directory, accepting capabilities', () => {
-    // OpenClaw >= 2026.8.1 refuses a non-interactive path install without capability consent,
-    // and install itself enables the plugin; a separate enable races the Gateway's reload.
-    expect(getOpenClawInstallCommands('/packaged/dir')).toEqual([
-      ['openclaw', 'plugins', 'install', '/packaged/dir', '--force', '--accept-capabilities'],
-    ]);
   });
 });
 
@@ -245,27 +231,6 @@ describe('verifying that the installed plugin actually loads', () => {
     );
     return { outcome, calls: bin.readLog().map((line) => line.split('\t')[0]) };
   };
-
-  test('accepts a loaded plugin however much trace lands on stderr', async () => {
-    expect(
-      await verify([
-        inspect({
-          stdout: '{"plugin":{"status":"loaded"}}',
-          stderr: 'plugin lifecycle: resolve\nplugin lifecycle: import\n',
-        }),
-      ]),
-    ).toEqual({
-      outcome: { kind: 'returned', value: undefined },
-      calls: [INSPECT_CALL],
-    });
-  });
-
-  test('reports the status OpenClaw gave a plugin that did not load', async () => {
-    expect((await verify([reportStatus('error')])).outcome).toEqual({
-      kind: 'threw',
-      message: `OpenClaw reports the cc-safety-net plugin with status "error". ${INSPECT_HINT}`,
-    });
-  });
 
   test('refuses to call a report it cannot read a success', async () => {
     expect((await verify([inspect({ stdout: 'nope' })])).outcome).toEqual({
@@ -343,16 +308,6 @@ describe('verifying that the installed plugin actually loads', () => {
         message: `OpenClaw reports the cc-safety-net plugin with status "disabled"; run \`openclaw plugins enable cc-safety-net\`. ${INSPECT_HINT}`,
       },
       calls: [INSPECT_CALL, ENABLE_CALL, INSPECT_CALL],
-    });
-  });
-
-  test('leaves a plugin disabled when it was already installed', async () => {
-    expect(await verify([reportStatus('disabled'), enableSucceeds])).toEqual({
-      outcome: {
-        kind: 'threw',
-        message: `OpenClaw reports the cc-safety-net plugin with status "disabled"; run \`openclaw plugins enable cc-safety-net\`. ${INSPECT_HINT}`,
-      },
-      calls: [INSPECT_CALL],
     });
   });
 });

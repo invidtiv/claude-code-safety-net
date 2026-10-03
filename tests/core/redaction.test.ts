@@ -4,77 +4,6 @@ import * as next from '@/core/redaction';
 const PRIVATE_KEY =
   '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0Z3VS5JJcds3xfn/ygWyF8PbnGy0AYc5\n-----END RSA PRIVATE KEY-----';
 
-const FIXED: readonly string[] = [
-  'TOKEN=abc123 npm publish',
-  'export GITHUB_TOKEN="ghp_abcdefghijklmnopqrstuvwxyz0123" gh auth status',
-  "AWS_SECRET_ACCESS_KEY='wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY' aws s3 ls",
-  'DATABASE_URL=postgres://user:pw@db.internal:5432/app prisma migrate',
-  'DATABASE_DSN=host=db user=app password=hunter2 sslmode=require psql',
-  'CONNECTION_STRING="Server=db;User Id=app;Password=hunter2" dotnet run',
-  'REDIS_URI=redis://:pw@cache:6379/0 node worker.js',
-  'MY_API_KEY=$(cat ~/.secret) ./run',
-  'TOKEN=$(printf \'%s\' "$(get-secret)") SAFE=value',
-  'PASSWORD="with \\" escaped quote" ./login',
-  "PASS='single quoted value' ./login",
-  'CREDENTIALS= empty-then-space',
-  'KEY=',
-  'prefixTOKEN=value',
-  'prefix-TOKEN=value',
-  '(TOKEN=inside-parens) [KEY=brackets] {SECRET=braces}',
-  'X=1 Y="two words" Z=$(echo three) W=`four`',
-  'lower_case_token=abc mixed_Case=def',
-  'FOO=bar\nSECRET_KEY=baz\nBAR=qux',
-  'echo TOKEN=not-at-start-but-preceded-by-space',
-  'A=B=C D==E =F G= H',
-  '1TOKEN=digit-first _TOKEN=underscore-first',
-  'curl -H "Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz0123" https://api.github.com',
-  "curl -H 'x-api-key: sk-ant-api03-abcdefghijklmnopqrstuvwxyz' https://api.example.com",
-  'authorization: Basic dXNlcjpwYXNzd29yZA==',
-  '{"authorization":"Bearer abc","cookie":"session=xyz; other=1"}',
-  "{'api-key': 'value with spaces', 'x-api-key': \"v2\"}",
-  'Cookie: a=b; c=d',
-  'api-key: "<redacted>" cookie: \'<redacted>\'',
-  'token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U',
-  'AKIAIOSFODNN7EXAMPLE and ASIAIOSFODNN7EXAMPLE',
-  'gho_abcdefghijklmnopqrstuvwxyz0123 github_pat_11ABCDEFG0123456789abcdef',
-  `glpat-abcdefghijklmnopqrstuv ${['xoxb', '1234567890', 'abcdefghijklmnop'].join('-')} npm_abcdefghijklmnopqrstuvwxyz`,
-  'pypi-AgEIcHlwaS5vcmcCJDAwMDAwMDAw sk_live_abcdefghijklmnopqrstuv rk_test_abcdefghijklmnopqrstuv',
-  'sk-proj-abcdefghijklmnopqrstuvwxyz sk_abcdefghijklmnopqrstuvwxyz',
-  `gsk_${'a'.repeat(52)} xai-${'b'.repeat(80)} pplx-${'c'.repeat(20)}`,
-  `bastn_${'d'.repeat(16)} tgp_v1_${'e'.repeat(43)} flp_${'f'.repeat(10)} wfr_${'g'.repeat(20)}`,
-  `fw_${'h'.repeat(20)} fwp_${'i'.repeat(20)} tp-${'j'.repeat(20)} psk-${'k'.repeat(8)}-${'l'.repeat(8)}`,
-  `${'0'.repeat(32)}.${'A'.repeat(16)} looks like a paired token`,
-  'ghp_short xoxb-short sk-short',
-  'git clone https://user:s3cr3t@github.com/org/repo.git',
-  'git remote add origin https://token@github.com/org/repo.git',
-  'curl ftp://anonymous:me@ftp.example.com/file',
-  'wget "https://bucket.s3.amazonaws.com/key?X-Amz-Signature=abcdef0123456789&X-Amz-Date=1"',
-  'curl "https://storage.googleapis.com/o?x-goog-signature=abc123"',
-  'curl "https://cdn.example.com/f?sig=abc%2Fdef&sv=2024"',
-  'curl -u admin:password https://example.com',
-  'curl --user=admin:password https://example.com',
-  'curl --user admin https://example.com',
-  'mongodb+srv://app:pw@cluster0.example.net/db',
-  `echo "${PRIVATE_KEY}" > key.pem`,
-  `cat <<EOF > id_rsa\n${PRIVATE_KEY}\nEOF`,
-  '-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----',
-  '-----BEGIN PRIVATE KEY----- unterminated',
-  'TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123 curl -H "Authorization: Bearer $TOKEN" https://u:p@h/',
-  'sh -c \'export API_KEY=xyz; curl -H "x-api-key: $API_KEY" https://api\'',
-  'echo password=hunter2 | tee creds.txt',
-  'docker run -e POSTGRES_PASSWORD=pw -e DB_URL=postgres://a:b@c/d image',
-  '',
-  'git status',
-  'ls -la ~/projects',
-  'echo hello world',
-  'rm -rf ./build && npm run build',
-  'the word token appears but no assignment',
-  'https://example.com/path?query=1#frag',
-  'echo 😀 é 日本語',
-  'a=1',
-  'x'.repeat(300),
-];
-
 describe('redaction', () => {
   test('a quoted escape inside command substitution does not expose the assignment tail', () => {
     expect(next.sanitizeDiagnosticText('TOKEN=$(printf "a\\" secret") echo done')).toBe(
@@ -171,6 +100,121 @@ describe('redaction', () => {
         redacted: 'curl -H "Cookie: <redacted>" -H "X-API-Key: <redacted>" https://example.com',
       },
       { text: PRIVATE_KEY, redacted: '<redacted>' },
+      { text: 'TOKEN=abc123 npm publish', redacted: 'TOKEN=<redacted> npm publish' },
+      {
+        text: 'export GITHUB_TOKEN="ghp_abcdefghijklmnopqrstuvwxyz0123" gh auth status',
+        redacted: 'export GITHUB_TOKEN=<redacted> gh auth status',
+      },
+      {
+        text: "AWS_SECRET_ACCESS_KEY='wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY' aws s3 ls",
+        redacted: 'AWS_SECRET_ACCESS_KEY=<redacted> aws s3 ls',
+      },
+      {
+        text: 'DATABASE_URL=postgres://user:pw@db.internal:5432/app prisma migrate',
+        redacted: 'DATABASE_URL=<redacted> prisma migrate',
+      },
+      {
+        text: 'DATABASE_DSN=host=db user=app password=hunter2 sslmode=require psql',
+        redacted: 'DATABASE_DSN=<redacted> psql',
+      },
+      {
+        text: 'CONNECTION_STRING="Server=db;User Id=app;Password=hunter2" dotnet run',
+        redacted: 'CONNECTION_STRING=<redacted> dotnet run',
+      },
+      {
+        text: 'REDIS_URI=redis://:pw@cache:6379/0 node worker.js',
+        redacted: 'REDIS_URI=<redacted> node worker.js',
+      },
+      { text: "PASS='single quoted value' ./login", redacted: 'PASS=<redacted> ./login' },
+      { text: 'prefixTOKEN=value', redacted: 'prefixTOKEN=<redacted>' },
+      { text: 'prefix-TOKEN=value', redacted: 'prefix-TOKEN=<redacted>' },
+      {
+        text: 'lower_case_token=abc mixed_Case=def',
+        redacted: 'lower_case_token=<redacted> mixed_Case=def',
+      },
+      {
+        text: 'FOO=bar\nSECRET_KEY=baz\nBAR=qux',
+        redacted: 'FOO=bar\nSECRET_KEY=<redacted>\nBAR=qux',
+      },
+      {
+        text: 'echo TOKEN=not-at-start-but-preceded-by-space',
+        redacted: 'echo TOKEN=<redacted>',
+      },
+      {
+        text: '1TOKEN=digit-first _TOKEN=underscore-first',
+        redacted: '1TOKEN=<redacted> _TOKEN=<redacted>',
+      },
+      {
+        text: 'authorization: Basic dXNlcjpwYXNzd29yZA==',
+        redacted: 'authorization: <redacted>',
+      },
+      {
+        text: '{"authorization":"Bearer abc","cookie":"session=xyz; other=1"}',
+        redacted: '{"authorization":"<redacted>","cookie":"<redacted>"}',
+      },
+      {
+        text: "{'api-key': 'value with spaces', 'x-api-key': \"v2\"}",
+        redacted: "{'api-key': '<redacted>', 'x-api-key': \"<redacted>\"}",
+      },
+      { text: 'Cookie: a=b; c=d', redacted: 'Cookie: <redacted>' },
+      {
+        text: 'token eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U',
+        redacted: 'token <redacted>',
+      },
+      {
+        text: 'git clone https://user:s3cr3t@github.com/org/repo.git',
+        redacted: 'git clone https://<redacted>:<redacted>@github.com/org/repo.git',
+      },
+      {
+        text: 'curl ftp://anonymous:me@ftp.example.com/file',
+        redacted: 'curl ftp://<redacted>:<redacted>@ftp.example.com/file',
+      },
+      {
+        text: 'wget "https://bucket.s3.amazonaws.com/key?X-Amz-Signature=abcdef0123456789&X-Amz-Date=1"',
+        redacted:
+          'wget "https://bucket.s3.amazonaws.com/key?X-Amz-Signature=<redacted>&X-Amz-Date=1"',
+      },
+      {
+        text: 'curl "https://storage.googleapis.com/o?x-goog-signature=abc123"',
+        redacted: 'curl "https://storage.googleapis.com/o?x-goog-signature=<redacted>"',
+      },
+      {
+        text: 'curl "https://cdn.example.com/f?sig=abc%2Fdef&sv=2024"',
+        redacted: 'curl "https://cdn.example.com/f?sig=<redacted>&sv=2024"',
+      },
+      {
+        text: 'curl -u admin:password https://example.com',
+        redacted: 'curl -u <redacted>:<redacted> https://example.com',
+      },
+      {
+        text: 'curl --user=admin:password https://example.com',
+        redacted: 'curl --user=<redacted>:<redacted> https://example.com',
+      },
+      {
+        text: 'curl --user admin:password https://example.com',
+        redacted: 'curl --user <redacted>:<redacted> https://example.com',
+      },
+      {
+        text: 'mongodb+srv://app:pw@cluster0.example.net/db',
+        redacted: 'mongodb+srv://<redacted>:<redacted>@cluster0.example.net/db',
+      },
+      { text: `echo "${PRIVATE_KEY}" > key.pem`, redacted: 'echo "<redacted>" > key.pem' },
+      {
+        text: `cat <<EOF > id_rsa\n${PRIVATE_KEY}\nEOF`,
+        redacted: 'cat <<EOF > id_rsa\n<redacted>\nEOF',
+      },
+      {
+        text: '-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----',
+        redacted: '<redacted>',
+      },
+      {
+        text: 'echo password=hunter2 | tee creds.txt',
+        redacted: 'echo password=<redacted> | tee creds.txt',
+      },
+      {
+        text: 'docker run -e POSTGRES_PASSWORD=pw -e DB_URL=postgres://a:b@c/d image',
+        redacted: 'docker run -e POSTGRES_PASSWORD=<redacted> -e DB_URL=<redacted> image',
+      },
     ];
     for (const row of rows) {
       expect(next.redactSecrets(row.text), row.text).toBe(row.redacted);
@@ -181,31 +225,72 @@ describe('redaction', () => {
       ['sk', 'live', 'abcdefghijklmnopqrstuvwx'].join('_'),
       'pypi-AgEIcHlwaS5vcmcCJDAwMDAwMDAw',
       'AKIAIOSFODNN7EXAMPLE',
+      'ASIAIOSFODNN7EXAMPLE',
+      'gho_abcdefghijklmnopqrstuvwxyz0123',
+      'github_pat_11ABCDEFG0123456789abcdef',
+      'glpat-abcdefghijklmnopqrstuv',
+      ['rk', 'test', 'abcdefghijklmnopqrstuv'].join('_'),
+      'sk-proj-abcdefghijklmnopqrstuvwxyz',
+      'sk_abcdefghijklmnopqrstuvwxyz',
+      `gsk_${'a'.repeat(52)}`,
+      `xai-${'b'.repeat(80)}`,
+      `pplx-${'c'.repeat(20)}`,
+      `bastn_${'d'.repeat(16)}`,
+      `tgp_v1_${'e'.repeat(43)}`,
+      `flp_${'f'.repeat(10)}`,
+      `wfr_${'g'.repeat(20)}`,
+      `fw_${'h'.repeat(20)}`,
+      `fwp_${'i'.repeat(20)}`,
+      `tp-${'j'.repeat(20)}`,
+      `psk-${'k'.repeat(8)}-${'l'.repeat(8)}`,
+      `${'0'.repeat(32)}.${'A'.repeat(16)}`,
     ]) {
       expect(next.redactSecrets(token), token).toBe('<redacted>');
     }
+    for (const text of [
+      '',
+      'git status',
+      'ls -la ~/projects',
+      'echo hello world',
+      'rm -rf ./build && npm run build',
+      'the word token appears but no assignment',
+      'https://example.com/path?query=1#frag',
+      'echo 😀 é 日本語',
+      'a=1',
+      'x'.repeat(300),
+      'ghp_short xoxb-short sk-short',
+      'curl --user admin https://example.com',
+      'CREDENTIALS= empty-then-space',
+      'KEY=',
+      'A=B=C D==E =F G= H',
+      'X=1 Y="two words" Z=$(echo three) W=`four`',
+      'api-key: "<redacted>" cookie: \'<redacted>\'',
+    ]) {
+      expect(next.redactSecrets(text), text).toBe(text);
+    }
   });
 
-  test('the diagnostic sanitizer is the assignment pass followed by the non-assignment pass', () => {
-    for (const text of [
-      'TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123 curl -H "Authorization: Bearer abc123" https://example.com',
-      'git reset --hard',
-      'https://user:password@example.com',
-      PRIVATE_KEY,
-    ]) {
-      expect(next.sanitizeDiagnosticText(text), text).toBe(
-        next.redactNonAssignmentSecrets(next.redactEnvAssignmentValues(text)),
-      );
+  test('diagnostics redact every assignment value as well as non-assignment credentials', () => {
+    for (const [text, expected] of [
+      [
+        'TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123 curl -H "Authorization: Bearer abc123" https://example.com',
+        'TOKEN=<redacted> curl -H "Authorization: <redacted>" https://example.com',
+      ],
+      ['git reset --hard', 'git reset --hard'],
+      ['https://user:password@example.com', 'https://<redacted>:<redacted>@example.com'],
+      [PRIVATE_KEY, '<redacted>'],
+      ['FOO=bar SECRET_KEY=baz BAR=qux', 'FOO=<redacted> SECRET_KEY=<redacted> BAR=<redacted>'],
+      ['A=B=C D==E =F G= H', 'A=<redacted> D=<redacted> =F G=<redacted> H'],
+      ['MY_API_KEY=$(cat ~/.secret) ./run', 'MY_API_KEY=<redacted> ./run'],
+      [
+        'X=1 Y="two words" Z=$(echo three) W=`four`',
+        'X=<redacted> Y=<redacted> Z=<redacted> W=<redacted>',
+      ],
+    ] as const) {
+      expect(next.sanitizeDiagnosticText(text), text).toBe(expected);
     }
     expect(next.redactEnvAssignmentValues('curl -H "Authorization: Bearer abc123"')).toBe(
       'curl -H "Authorization: Bearer abc123"',
     );
-  });
-
-  test('the fixed table both redacts and leaves text alone', () => {
-    const redacted = FIXED.filter((text) => next.redactSecrets(text) !== text);
-    expect(redacted.length).toBeGreaterThanOrEqual(50);
-    expect(FIXED.length - redacted.length).toBeGreaterThanOrEqual(10);
-    for (const text of redacted) expect(next.redactSecrets(text)).toContain('<redacted>');
   });
 });

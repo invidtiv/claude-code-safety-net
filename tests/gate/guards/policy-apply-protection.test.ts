@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBudget } from '@/core/budget';
 import {
-  findPolicyApplyInvocationInCommand,
   findPolicyApplyInvocationInSemanticFacts,
   REASON_POLICY_APPLY_PROTECTION,
 } from '@/gate/guards/policy-apply-protection';
@@ -17,10 +16,7 @@ let root = '';
 let workspace = '';
 
 function findPair(command: string) {
-  const environments = pairedEnvironments({ HOME: join(root, 'home') }, join(root, 'home'));
-  return describeOutcome(() =>
-    findPolicyApplyInvocationInCommand(command, workspace, environments),
-  );
+  return factsPair('Bash', { command }, { kind: 'command', shell: 'posix' }, command);
 }
 
 function factsPair(toolName: string, input: unknown, route: ToolRoute, command: string | null) {
@@ -116,20 +112,21 @@ describe('policy apply protection', () => {
   });
 
   test('the reported target is the segment as written, wrappers peeled', () => {
-    const environments = pairedEnvironments({ HOME: join(root, 'home') }, join(root, 'home'));
-    const find = (command: string) =>
-      findPolicyApplyInvocationInCommand(command, workspace, environments);
-    expect(find('cc-safety-net policy apply proposal.json')).toStrictEqual({
-      target: 'cc-safety-net policy apply proposal.json',
+    expect(findPair('cc-safety-net policy apply proposal.json')).toStrictEqual({
+      ok: true,
+      value: { target: 'cc-safety-net policy apply proposal.json' },
     });
-    expect(find('sudo cc-safety-net policy apply proposal.json')).toStrictEqual({
-      target: 'cc-safety-net policy apply proposal.json',
+    expect(findPair('sudo cc-safety-net policy apply proposal.json')).toStrictEqual({
+      ok: true,
+      value: { target: 'cc-safety-net policy apply proposal.json' },
     });
-    expect(find('echo hi && cc-safety-net policy apply proposal.json')).toStrictEqual({
-      target: 'cc-safety-net policy apply proposal.json',
+    expect(findPair('echo hi && cc-safety-net policy apply proposal.json')).toStrictEqual({
+      ok: true,
+      value: { target: 'cc-safety-net policy apply proposal.json' },
     });
-    expect(find('( cc-safety-net policy apply proposal.json )')).toStrictEqual({
-      target: 'cc-safety-net policy apply proposal.json',
+    expect(findPair('( cc-safety-net policy apply proposal.json )')).toStrictEqual({
+      ok: true,
+      value: { target: 'cc-safety-net policy apply proposal.json' },
     });
   });
 

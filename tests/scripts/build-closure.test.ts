@@ -2,8 +2,6 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
-import { buildAmpArtifactHeader } from '@/hosts/amp/artifact';
-import { buildOpenClawArtifactHeader } from '@/hosts/openclaw/artifact';
 import pkg from '../../package.json';
 import {
   buildAmpBundle,
@@ -89,10 +87,6 @@ describe('the build', () => {
     expect(listOutputs('chunks/*.js').length).toBeGreaterThan(0);
   });
 
-  test('starts the bin with the Node shebang', () => {
-    expect(readFileSync(bin, 'utf8').startsWith('#!/usr/bin/env node\n')).toBeTrue();
-  });
-
   test('ships the bin as CommonJS: a loader over the hook bundle, marked by its own package.json', () => {
     expect(JSON.parse(readFileSync(join(outdir, 'bin', 'package.json'), 'utf8'))).toEqual({
       type: 'commonjs',
@@ -129,20 +123,14 @@ describe('the build', () => {
     ).toBeTrue();
   });
 
-  test('stamps both plugin artifacts with their managed header', () => {
+  test('passes build verification and emits the OpenClaw registration manifests', async () => {
+    const pluginDir = join(outdir, 'openclaw', 'cc-safety-net');
+    expect(JSON.parse(readFileSync(join(pluginDir, 'openclaw.plugin.json'), 'utf8')).id).toBe(
+      'cc-safety-net',
+    );
     expect(
-      readFileSync(join(outdir, 'amp', 'cc-safety-net', 'index.ts'), 'utf8').startsWith(
-        buildAmpArtifactHeader(pkg.version),
-      ),
-    ).toBeTrue();
-    expect(
-      readFileSync(join(outdir, 'openclaw', 'cc-safety-net', 'index.js'), 'utf8').startsWith(
-        buildOpenClawArtifactHeader(pkg.version),
-      ),
-    ).toBeTrue();
-  });
-
-  test('passes build verification', async () => {
+      JSON.parse(readFileSync(join(pluginDir, 'package.json'), 'utf8')).openclaw.extensions,
+    ).toEqual(['./index.js']);
     process.chdir(root);
 
     expect(await verifyBuildArtifacts()).toContain('dist/bin/cc-safety-net.js');

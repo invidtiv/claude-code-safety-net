@@ -141,7 +141,6 @@ export function explainCommand(
     decision &&
     (evaluation.stage === 'policy-protection' || evaluation.stage === 'secret-protection')
   ) {
-    const matcher = preAnalysisMatcher(decision);
     return {
       trace: {
         steps: [],
@@ -149,7 +148,12 @@ export function explainCommand(
           {
             index: 0,
             steps: [
-              { type: 'rule-check', rule: matcher.rule, matched: true, reason: decision.reason },
+              {
+                type: 'rule-check',
+                rule: preAnalysisRule(decision),
+                matched: true,
+                reason: decision.reason,
+              },
             ],
           },
         ],
@@ -157,7 +161,7 @@ export function explainCommand(
       result: 'blocked',
       reason: sanitizeDiagnosticText(decision.reason),
       segment: sanitizeDiagnosticText(denialSegment(decision, command)),
-      ...(matcher.ruleId ? { ruleId: sanitizeDiagnosticText(matcher.ruleId) } : {}),
+      ruleId: sanitizeDiagnosticText(decision.ruleId),
       configSource,
       configValid,
       ...configuration,
@@ -182,7 +186,7 @@ export function explainCommand(
     result: decision ? 'blocked' : 'allowed',
     reason: decision ? sanitizeDiagnosticText(decision.reason) : undefined,
     segment: decision ? sanitizeDiagnosticText(denialSegment(decision, command)) : undefined,
-    ruleId: decision?.ruleId ? sanitizeDiagnosticText(decision.ruleId) : undefined,
+    ruleId: decision ? sanitizeDiagnosticText(decision.ruleId) : undefined,
     customRule: sanitizeCustomRule(getCustomRule(decision?.ruleId, snapshot)),
     configSource,
     configValid,
@@ -204,26 +208,14 @@ function denialSegment(decision: CommandDenial, command: string): string {
   return decision.evidence?.segment ?? command;
 }
 
-function preAnalysisMatcher(decision: CommandDenial) {
+function preAnalysisRule(decision: CommandDenial) {
   if (decision.reason === REASON_POLICY_CONFIG_PROTECTION)
-    return {
-      ruleId: 'policy-protection',
-      rule: 'policy-protection:findPolicyConfigMutationTargetInSemanticFacts',
-    };
+    return 'policy-protection:findPolicyConfigMutationTargetInSemanticFacts';
   if (decision.reason === REASON_POLICY_APPLY_PROTECTION)
-    return {
-      ruleId: 'policy-apply-protection',
-      rule: 'policy-apply-protection:findPolicyApplyInvocationInSemanticFacts',
-    };
+    return 'policy-apply-protection:findPolicyApplyInvocationInSemanticFacts';
   if (decision.reason === REASON_GIT_METADATA_PROTECTION)
-    return {
-      ruleId: 'git-metadata-protection',
-      rule: 'git-metadata-protection:findGitMetadataMutationTargetInSemanticFacts',
-    };
-  return {
-    ruleId: decision.ruleId,
-    rule: 'secret-protection:findSensitiveTargetInSemanticFacts',
-  };
+    return 'git-metadata-protection:findGitMetadataMutationTargetInSemanticFacts';
+  return 'secret-protection:findSensitiveTargetInSemanticFacts';
 }
 
 interface GetConfigSourceOptions {
@@ -232,8 +224,7 @@ interface GetConfigSourceOptions {
   userConfigDir?: string;
 }
 
-/** @internal */
-export function getConfigSource(
+function getConfigSource(
   environment: Environment,
   options: GetConfigSourceOptions,
 ): {

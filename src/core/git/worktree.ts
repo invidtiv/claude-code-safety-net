@@ -52,11 +52,6 @@ function resolveDirectory(cwd: string): string | null {
   }
 }
 
-/** @internal */
-export function isLinkedWorktree(cwd: string): boolean {
-  return resolveLinkedWorktreeTargets(cwd) !== null;
-}
-
 function resolveLinkedWorktreeTargets(cwd: string): LinkedWorktreeTargets | null {
   const dotGitPath = findDotGit(cwd);
   if (!dotGitPath) {

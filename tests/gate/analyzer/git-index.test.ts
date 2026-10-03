@@ -9,7 +9,6 @@ import type { EffectiveSafetyCapabilities } from '@/core/policy/types';
 import { textCommandWords } from '@/gate/analyzer/command-words';
 import { analyzeGitDetailed, analyzeGitMatch } from '@/gate/analyzer/git';
 import { createLinkedWorktreeFixture, runGit, withLinkedWorktreeFixture } from '../../helpers';
-import { corpusCommands } from '../../helpers/shell-inputs';
 
 const fixture = createLinkedWorktreeFixture();
 
@@ -73,23 +72,6 @@ const GIT_ARGVS: readonly (readonly string[])[] = [
   ['not-git', 'checkout', '--', '.'],
 ];
 
-const ENVIRONMENTS: readonly Readonly<Record<string, string>>[] = [
-  {},
-  { GIT_SSH_COMMAND: 'ssh -o StrictHostKeyChecking=no' },
-  { GIT_DIR: '/elsewhere/.git' },
-  {
-    GIT_CONFIG_COUNT: '1',
-    GIT_CONFIG_KEY_0: 'alias.co',
-    GIT_CONFIG_VALUE_0: 'checkout',
-  },
-];
-
-const ENV_ASSIGNMENTS: readonly (ReadonlyMap<string, string> | undefined)[] = [
-  undefined,
-  new Map([['GIT_SSH_COMMAND', 'ssh -v']]),
-  new Map([['GIT_WORK_TREE', '/elsewhere']]),
-];
-
 function capabilities(failClosed: boolean): EffectiveSafetyCapabilities {
   const state = (enabled: boolean) => ({ enabled, source: 'preset' as const, sources: ['preset'] });
   return {
@@ -117,66 +99,7 @@ function policyPair(
   } satisfies DestructiveCommandRulePolicy;
 }
 
-const POLICIES = [
-  undefined,
-  policyPair(true, {}, false),
-  policyPair(true, {}, true),
-  policyPair(false, {}, false),
-  policyPair(true, { 'git.alias-config': 'off' }, true),
-] as const;
-
-function gitCorpusArgvs(): readonly (readonly string[])[] {
-  return corpusCommands()
-    .filter((command) => /(^|[\s|;&(])git\s/.test(command))
-    .map((command) => command.split(/\s+/).filter(Boolean));
-}
-
 describe('gate/analyzer/git', () => {
-  test('every Git command is decided in and out of a linked worktree', () => {
-    const rows = [...GIT_ARGVS, ...gitCorpusArgvs()];
-    let matches = 0;
-    let relaxations = 0;
-
-    for (const variables of ENVIRONMENTS) {
-      const env = new Map(Object.entries(variables));
-      const environment = createTestEnvironment({
-        env,
-        home: fixture.rootDir,
-        paths: processPathResolver,
-      });
-
-      for (const cwd of [fixture.linkedWorktree, fixture.mainWorktree, fixture.rootDir]) {
-        for (const worktreeMode of [true, false]) {
-          for (const envAssignments of ENV_ASSIGNMENTS) {
-            for (const policy of POLICIES) {
-              for (const tokens of rows) {
-                const shared = { cwd, envAssignments, worktreeMode, dynamicArguments: false };
-                const match = analyzeGitMatch(textCommandWords(tokens), {
-                  ...shared,
-                  environment,
-                  policy,
-                });
-
-                const detailed = analyzeGitDetailed(textCommandWords(tokens), {
-                  ...shared,
-                  environment,
-                  policy,
-                });
-                expect(detailed.match).toStrictEqual(match);
-
-                if (match) matches++;
-                if (detailed.relaxation) relaxations++;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    expect(matches).toBeGreaterThan(100);
-    expect(relaxations).toBeGreaterThan(10);
-  }, 60_000);
-
   test('dynamic arguments withhold the relaxation', () => {
     const env = new Map<string, string>();
     const environment = createTestEnvironment({

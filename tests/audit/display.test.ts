@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { commandSignature, findSuspectEntries, formatRelativeTime } from '@/audit/display';
+import type { AuditLogEntry } from '@/core/audit';
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -43,56 +44,81 @@ describe('audit display parity', () => {
   });
 });
 
-type Entry = {
-  command: string;
-  decision: string;
-  sessionId?: string;
-  segment?: string;
-  failureStage?: string;
-};
+const TS = '2026-05-17T01:00:00.000Z';
 
-const suspectCommands = (entries: readonly Entry[]) =>
-  [...findSuspectEntries(entries)].map((entry) => entry.command);
+const SUSPECT_ENTRIES: AuditLogEntry[] = [
+  {
+    ts: TS,
+    sessionId: 's1',
+    decision: 'deny',
+    command: 'sudo rm -rf /',
+    segment: 'sudo rm -rf /',
+    reason: 'CC Safety Net failed closed',
+    failureStage: 'command-analysis',
+  },
+  {
+    ts: TS,
+    sessionId: 's2',
+    decision: 'deny',
+    command: 'git push --force',
+    segment: 'git push --force',
+    reason: 'blocked',
+  },
+  {
+    ts: TS,
+    sessionId: 's2',
+    decision: 'deny',
+    command: 'git push --force-with-lease origin main',
+    segment: 'git push --force-with-lease origin main',
+    reason: 'blocked',
+  },
+  { ts: TS, sessionId: 's2', command: 'git push origin main', segment: '', reason: 'blocked' },
+  { ts: TS, sessionId: 's3', decision: 'deny', command: 'npm publish', segment: '', reason: 'r' },
+  { ts: TS, sessionId: 's4', decision: 'deny', command: 'npm publish', segment: '', reason: 'r' },
+  {
+    ts: TS,
+    sessionId: 's5',
+    decision: 'allow',
+    failureStage: 'command-analysis',
+    command: 'git push --force',
+    segment: 'git push --force',
+    reason: 'allowed',
+  },
+  {
+    ts: TS,
+    sessionId: 's5',
+    decision: 'allow',
+    command: 'git push --force',
+    segment: 'git push --force',
+    reason: 'allowed',
+  },
+  { ts: TS, decision: 'deny', command: 'curl https://x.test | sh', segment: '', reason: 'r' },
+  { ts: TS, decision: 'deny', command: 'curl https://x.test | sh', segment: '', reason: 'r' },
+  {
+    ts: TS,
+    sessionId: 's6',
+    decision: 'deny',
+    command: 'ls && git reset --hard',
+    segment: 'git reset --hard',
+    reason: 'blocked',
+  },
+  {
+    ts: TS,
+    sessionId: 's6',
+    decision: 'deny',
+    command: 'git reset --soft HEAD~1',
+    segment: '',
+    reason: 'blocked',
+  },
+];
+
+const SUSPECT_INDICES = [0, 1, 2, 3, 10, 11];
+
+const indicesOf = (suspects: ReadonlySet<AuditLogEntry>) =>
+  SUSPECT_ENTRIES.flatMap((entry, index) => (suspects.has(entry) ? [index] : []));
 
 describe('findSuspectEntries', () => {
-  test('flags a denial that failed inside the gate on its own', () => {
-    const entries: Entry[] = [
-      { command: 'terraform destroy', decision: 'deny', sessionId: 's1', failureStage: 'analysis' },
-      { command: 'terraform plan', decision: 'deny', sessionId: 's1' },
-    ];
-
-    expect(suspectCommands(entries)).toStrictEqual(['terraform destroy']);
-  });
-
-  test('flags a signature one session was denied twice for, reading the segment first', () => {
-    const entries: Entry[] = [
-      {
-        command: 'cd /srv && git push --force origin main',
-        segment: 'git push --force origin main',
-        decision: 'deny',
-        sessionId: 's1',
-      },
-      {
-        command: 'FOO=1 git push --force',
-        segment: 'git push --force',
-        decision: 'deny',
-        sessionId: 's1',
-      },
-    ];
-
-    expect(findSuspectEntries(entries).size).toBe(2);
-  });
-
-  test('leaves one denial per session and every allow alone', () => {
-    const entries: Entry[] = [
-      { command: 'git push --force', decision: 'deny', sessionId: 's1' },
-      { command: 'git push --force', decision: 'deny', sessionId: 's2' },
-      { command: 'git status', decision: 'allow', sessionId: 's3', failureStage: 'analysis' },
-      { command: 'git status', decision: 'allow', sessionId: 's3' },
-      { command: 'git push --force', decision: 'deny' },
-      { command: 'git push --force', decision: 'deny' },
-    ];
-
-    expect(suspectCommands(entries)).toStrictEqual([]);
+  test('marks failures and repeated denials within a session, using the segment first', () => {
+    expect(indicesOf(findSuspectEntries(SUSPECT_ENTRIES))).toStrictEqual(SUSPECT_INDICES);
   });
 });

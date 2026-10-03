@@ -54,8 +54,7 @@ export function registerToolCallEvent(pi: PiApi): void {
   pi.on('tool_call', handlePiToolCall);
 }
 
-/** @internal */
-export const handlePiToolCall = createPiToolCallHandler();
+const handlePiToolCall = createPiToolCallHandler();
 
 /** @internal */
 export function createPiToolCallHandler(

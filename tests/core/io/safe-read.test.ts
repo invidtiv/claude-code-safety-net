@@ -25,7 +25,6 @@ import {
   removeEmptyPolicyDirectory,
   removePolicyDirectory,
   removePolicyFile,
-  validatePolicyDirectoryRemoval,
   writePolicyFileAtomic,
 } from '@/core/io/safe-read';
 import {
@@ -277,10 +276,9 @@ describe('atomic policy writes', () => {
     expect(seen).toEqual([join('fresh', 'home', 'rules', 'new', 'rule.json')]);
   });
 
-  test('honours an explicit mode', () => {
+  test.skipIf(!posixModes)('honours an explicit mode', () => {
     writePolicyFileAtomic(target('root', 'rules/mode.json', 'user policy'), 'm\n', 0o644);
-    if (posixModes)
-      expect(lstatSync(join(base, 'root', 'rules', 'mode.json')).mode & 0o777).toBe(0o644);
+    expect(lstatSync(join(base, 'root', 'rules', 'mode.json')).mode & 0o777).toBe(0o644);
   });
 
   test('replaces an existing file, and gives it the write mode rather than the old one', () => {
@@ -422,20 +420,6 @@ describe('policy directory listings', () => {
       );
     });
   }
-
-  test('clears a tree of plain files and directories for removal', () => {
-    expect(validatePolicyDirectoryRemoval(target('root', 'nested', 'user policy'))).toBe(true);
-  });
-
-  test('reports a missing directory as nothing to remove', () => {
-    expect(validatePolicyDirectoryRemoval(target('root', 'missing', 'user policy'))).toBe(false);
-  });
-
-  test('refuses to clear a tree that holds a symlink', () => {
-    expect(() => validatePolicyDirectoryRemoval(target('root', 'rules', 'user policy'))).toThrow(
-      refusal('user policy').message,
-    );
-  });
 });
 
 describe('target identity', () => {

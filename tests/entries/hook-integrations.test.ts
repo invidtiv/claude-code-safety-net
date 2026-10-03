@@ -1,15 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  type HookIntegration,
   findHookIntegrationByFlag as portedFindByFlag,
   findLegacyTopLevelHookIntegration as portedFindLegacy,
-  hookIntegrations as portedIntegrations,
 } from '@/entries/hook-integrations';
 import {
   type IntegrationId,
   getIntegrationDisplayName as portedDisplayName,
   integrationDisplayNames as portedDisplayNames,
-  doctorIntegrationOrder as portedDoctorOrder,
   installIntegrationMetadata as portedInstallMetadata,
   runtimeHookIntegrationMetadata as portedRuntimeMetadata,
 } from '@/hosts/catalog';
@@ -125,9 +122,6 @@ const HOOK_TABLE = [
 
 const idOf = (integration: { id: string } | undefined): string | undefined => integration?.id;
 
-const withoutRun = (integrations: readonly HookIntegration[]) =>
-  integrations.map(({ run: _run, ...integration }) => integration);
-
 describe('the hook table', () => {
   test('resolves one integration per hook argument list', () => {
     expect(HOOK_ARGS.map(([args]) => idOf(portedFindByFlag(args)))).toEqual(
@@ -142,7 +136,6 @@ describe('the hook table', () => {
   });
 
   test('carries the flags and the help text the bin lists, in order', () => {
-    expect(withoutRun(portedIntegrations)).toEqual(HOOK_TABLE as never);
     expect(portedRuntimeMetadata).toEqual(HOOK_TABLE as never);
   });
 });
@@ -225,28 +218,6 @@ describe('the host catalog', () => {
       },
       { id: 'pi', flag: '--pi', artifactKind: 'package', probeCommand: ['pi', '--version'] },
     ]);
-  });
-
-  test('reports on every installable host, the one the tool is named for first', () => {
-    expect(portedDoctorOrder).toEqual([
-      'claude-code',
-      'amp',
-      'antigravity-cli',
-      'codex',
-      'cursor',
-      'deepseek-harness',
-      'gemini-cli',
-      'copilot-cli',
-      'grok-build',
-      'hermes-agent',
-      'kimi-code',
-      'openclaw',
-      'opencode',
-      'pi',
-    ]);
-    expect([...portedDoctorOrder].sort()).toEqual(
-      portedInstallMetadata.map((host) => host.id).sort(),
-    );
   });
 
   test('names every integration the way the CLI prints it', () => {

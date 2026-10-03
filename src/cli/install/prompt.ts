@@ -115,18 +115,11 @@ const CHECKBOX_OFF = '◯';
 const CURSOR_ON = '>';
 const CURSOR_OFF = ' ';
 
-/** @internal */
-export function renderInstallSelection(
+function renderInstallSelection(
   action: InstallAction,
   choices: readonly InstallTargetChoice[],
   state: InstallSelectionState,
-  options: { color?: boolean } = {},
 ): string {
-  const useColor = options.color !== false;
-  const formatDim = useColor ? colors.dim : (value: string) => value;
-  const formatCheckboxOn = useColor ? colors.green : (value: string) => value;
-  const formatFocus = useColor ? colors.bold : (value: string) => value;
-
   return [
     '',
     `${titleCaseAction(action)} CC Safety Net ${targetPreposition(action)}:`,
@@ -139,11 +132,11 @@ export function renderInstallSelection(
       const suffix = choice.available ? '' : ` (${choice.unavailableReason ?? 'not installed'})`;
       const rowBody = `${marker} ${choice.label}${suffix}`;
       const formatted = !choice.available
-        ? formatDim(rowBody)
+        ? colors.dim(rowBody)
         : selected
-          ? formatCheckboxOn(rowBody)
+          ? colors.green(rowBody)
           : focused
-            ? formatFocus(rowBody)
+            ? colors.bold(rowBody)
             : rowBody;
       return `${cursor} ${formatted}`;
     }),

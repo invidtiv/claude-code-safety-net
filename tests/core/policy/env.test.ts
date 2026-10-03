@@ -276,8 +276,9 @@ describe('the environment variables that resolve safety capabilities', () => {
       'worktree CC_SAFETY_NET_WORKTREE SAFETY_NET_WORKTREE',
       'debug CC_SAFETY_NET_DEBUG (no legacy name)',
       'auditScope CC_SAFETY_NET_AUDIT_SCOPE (no legacy name)',
+      'projectTightenOnly CC_SAFETY_NET_PROJECT_TIGHTEN_ONLY (no legacy name)',
     ]);
-    expect(ENV_NAMES).toHaveLength(13);
+    expect(ENV_NAMES).toHaveLength(14);
   });
 
   test.each(RESOLVED.map((row) => [row.behavior, row] as const))('%s', (_behavior, row) => {

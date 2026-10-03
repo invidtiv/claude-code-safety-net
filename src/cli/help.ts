@@ -128,6 +128,12 @@ export function printHelp(): void {
     ),
   );
   lines.push(
+    formatEnvironmentVariable(
+      `${ENV_FLAGS.projectTightenOnly.name}=1`,
+      'Ignore project policy settings that weaken the user policy',
+    ),
+  );
+  lines.push(
     formatEnvironmentVariable('CC_SAFETY_NET_HOME', 'Override rule config home directory'),
   );
   lines.push('');

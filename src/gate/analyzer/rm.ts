@@ -23,7 +23,7 @@ import {
   type RecursiveDeleteTargetContext,
   type RecursiveDeleteTargetOptions,
 } from './recursive-delete-targets';
-import { hasRecursiveForceFlags, hasRecursiveOption } from './rm-flags';
+import { hasRecursiveOption } from './rm-flags';
 
 const REASON_RM_RF =
   'rm -rf outside cwd is blocked. Retry deleting only explicit paths inside the current directory; escalate for anything outside it.';
@@ -64,13 +64,12 @@ export function analyzeRmMatch(
     posixShell: true,
   });
   const flagTexts = words.map(analysisWordText);
-  const recursiveForce = hasRecursiveForceFlags(flagTexts);
   const recursive = hasRecursiveOption(flagTexts);
   const targets = extractTargets(words);
 
   for (const target of targets) {
     const facts = deleteTargetWordFacts(target.word);
-    if (recursiveForce && facts.unsafeBraceExpansion) {
+    if (recursive && facts.unsafeBraceExpansion) {
       const match = filterDestructiveCommandMatch(
         matchRecursiveDeleteClassification(
           { kind: 'outside_anchored_cwd' },
@@ -104,21 +103,7 @@ export function analyzeRmMatch(
       ) {
         return destructiveCommandMatch('rm.git-metadata', REASON_GIT_METADATA_PROTECTION);
       }
-      if (recursive && !recursiveForce) {
-        const classification = classifyRecursiveDeleteTarget(
-          nativeTarget,
-          ctx,
-          classificationOptions,
-        );
-        if (classification.kind === 'root_or_home_target') {
-          return destructiveCommandMatch('rm.recursive-force-root-or-home', REASON_RM_RF_ROOT_HOME);
-        }
-        if (classification.kind === 'git_metadata_target') {
-          return destructiveCommandMatch('rm.git-metadata', REASON_GIT_METADATA_PROTECTION);
-        }
-        continue;
-      }
-      if (!recursiveForce) continue;
+      if (!recursive) continue;
       for (const classification of orderedTargetClassifications(
         nativeTarget,
         ctx,

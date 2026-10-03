@@ -87,7 +87,12 @@ export async function printStatusline(
       custom: '🔧',
     }[hasEffectiveRuleCustomization ? 'custom' : modes.effectiveLevel];
 
-    const weakened = (snapshot.policyScopes?.weakenings.length ?? 0) > 0 ? '🔻' : '';
+    const weakened =
+      snapshot.policyScopes &&
+      !snapshot.policyScopes.weakeningsIgnored &&
+      snapshot.policyScopes.weakenings.length > 0
+        ? '🔻'
+        : '';
 
     status = `🛡️ CC Safety Net ${levelEmoji}${modes.worktreeMode ? '🌳' : ''}${weakened}${snapshot.state === 'degraded' ? '⚠️' : ''}`;
   }

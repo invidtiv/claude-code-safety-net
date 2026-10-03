@@ -134,8 +134,7 @@ export function formatEngineSelfTestSection(selfTest: SelfTestSummary): string {
   return lines.join('\n');
 }
 
-/** @internal */
-export function formatRulesTable(rules: EffectiveRule[]): string {
+function formatRulesTable(rules: EffectiveRule[]): string {
   if (rules.length === 0) {
     return '   (no custom rules)';
   }
@@ -215,7 +214,7 @@ export function formatEffectiveSafetySection(report: DoctorReport): string {
   }
 
   if (scopes && scopes.weakenings.length > 0) {
-    lines.push('   Project policy deltas:');
+    lines.push(`   Project policy deltas${scopes.weakeningsIgnored ? ' (ignored)' : ''}:`);
     for (const weakening of scopes.weakenings) lines.push(`      ${weakening}`);
   }
 

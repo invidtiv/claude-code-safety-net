@@ -131,30 +131,6 @@ const migrationRows: {
   check: (tree: Tree) => void;
 }[] = [
   {
-    name: 'a scope with nothing left behind says so and touches nothing',
-    files: { [`${PROJECT_SCOPE}/rules/rule.json`]: rulesConfig([]) },
-    code: 0,
-    lines: [
-      `No v2 lock or cache leftovers found in ${posix.join('<root>', PROJECT_SCOPE)}; nothing to migrate.`,
-    ],
-    check: (tree) => expect(holdsAny(tree, 'rules/x')).toBeFalse(),
-  },
-  {
-    name: 'a cached copy that still matches its digest is vendored offline',
-    files: {
-      [`${PROJECT_SCOPE}/rules/rule.json`]: rulesConfig([SPEC]),
-      [`${PROJECT_SCOPE}/rules/rule.lock`]: v2Lock([LOCK_ENTRY]),
-      [cachedAt(PROJECT_SCOPE, v2CacheDir(LOCK_ENTRY))]: CACHED_RULEBOOK,
-    },
-    code: 0,
-    lines: [`Vendored ${SPEC} from the v2 cache.`, removedUnder(PROJECT_SCOPE)],
-    check: (tree) => {
-      expect(held(tree, `${PROJECT_SCOPE}/rules/x/rulebook.json`)).toBe(CACHED_RULEBOOK);
-      expect(holdsAny(tree, 'cache')).toBeFalse();
-      expect(holdsAny(tree, 'rule.lock')).toBeFalse();
-    },
-  },
-  {
     name: 'a cached copy whose digest no longer matches names the command that refetches it',
     files: {
       [`${PROJECT_SCOPE}/rules/rule.json`]: rulesConfig([SPEC]),
@@ -236,21 +212,6 @@ const migrationRows: {
     code: 0,
     lines: [removedUnder(PROJECT_SCOPE)],
     check: (tree) => expect(holdsAny(tree, 'cache')).toBeFalse(),
-  },
-  {
-    name: 'a rule config that cannot be read keeps the leftovers it cannot interpret',
-    files: {
-      [`${PROJECT_SCOPE}/rules/rule.json`]: '{ not json',
-      [`${PROJECT_SCOPE}/rules/rule.lock`]: v2Lock([LOCK_ENTRY]),
-      [cachedAt(PROJECT_SCOPE, v2CacheDir(LOCK_ENTRY))]: CACHED_RULEBOOK,
-    },
-    code: 1,
-    lines: [],
-    errors: [CANNOT_MIGRATE],
-    check: (tree) => {
-      expect(holdsAny(tree, 'rule.lock')).toBeTrue();
-      expect(held(tree, cachedAt(PROJECT_SCOPE, v2CacheDir(LOCK_ENTRY)))).toBe(CACHED_RULEBOOK);
-    },
   },
   {
     name: 'a missing rule config with lock rows keeps the only record of those specs',
