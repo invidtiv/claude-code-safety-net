@@ -33,7 +33,12 @@ export function detect(context: DetectContext): HookDetection {
     return { platform: 'droid', status: 'n/a', configPath };
   }
 
-  const errors = managedEntryDriftErrors(entry, DROID_HOOK_COMMAND, DROID_HOOK_TIMEOUT);
+  const errors = [
+    ...(entry.commandRegex === undefined || entry.commandRegex === ''
+      ? []
+      : ['Managed hook has a "commandRegex" that narrows coverage; reinstall to repair']),
+    ...managedEntryDriftErrors(entry, DROID_HOOK_COMMAND, DROID_HOOK_TIMEOUT),
+  ];
   return {
     platform: 'droid',
     status: 'configured',

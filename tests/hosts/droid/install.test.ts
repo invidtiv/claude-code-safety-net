@@ -62,6 +62,26 @@ describe('the Factory Droid hook config differential', () => {
     });
   });
 
+  test('carries the settings.json fallback hooks into the hooks file it creates', async () => {
+    const settings = `${JSON.stringify({
+      model: 'custom',
+      hooks: { SessionStart: SESSION_START, PreToolUse: [FOREIGN_ENTRY] },
+    })}\n`;
+    const { steps } = await row({ '.factory/settings.json': settings });
+
+    expectRow(steps, {
+      file: HOOKS,
+      alreadyInstalled: false,
+      wrote: droidHooks({
+        SessionStart: SESSION_START,
+        PreToolUse: [FOREIGN_ENTRY, CANONICAL_ENTRY],
+      }),
+      detected: CONFIGURED,
+      left: droidHooks({ SessionStart: SESSION_START, PreToolUse: [FOREIGN_ENTRY] }),
+    });
+    expect(fileAt(steps?.uninstall.tree, '.factory/settings.json')).toBe(settings);
+  });
+
   test.each([
     [
       '{ "PreToolUse": [',
@@ -100,6 +120,17 @@ describe('the Factory Droid detector differential', () => {
       value: {
         ...CONFIGURED,
         errors: ['Managed hook has a "matcher" that narrows coverage; reinstall to repair'],
+      },
+    });
+    expect(
+      await detection({
+        [HOOKS]: droidHooks({ PreToolUse: [{ commandRegex: '^git ', hooks: [OURS] }] }),
+      }),
+    ).toEqual({
+      kind: 'returned',
+      value: {
+        ...CONFIGURED,
+        errors: ['Managed hook has a "commandRegex" that narrows coverage; reinstall to repair'],
       },
     });
   });

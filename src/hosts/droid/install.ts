@@ -40,6 +40,12 @@ function parseDroidHooksConfig(configPath: string) {
   throw new Error(`Factory Droid hooks config ${configPath} "PreToolUse" must be an array`);
 }
 
+function settingsFallbackHooks(settingsPath: string): Record<string, unknown> {
+  if (!existsSync(settingsPath)) return {};
+  const settings = readDroidJson(settingsPath);
+  return isRecord(settings) && isRecord(settings.hooks) ? settings.hooks : {};
+}
+
 function getPreToolUse(config: Record<string, unknown>): unknown[] {
   return Array.isArray(config.PreToolUse) ? config.PreToolUse : [];
 }
@@ -57,22 +63,22 @@ function writeDroidHooksConfig(
 
 export function installDroid(environment: Environment): InstallResult {
   const configPath = getDroidHooksPath(environment);
-  const canonical = canonicalPreToolUseEntry(DROID_HOOK_COMMAND, DROID_HOOK_TIMEOUT);
-  if (!existsSync(configPath)) {
-    mkdirSync(dirname(configPath), { recursive: true });
-    writeDroidHooksConfig(configPath, {}, [canonical]);
-    return { path: configPath, alreadyInstalled: false };
-  }
-
-  const config = parseDroidHooksConfig(configPath);
+  const hooksFileExists = existsSync(configPath);
+  const config = hooksFileExists
+    ? parseDroidHooksConfig(configPath)
+    : settingsFallbackHooks(join(environment.home, '.factory', 'settings.json'));
   const existing = getPreToolUse(config);
-  if (isInstalledOnceCanonically(existing, DROID_HOOK_COMMAND, DROID_HOOK_TIMEOUT)) {
+  if (
+    hooksFileExists &&
+    isInstalledOnceCanonically(existing, DROID_HOOK_COMMAND, DROID_HOOK_TIMEOUT)
+  ) {
     return { path: configPath, alreadyInstalled: true };
   }
 
+  mkdirSync(dirname(configPath), { recursive: true });
   writeDroidHooksConfig(configPath, config, [
     ...withoutManagedHandlers(existing, DROID_HOOK_COMMAND),
-    canonical,
+    canonicalPreToolUseEntry(DROID_HOOK_COMMAND, DROID_HOOK_TIMEOUT),
   ]);
   return { path: configPath, alreadyInstalled: false };
 }
