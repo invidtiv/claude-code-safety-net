@@ -36,6 +36,7 @@ beforeAll(() => {
   writeTree(root, {
     'home/notes': null,
     'work/logs': null,
+    'work/escape-link': { symlink: join(root, 'scratch') },
     'work/.git/HEAD': 'ref: refs/heads/main\n',
     'work/.git/hooks/pre-commit.sample': '#!/bin/sh\n',
     'work/.git/objects/pack/pack-1.pack': '',
@@ -284,7 +285,8 @@ describe('find analysis', () => {
       { source: 'find . -delete', id: 'find.delete' },
       { source: 'find . -name "*.log" -delete', id: 'find.delete' },
       { source: 'find -delete', id: 'find.delete' },
-      { source: 'find logs -delete', id: 'find.delete' },
+      { source: 'find logs -delete', id: null },
+      { source: 'find ./logs src -delete', id: null },
       { source: 'find logs -L -delete', id: 'find.delete' },
       { source: 'find "$HOME"/notes -delete', id: 'find.delete' },
       { source: 'find / -delete', id: 'rm.recursive-force-root-or-home' },
@@ -299,6 +301,20 @@ describe('find analysis', () => {
     for (const row of rows) {
       expect(matchId(row.source, workspaceCase), row.source).toBe(row.id);
     }
+  });
+
+  test('a delete inside the workspace stays blocked under paranoid rm or through an escaping symlink', () => {
+    const workspaceCase = caseFor('workspace');
+    const paired = pairedEnvironments({ HOME: home }, home);
+    expect(
+      analyzeFindMatch(commandWords('find logs -delete'), {
+        ...sharedContext(workspaceCase),
+        environment: paired,
+        paranoid: true,
+      })?.id,
+    ).toBe('find.delete');
+
+    expect(matchId('find escape-link/ -delete', workspaceCase)).toBe('find.delete');
   });
 
   test('an -exec body decides the match, through the wrappers it runs behind', () => {

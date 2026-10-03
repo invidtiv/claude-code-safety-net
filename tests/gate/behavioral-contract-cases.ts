@@ -249,6 +249,36 @@ export function behavioralContractCases(paths: {
       },
     },
     {
+      name: 'allows find delete of a workspace subdirectory',
+      command: 'find build -type f -delete',
+      options: options({ cwd: paths.cwd }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'blocks find delete of a workspace subdirectory under paranoid rm',
+      command: 'find build -type f -delete',
+      options: options({ cwd: paths.cwd, paranoidRm: true }),
+      expected: {
+        kind: 'block',
+        ruleId: 'find.delete',
+        intent: 'scope_down',
+        reasonIncludes: 'Use -print first',
+        segment: 'find build -type f -delete',
+      },
+    },
+    {
+      name: 'blocks find delete of a starting point that climbs out of the workspace',
+      command: 'find build/../.. -delete',
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'find.delete',
+        intent: 'scope_down',
+        reasonIncludes: 'Use -print first',
+        segment: 'find build/../.. -delete',
+      },
+    },
+    {
       name: 'blocks a destructive command inside interpreter code',
       command: `python -c "import os; os.system('rm -rf /')"`,
       options: options({ cwd: paths.cwd }),

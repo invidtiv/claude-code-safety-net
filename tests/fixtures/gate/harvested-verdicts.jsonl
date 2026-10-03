@@ -3212,7 +3212,7 @@
 {"literal":"find . -type f -exec cat {} +","work/standard":"allow","work/strict":"allow","repo/standard":"allow","repo/strict":"allow"}
 {"literal":"find . ; -delete","work/standard":"allow","work/strict":"allow","repo/standard":"allow","repo/strict":"allow"}
 {"literal":"find .;\n-delete","work/standard":"allow","work/strict":"allow","repo/standard":"allow","repo/strict":"allow"}
-{"literal":"find .git -delete","work/standard":"deny find.delete @command-analysis","work/strict":"deny find.delete @command-analysis","repo/standard":"deny find.delete-git-metadata @command-analysis","repo/strict":"deny find.delete-git-metadata @command-analysis"}
+{"literal":"find .git -delete","work/standard":"allow","work/strict":"allow","repo/standard":"deny find.delete-git-metadata @command-analysis","repo/strict":"deny find.delete-git-metadata @command-analysis"}
 {"literal":"find .git -exec rm -rf {} +","work/standard":"deny find.exec-rm-recursive-force @command-analysis","work/strict":"deny find.exec-rm-recursive-force @command-analysis","repo/standard":"deny find.delete-git-metadata @command-analysis","repo/strict":"deny find.delete-git-metadata @command-analysis"}
 {"literal":"find .git -maxdepth 0 -exec rm -f /tmp/unrelated-cache \\;","work/standard":"allow","work/strict":"allow","repo/standard":"allow","repo/strict":"allow"}
 {"literal":"find .git/* -delete","work/standard":"deny find.delete @command-analysis","work/strict":"deny find.delete @command-analysis","repo/standard":"deny find.delete-git-metadata @command-analysis","repo/strict":"deny find.delete-git-metadata @command-analysis"}

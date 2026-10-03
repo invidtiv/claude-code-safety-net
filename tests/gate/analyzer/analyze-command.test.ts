@@ -433,7 +433,7 @@ describe('analyzeCommand', () => {
         ruleId: 'rm.recursive-force-root-or-home',
       },
       { command: 'cat <<EOF\n$(find . -delete)\nEOF', ruleId: 'find.delete-git-metadata' },
-      { command: 'find logs -delete', ruleId: 'find.delete' },
+      { command: 'find ../logs -delete', ruleId: 'find.delete' },
     ];
     for (const row of rows) {
       expect(decision(row.command, standard)?.ruleId, row.command).toBe(row.ruleId);

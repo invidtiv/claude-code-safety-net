@@ -93,6 +93,7 @@ const FIND_PRIMARY_ARITY = new Map<string, number>([
 ]);
 
 export interface AnalyzeFindContext extends RecursiveDeleteTargetTrustOptions {
+  paranoid?: boolean;
   budget?: Budget;
   envAssignments?: ReadonlyMap<string, string>;
   policy?: DestructiveCommandRulePolicy &
@@ -111,7 +112,7 @@ export function analyzeFindMatch(
   const catastrophicMatch = findCatastrophicDeleteMatch(words, tokens, context);
   if (catastrophicMatch) return catastrophicMatch;
 
-  if (findHasDelete(tokens, 1) && !hasOnlyTrustedTempDeleteTargets(words, tokens, context)) {
+  if (findHasDelete(tokens, 1) && !hasOnlyScopedDeleteTargets(words, tokens, context)) {
     const match = filterDestructiveCommandMatch(
       destructiveCommandMatch('find.delete', REASON_FIND_DELETE),
       context.policy,
@@ -322,7 +323,7 @@ function findSelectsHooksByName(tokens: readonly string[]): boolean {
   });
 }
 
-function hasOnlyTrustedTempDeleteTargets(
+function hasOnlyScopedDeleteTargets(
   words: readonly CommandWord[],
   tokens: readonly string[],
   context: AnalyzeFindContext,
@@ -369,13 +370,24 @@ function hasOnlyTrustedTempDeleteTargets(
     return (facts.expandedTargets ?? [analysisWordText(target)]).every((expandedTarget) => {
       const trackedCwd = /^\.\/*$/.test(expandedTarget) ? cwdOutsideWorkspace : undefined;
       const startingPoint = trackedCwd ?? expandedTarget;
+      const classificationOptions = {
+        targetIsLiteral: facts.expandedTargets !== undefined || facts.targetIsLiteral,
+        tmpdirWordSplittingProtected: facts.tmpdirWordSplittingProtected,
+      };
+      if (
+        !context.paranoid &&
+        !trackedCwd &&
+        classifyRecursiveDeleteTarget(startingPoint, targetContext, classificationOptions).kind ===
+          'within_anchored_cwd'
+      ) {
+        return true;
+      }
       return isTrustedTempDescendantTarget(
         startingPoint,
         trackedCwd ? workspaceContext : targetContext,
         {
+          ...classificationOptions,
           containmentTarget: expandTmpdirTarget(startingPoint, effectiveTmpdirValue),
-          targetIsLiteral: facts.expandedTargets !== undefined || facts.targetIsLiteral,
-          tmpdirWordSplittingProtected: facts.tmpdirWordSplittingProtected,
         },
       );
     });
