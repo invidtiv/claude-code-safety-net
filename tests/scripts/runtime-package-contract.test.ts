@@ -50,7 +50,9 @@ describe('published runtime contract', () => {
       '@opencode-ai/plugin': { optional: true },
       '@opencode/plugin': { optional: true },
     });
-    expect((pkg.scripts as Record<string, string>)['audit:dependencies']).toBe('bun audit');
+    expect((pkg.scripts as Record<string, string>)['audit:dependencies']).toBe(
+      'bun audit --ignore=GHSA-ch52-4w7c-c8xp',
+    );
     expect(pkg.gitHead).toBeUndefined();
   });
 });

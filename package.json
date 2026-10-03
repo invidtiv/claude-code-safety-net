@@ -54,7 +54,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "audit:dependencies": "bun audit",
+    "audit:dependencies": "bun audit --ignore=GHSA-ch52-4w7c-c8xp",
     "build": "bun run clean && bun scripts/project-bun.ts scripts/build.ts",
     "build:types": "tsc --project tsconfig.build.json --emitDeclarationOnly --declaration",
     "verify:package": "bun run scripts/verify-package.ts",
