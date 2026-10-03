@@ -319,6 +319,23 @@ describe('parallel analysis', () => {
     expect(pair.match.ok && pair.match.value).toStrictEqual(NESTED);
   });
 
+  test('a quoted command is handed to the caller as the shell source each job runs', () => {
+    const rows: readonly { readonly tokens: readonly string[]; readonly jobs: string[] }[] = [
+      { tokens: ['parallel', 'rm -rf {}', ':::', '../other'], jobs: ['rm -rf ../other'] },
+      { tokens: ['parallel', 'rm -rf', ':::', '/'], jobs: ['rm -rf /'] },
+      { tokens: ['parallel', 'git reset --hard', ':::', 'x'], jobs: ['git reset --hard x'] },
+      { tokens: ['parallel', 'echo {}', ':::', 'a', 'b'], jobs: ['echo a', 'echo b'] },
+    ];
+    for (const row of rows) {
+      expect(bothAnalyzers(row.tokens, { label: 'bare' }).jobs, row.tokens.join(' ')).toStrictEqual(
+        row.jobs.map((job) => `${job} @ ${project}`),
+      );
+    }
+    expect(idFor(['parallel', 'rm -rf {}'])).toBe('parallel.rm-recursive-force-dynamic');
+    expect(idFor(['parallel', 'git reset --hard'])).toBe('git.reset-hard');
+    expect(idFor(['parallel', 'echo {}', ':::', 'a'])).toBeNull();
+  });
+
   test('a PARALLEL value in the environment makes the construction unverifiable', () => {
     const plain = bothAnalyzers(['parallel', 'echo', ':::', 'a'], { label: 'bare' });
     expect(plain.match).toStrictEqual({ ok: true, value: null });

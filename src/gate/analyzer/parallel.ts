@@ -220,6 +220,18 @@ function analyzeParallelChildCommand(
     runsRemotely || hasDynamicStdinPlaceholder,
   );
 
+  const quotedCommand = childTokens.length === 1 ? (childTokens[0] ?? '') : '';
+  if (/\s/.test(quotedCommand)) {
+    return analyzeParallelShellSource(
+      hasParallelPlaceholder(quotedCommand) ? quotedCommand : `${quotedCommand} {}`,
+      childCommand,
+      parseResult,
+      context,
+      executionContext,
+      nestedOverrides,
+    );
+  }
+
   if (SHELL_WRAPPERS.has(childCommand.head)) {
     const analyzeExpandedShellArgv = () => {
       if (!templateHasPlaceholder || jobs.length === 0) return null;
@@ -246,44 +258,14 @@ function analyzeParallelChildCommand(
       }
 
       if (hasParallelPlaceholder(dashCArg)) {
-        if (jobs.length > 0) {
-          return firstMatch(jobs, (job) =>
-            context.analyzeNested(
-              expandParallelString(dashCArg, job, context.budget),
-              nestedOverrides,
-            ),
-          );
-        }
-
-        const scriptTokens = parseSimpleWords(dashCArg);
-        if (
-          scriptTokens?.[0] &&
-          normalizeCommandToken(scriptTokens[0]) === 'rm' &&
-          hasRecursiveForceFlags(scriptTokens)
-        ) {
-          const reason = parallelRmDynamicReason(context);
-          if (reason) {
-            return reason;
-          }
-        }
-        const dynamicReason = scriptTokens
-          ? context.analyzeChild(scriptTokens, {
-              ...childProvenance(childCommand, executionContext),
-              dynamicInput: usesStdin,
-              shellDynamicMatch: destructiveCommandMatch(
-                'parallel.shell-dynamic',
-                REASON_PARALLEL_SHELL,
-              ),
-              rmDynamicMatch: destructiveCommandMatch(
-                'parallel.rm-recursive-force-dynamic',
-                REASON_PARALLEL_RM,
-              ),
-            })
-          : null;
-        if (dynamicReason) {
-          return dynamicReason;
-        }
-        return context.analyzeNested(dashCArg, nestedOverrides);
+        return analyzeParallelShellSource(
+          dashCArg,
+          childCommand,
+          parseResult,
+          context,
+          executionContext,
+          nestedOverrides,
+        );
       }
 
       const positionalSources =
@@ -443,6 +425,43 @@ function analyzeParallelChildCommand(
       result ?? dynamicCustomResult ?? checkPolicyRuleMatch(tokens, context.policy?.rules ?? [])
     );
   });
+}
+
+function analyzeParallelShellSource(
+  source: string,
+  childCommand: NormalizedChildCommand,
+  parseResult: ParallelParseResult,
+  context: ParallelAnalyzeContext,
+  executionContext: ParallelAnalyzeContext,
+  nestedOverrides: AnalyzeNestedOverrides | undefined,
+): DestructiveCommandRuleMatch | null {
+  if (parseResult.jobs.length > 0) {
+    return firstMatch(parseResult.jobs, (job) =>
+      context.analyzeNested(expandParallelString(source, job, context.budget), nestedOverrides),
+    );
+  }
+
+  const scriptTokens = parseSimpleWords(source);
+  if (
+    scriptTokens?.[0] &&
+    normalizeCommandToken(scriptTokens[0]) === 'rm' &&
+    hasRecursiveForceFlags(scriptTokens)
+  ) {
+    const reason = parallelRmDynamicReason(context);
+    if (reason) return reason;
+  }
+  const dynamicReason = scriptTokens
+    ? context.analyzeChild(scriptTokens, {
+        ...childProvenance(childCommand, executionContext),
+        dynamicInput: parseResult.usesStdin,
+        shellDynamicMatch: destructiveCommandMatch('parallel.shell-dynamic', REASON_PARALLEL_SHELL),
+        rmDynamicMatch: destructiveCommandMatch(
+          'parallel.rm-recursive-force-dynamic',
+          REASON_PARALLEL_RM,
+        ),
+      })
+    : null;
+  return dynamicReason ?? context.analyzeNested(source, nestedOverrides);
 }
 
 function parallelInputCanChangeExecutedSource(

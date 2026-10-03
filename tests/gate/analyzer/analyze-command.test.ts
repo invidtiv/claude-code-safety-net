@@ -136,6 +136,24 @@ describe('analyzeCommand', () => {
     expect(decision(`parallel ::: ${Array(1025).fill('true').join(' ')}`, standard)).toBeNull();
     expect(decision('parallel ::: true true', standard)).toBeNull();
   });
+  test('parallel runs a quoted command through the shell like its unquoted words', () => {
+    const rows = [
+      { command: "parallel 'rm -rf {}' ::: ../other", ruleId: 'rm.recursive-force-outside-cwd' },
+      { command: 'parallel rm -rf {} ::: ../other', ruleId: 'rm.recursive-force-outside-cwd' },
+      { command: "parallel 'rm -rf {}' ::: /", ruleId: 'rm.recursive-force-root-or-home' },
+      { command: "parallel 'rm -rf' ::: /", ruleId: 'rm.recursive-force-root-or-home' },
+      { command: 'parallel rm -rf ::: /', ruleId: 'rm.recursive-force-root-or-home' },
+      { command: "parallel 'git reset --hard' ::: x", ruleId: 'git.reset-hard' },
+      { command: 'parallel git reset --hard ::: x', ruleId: 'git.reset-hard' },
+    ];
+    for (const row of rows) {
+      expect(decision(row.command, standard), row.command).toMatchObject({
+        kind: 'deny',
+        ruleId: row.ruleId,
+      });
+    }
+    expect(decision("parallel 'echo {}' ::: a", standard)).toBeNull();
+  });
   test('parallel refuses to assemble commands from multiple input lists', () => {
     expect(decision('parallel ::: echo ::: ready', standard)).toMatchObject({
       kind: 'deny',
