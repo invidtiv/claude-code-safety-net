@@ -48,6 +48,7 @@ const REASON_PARALLEL_UNSUPPORTED =
   'parallel command construction cannot be verified safely. Use the default ::: separator, literal arguments, and built-in replacement strings.';
 const PARALLEL_PLACEHOLDER_RE = /\{[^{}\s]*\}/g;
 const PARALLEL_RM_PLACEHOLDER_RE = /\{\}|\{-?\d+\}/g;
+const SHELL_SOURCE_CHARACTER_RE = /[\s;&|<>()$`\\"']/;
 const AWK_SOURCE_OPTION_INPUTS = ['e', 'f', 'source', 'file', '-e', '-f', '--source', '--file'];
 const INTERPRETER_SOURCE_OPTION_INPUTS = [
   'c',
@@ -202,7 +203,7 @@ function analyzeParallelChildCommand(
   context: ParallelAnalyzeContext,
   executionContext: ParallelAnalyzeContext,
 ): DestructiveCommandRuleMatch | null {
-  const { jobs, templateHasPlaceholder, runsRemotely, usesStdin } = parseResult;
+  const { templateHasPlaceholder, runsRemotely, usesStdin } = parseResult;
   const childTokens = childCommand.tokens;
   const childEnvValues = [...childCommand.envAssignments.values()];
   if (childEnvValues.some(hasUnsupportedParallelPlaceholder)) {
@@ -220,17 +221,43 @@ function analyzeParallelChildCommand(
     runsRemotely || hasDynamicStdinPlaceholder,
   );
 
-  const quotedCommand = childTokens.length === 1 ? (childTokens[0] ?? '') : '';
-  if (/\s/.test(quotedCommand)) {
-    return analyzeParallelShellSource(
-      hasParallelPlaceholder(quotedCommand) ? quotedCommand : `${quotedCommand} {}`,
-      childCommand,
-      parseResult,
-      context,
-      executionContext,
-      nestedOverrides,
-    );
+  const wordsResult = analyzeParallelChildWords(
+    childCommand,
+    parseResult,
+    context,
+    executionContext,
+    nestedOverrides,
+    envHasPlaceholder,
+  );
+  if (
+    wordsResult ||
+    parseResult.quotesCommand ||
+    !childTokens.some((token) => SHELL_SOURCE_CHARACTER_RE.test(token))
+  ) {
+    return wordsResult;
   }
+  const shellSource = childTokens.join(' ');
+  return analyzeParallelShellSource(
+    hasParallelPlaceholder(shellSource) ? shellSource : `${shellSource} {}`,
+    childCommand,
+    parseResult,
+    context,
+    executionContext,
+    nestedOverrides,
+  );
+}
+
+function analyzeParallelChildWords(
+  childCommand: NormalizedChildCommand,
+  parseResult: ParallelParseResult,
+  context: ParallelAnalyzeContext,
+  executionContext: ParallelAnalyzeContext,
+  nestedOverrides: AnalyzeNestedOverrides | undefined,
+  envHasPlaceholder: boolean,
+): DestructiveCommandRuleMatch | null {
+  const { jobs, templateHasPlaceholder, runsRemotely, usesStdin } = parseResult;
+  const childTokens = childCommand.tokens;
+  const hasPlaceholder = templateHasPlaceholder || envHasPlaceholder;
 
   if (SHELL_WRAPPERS.has(childCommand.head)) {
     const analyzeExpandedShellArgv = () => {
@@ -736,6 +763,7 @@ interface ParallelParseResult {
   childStart: number;
   templateHasPlaceholder: boolean;
   runsRemotely: boolean;
+  quotesCommand: boolean;
   usesStdin: boolean;
   readsCommandsFromInput: boolean;
   unsupported: boolean;
@@ -837,6 +865,7 @@ function parseParallelCommand(tokens: readonly string[]): ParallelParseResult {
   let childStart = tokens.length;
   let markerIndex = -1;
   let runsRemotely = false;
+  let quotesCommand = false;
   let usesPipe = false;
   let workdir: string | undefined;
   let dryRun = false;
@@ -898,6 +927,11 @@ function parseParallelCommand(tokens: readonly string[]): ParallelParseResult {
     if (token === '-a' || PARALLEL_UNSUPPORTED_INPUT_OPTIONS.has(optionName)) {
       unsupported = true;
       i += attachedValue === undefined ? 2 : 1;
+      continue;
+    }
+    if (token === '-q' || token === '--quote') {
+      quotesCommand = true;
+      i++;
       continue;
     }
     if (token === '--pipe' || token === '--pipepart') {
@@ -978,6 +1012,7 @@ function parseParallelCommand(tokens: readonly string[]): ParallelParseResult {
     childStart,
     templateHasPlaceholder,
     runsRemotely,
+    quotesCommand,
     usesStdin: usesPipe || markerIndex === -1,
     readsCommandsFromInput,
     unsupported,

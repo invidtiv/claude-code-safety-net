@@ -331,7 +331,8 @@ describe('parallel analysis', () => {
         row.jobs.map((job) => `${job} @ ${project}`),
       );
     }
-    expect(idFor(['parallel', 'rm -rf {}'])).toBe('parallel.rm-recursive-force-dynamic');
+    expect(idFor(['parallel', 'rm -rf {}'])).toBe('parallel.shell-dynamic');
+    expect(idFor(['parallel', 'rm -rf', '{}'])).toBe('parallel.rm-recursive-force-dynamic');
     expect(idFor(['parallel', 'git reset --hard'])).toBe('git.reset-hard');
     expect(idFor(['parallel', 'echo {}', ':::', 'a'])).toBeNull();
   });

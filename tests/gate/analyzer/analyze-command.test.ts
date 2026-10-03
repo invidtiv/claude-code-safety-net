@@ -145,6 +145,10 @@ describe('analyzeCommand', () => {
       { command: 'parallel rm -rf ::: /', ruleId: 'rm.recursive-force-root-or-home' },
       { command: "parallel 'git reset --hard' ::: x", ruleId: 'git.reset-hard' },
       { command: 'parallel git reset --hard ::: x', ruleId: 'git.reset-hard' },
+      { command: "parallel 'rm -rf' {} ::: /", ruleId: 'rm.recursive-force-root-or-home' },
+      { command: "parallel echo 'x; rm -rf /' ::: a", ruleId: 'rm.recursive-force-root-or-home' },
+      { command: "parallel rm '-rf {}' ::: /", ruleId: 'rm.recursive-force-root-or-home' },
+      { command: "parallel 'git reset' --hard ::: x", ruleId: 'git.reset-hard' },
     ];
     for (const row of rows) {
       expect(decision(row.command, standard), row.command).toMatchObject({
@@ -152,7 +156,16 @@ describe('analyzeCommand', () => {
         ruleId: row.ruleId,
       });
     }
-    expect(decision("parallel 'echo {}' ::: a", standard)).toBeNull();
+    for (const command of [
+      "parallel 'echo {}' ::: a",
+      'parallel echo {} ::: a b',
+      "parallel 'echo hi' {} ::: a",
+      'parallel -q rm -rf {} ::: /tmp/x',
+      "parallel -q echo 'x; rm -rf /' ::: a",
+      "parallel --quote echo 'x; rm -rf /' ::: a",
+    ]) {
+      expect(decision(command, standard), command).toBeNull();
+    }
   });
   test('parallel refuses to assemble commands from multiple input lists', () => {
     expect(decision('parallel ::: echo ::: ready', standard)).toMatchObject({
