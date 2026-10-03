@@ -321,10 +321,13 @@ describe('parallel analysis', () => {
 
   test('a quoted command is handed to the caller as the shell source each job runs', () => {
     const rows: readonly { readonly tokens: readonly string[]; readonly jobs: string[] }[] = [
-      { tokens: ['parallel', 'rm -rf {}', ':::', '../other'], jobs: ['rm -rf ../other'] },
-      { tokens: ['parallel', 'rm -rf', ':::', '/'], jobs: ['rm -rf /'] },
-      { tokens: ['parallel', 'git reset --hard', ':::', 'x'], jobs: ['git reset --hard x'] },
-      { tokens: ['parallel', 'echo {}', ':::', 'a', 'b'], jobs: ['echo a', 'echo b'] },
+      { tokens: ['parallel', 'rm -rf {}', ':::', '../other'], jobs: ["rm -rf '../other'"] },
+      { tokens: ['parallel', 'rm -rf', ':::', '/'], jobs: ["rm -rf '/'"] },
+      { tokens: ['parallel', 'git reset --hard', ':::', 'x'], jobs: ["git reset --hard 'x'"] },
+      { tokens: ['parallel', 'echo {}', ':::', 'a', 'b'], jobs: ["echo 'a'", "echo 'b'"] },
+      { tokens: ['parallel', 'echo {}', ':::', "it's"], jobs: [`echo 'it'"'"'s'`] },
+      { tokens: ['parallel', '{}', ':::', 'rm -rf /'], jobs: ['rm -rf /'] },
+      { tokens: ['parallel', '{} x', ':::', 'rm -rf'], jobs: ['rm -rf x'] },
     ];
     for (const row of rows) {
       expect(bothAnalyzers(row.tokens, { label: 'bare' }).jobs, row.tokens.join(' ')).toStrictEqual(

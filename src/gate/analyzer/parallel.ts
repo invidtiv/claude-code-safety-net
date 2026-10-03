@@ -33,6 +33,7 @@ import { hasRecursiveForceFlags } from './rm-flags';
 import {
   extractPositionalShellSource,
   extractShellScriptOperandSource,
+  quoteShellWord,
   shellSourceHasUnresolvedDynamicExecutionCarrier,
 } from './shell-execution';
 import { extractDashCArg, isShellSyntaxCheck } from './shell-wrappers';
@@ -215,30 +216,37 @@ function analyzeParallelChildCommand(
   const envHasPlaceholder = childEnvValues.some(hasParallelPlaceholder);
   const hasPlaceholder = templateHasPlaceholder || envHasPlaceholder;
   const hasDynamicStdinPlaceholder = usesStdin && hasPlaceholder;
-  const nestedOverrides = buildNestedOverrides(
+  const childOverrides = buildNestedOverrides(
     childCommand.envAssignments,
     childCommand.wrapperCwd,
     runsRemotely || hasDynamicStdinPlaceholder,
   );
+  const nestedOverrides = hasPlaceholder
+    ? { ...childOverrides, worktreeMode: false }
+    : childOverrides;
 
-  const wordsResult = analyzeParallelChildWords(
-    childCommand,
-    parseResult,
-    context,
-    executionContext,
-    nestedOverrides,
-    envHasPlaceholder,
-  );
-  if (
-    wordsResult ||
-    parseResult.quotesCommand ||
-    !childTokens.some((token) => SHELL_SOURCE_CHARACTER_RE.test(token))
-  ) {
-    return wordsResult;
-  }
   const shellSource = childTokens.join(' ');
+  const jobValuesRunAsCommand = hasParallelPlaceholder(shellSource.split(/[ \t\n=]/, 1)[0] ?? '');
+  const runsAsShellSource =
+    !parseResult.quotesCommand &&
+    (jobValuesRunAsCommand || childTokens.some((token) => SHELL_SOURCE_CHARACTER_RE.test(token)));
+  const headIsShellSource =
+    jobValuesRunAsCommand || SHELL_SOURCE_CHARACTER_RE.test(childTokens[0] ?? '');
+  const wordsResult =
+    runsAsShellSource && headIsShellSource && parseResult.jobs.length > 0
+      ? null
+      : analyzeParallelChildWords(
+          childCommand,
+          parseResult,
+          context,
+          executionContext,
+          nestedOverrides,
+          envHasPlaceholder,
+        );
+  if (wordsResult || !runsAsShellSource) return wordsResult;
   return analyzeParallelShellSource(
     hasParallelPlaceholder(shellSource) ? shellSource : `${shellSource} {}`,
+    !jobValuesRunAsCommand,
     childCommand,
     parseResult,
     context,
@@ -287,6 +295,7 @@ function analyzeParallelChildWords(
       if (hasParallelPlaceholder(dashCArg)) {
         return analyzeParallelShellSource(
           dashCArg,
+          false,
           childCommand,
           parseResult,
           context,
@@ -456,6 +465,7 @@ function analyzeParallelChildWords(
 
 function analyzeParallelShellSource(
   source: string,
+  quoteJobValues: boolean,
   childCommand: NormalizedChildCommand,
   parseResult: ParallelParseResult,
   context: ParallelAnalyzeContext,
@@ -464,7 +474,14 @@ function analyzeParallelShellSource(
 ): DestructiveCommandRuleMatch | null {
   if (parseResult.jobs.length > 0) {
     return firstMatch(parseResult.jobs, (job) =>
-      context.analyzeNested(expandParallelString(source, job, context.budget), nestedOverrides),
+      context.analyzeNested(
+        expandParallelString(
+          source,
+          quoteJobValues ? job.map(quoteShellWord) : job,
+          context.budget,
+        ),
+        nestedOverrides,
+      ),
     );
   }
 

@@ -149,6 +149,9 @@ describe('analyzeCommand', () => {
       { command: "parallel echo 'x; rm -rf /' ::: a", ruleId: 'rm.recursive-force-root-or-home' },
       { command: "parallel rm '-rf {}' ::: /", ruleId: 'rm.recursive-force-root-or-home' },
       { command: "parallel 'git reset' --hard ::: x", ruleId: 'git.reset-hard' },
+      { command: "parallel 'sh -c {}' ::: 'rm -rf /'", ruleId: 'rm.recursive-force-root-or-home' },
+      { command: "parallel {} ::: 'rm -rf /'", ruleId: 'rm.recursive-force-root-or-home' },
+      { command: "parallel {} ::: 'git reset --hard'", ruleId: 'git.reset-hard' },
     ];
     for (const row of rows) {
       expect(decision(row.command, standard), row.command).toMatchObject({
@@ -163,6 +166,8 @@ describe('analyzeCommand', () => {
       'parallel -q rm -rf {} ::: /tmp/x',
       "parallel -q echo 'x; rm -rf /' ::: a",
       "parallel --quote echo 'x; rm -rf /' ::: a",
+      `parallel 'echo {}' ::: ${Array.from({ length: 5461 }, (_, index) => `job${index}`).join(' ')}`,
+      "parallel 'echo {}' ::: 'x; rm -rf /'",
     ]) {
       expect(decision(command, standard), command).toBeNull();
     }
@@ -316,6 +321,29 @@ describe('analyzeCommand', () => {
         });
       }
       expect(options.environment.env.get('GIT_DIR')).toBe(join(temporary.mainWorktree, '.git'));
+    });
+  });
+
+  test('a parallel replacement string withholds the linked-worktree discard relaxation', async () => {
+    await withLinkedWorktreeFixture((temporary) => {
+      const options = {
+        environment,
+        cwd: temporary.linkedWorktree,
+        policySnapshot: policySnapshot({ worktreeMode: true }),
+        worktreeMode: true,
+        effectiveCapabilities: standard.capabilities,
+        protectedGitMetadata: null,
+      };
+      expect(analyzeCommand('git checkout -- .', options)).toBeNull();
+      for (const command of [
+        'parallel git checkout -- {} ::: .',
+        "parallel 'git checkout -- {}' ::: .",
+      ]) {
+        expect(analyzeCommand(command, options), command).toMatchObject({
+          kind: 'deny',
+          ruleId: 'git.checkout-double-dash',
+        });
+      }
     });
   });
 

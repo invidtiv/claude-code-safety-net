@@ -400,7 +400,7 @@ function wordText(word: CommandWord | undefined): string {
   return word ? analysisWordText(word) : '';
 }
 
-function quoteShellWord(value: string): string {
+export function quoteShellWord(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
