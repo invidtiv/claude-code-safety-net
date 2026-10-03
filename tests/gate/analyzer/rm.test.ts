@@ -217,9 +217,16 @@ describe('rm rule set', () => {
       { source: 'rm -rf {a,b}', id: null },
       { source: 'rm -rf {a,b}/{c,d}', id: null },
       { source: 'rm -rf x{1..3}', id: 'rm.recursive-force-outside-cwd' },
+      { source: 'rm -r ..', id: 'rm.recursive-force-outside-cwd' },
+      { source: 'rm -R -- ../outside', id: 'rm.recursive-force-outside-cwd' },
+      { source: 'rm --recursive /nonexistent/elsewhere', id: 'rm.recursive-force-outside-cwd' },
+      { source: 'rm -rv .', id: 'rm.recursive-force-cwd-self' },
+      { source: 'rm -r x{1..3}', id: 'rm.recursive-force-outside-cwd' },
     ];
     for (const row of rows)
       expect(ruleIdFor(row.source, 'plain workspace'), row.source).toBe(row.id);
+    expect(ruleIdFor('rm -r "$X"', 'strict')).toBe('rm.recursive-force-dynamic-target');
+    expect(ruleIdFor('rm -r src', 'paranoid rm')).toBe('rm.recursive-force-paranoid');
   });
 
   test('the temp roots and $TMPDIR are trusted unless word splitting can escape them', () => {

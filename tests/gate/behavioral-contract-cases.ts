@@ -197,6 +197,18 @@ export function behavioralContractCases(paths: {
       },
     },
     {
+      name: 'blocks recursive removal without force outside the workspace',
+      command: 'rm -r ../outside',
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'rm.recursive-force-outside-cwd',
+        intent: 'scope_down',
+        reasonIncludes: 'outside cwd is blocked',
+        segment: 'rm -r ../outside',
+      },
+    },
+    {
       name: 'blocks destructive Git nested in a shell',
       command: "sh -c 'git reset --hard'",
       options: options({ cwd: paths.cwd }),
