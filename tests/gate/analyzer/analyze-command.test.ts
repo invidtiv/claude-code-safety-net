@@ -166,12 +166,15 @@ describe('analyzeCommand', () => {
       'parallel -q rm -rf {} ::: /tmp/x',
       "parallel -q echo 'x; rm -rf /' ::: a",
       "parallel --quote echo 'x; rm -rf /' ::: a",
-      `parallel 'echo {}' ::: ${Array.from({ length: 5461 }, (_, index) => `job${index}`).join(' ')}`,
       "parallel 'echo {}' ::: 'x; rm -rf /'",
     ]) {
       expect(decision(command, standard), command).toBeNull();
     }
   });
+  test('a quoted parallel template within the derived-token cap is charged once', () => {
+    const jobs = Array.from({ length: 5461 }, (_, index) => `job${index}`).join(' ');
+    expect(decision(`parallel 'echo {}' ::: ${jobs}`, standard)).toBeNull();
+  }, 30_000);
   test('parallel refuses to assemble commands from multiple input lists', () => {
     expect(decision('parallel ::: echo ::: ready', standard)).toMatchObject({
       kind: 'deny',
