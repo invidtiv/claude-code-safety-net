@@ -2245,11 +2245,19 @@ describe('invariants over the corpus and the seeded fuzz', () => {
   const PARSE_FAILURE = 'Unable to parse command for secret protection';
   const settle = (command: string, mode: Mode, config?: SecretProtectionConfig) =>
     describeOutcome(() => secretIn(command, mode, config));
+  const settledByMode = new Map<Mode, Map<string, ReturnType<typeof settle>>>();
+  const settleOnce = (command: string, mode: Mode) => {
+    const settled = settledByMode.get(mode) ?? new Map<string, ReturnType<typeof settle>>();
+    settledByMode.set(mode, settled);
+    const outcome = settled.get(command) ?? settle(command, mode);
+    settled.set(command, outcome);
+    return outcome;
+  };
 
   test('a verdict is either nothing or a deny naming a catalog rule and a non-empty target', () => {
     const verdicts = sources().flatMap((command) =>
       MODES.flatMap((mode) => {
-        const outcome = settle(command, mode);
+        const outcome = settleOnce(command, mode);
         return outcome.ok && outcome.value !== null ? [{ command, value: outcome.value }] : [];
       }),
     );
@@ -2266,7 +2274,7 @@ describe('invariants over the corpus and the seeded fuzz', () => {
 
   test('the only failure is the fail-closed parse signal, and it is raised in every mode', () => {
     const failures = sources().flatMap((command) => {
-      const modes = MODES.map((mode) => settle(command, mode));
+      const modes = MODES.map((mode) => settleOnce(command, mode));
       return modes.some((outcome) => !outcome.ok) ? [{ command, modes }] : [];
     });
     expect(failures.length).toBeGreaterThan(0);
@@ -2280,15 +2288,15 @@ describe('invariants over the corpus and the seeded fuzz', () => {
 
   test('the same command decides the same way twice', () => {
     for (const command of sources()) {
-      expect(settle(command, UNSET), command).toStrictEqual(settle(command, UNSET));
+      expect(settle(command, UNSET), command).toStrictEqual(settleOnce(command, UNSET));
     }
   });
 
   test('standard mode only removes denials, and an unset level decides as strict', () => {
     for (const command of sources()) {
-      const standard = settle(command, STANDARD);
-      const strict = settle(command, STRICT);
-      expect(settle(command, UNSET), command).toStrictEqual(strict);
+      const standard = settleOnce(command, STANDARD);
+      const strict = settleOnce(command, STRICT);
+      expect(settleOnce(command, UNSET), command).toStrictEqual(strict);
       const denied = standard.ok && standard.value !== null;
       expect(denied && strict.ok ? strict.value !== null : true, command).toBeTrue();
     }
@@ -2297,14 +2305,14 @@ describe('invariants over the corpus and the seeded fuzz', () => {
   test('an allow entry that resolves to the home directory changes no verdict', () => {
     const allowHome = { denyPaths: [], allowPaths: [userHome] };
     for (const command of sources()) {
-      expect(settle(command, UNSET, allowHome), command).toStrictEqual(settle(command, UNSET));
+      expect(settle(command, UNSET, allowHome), command).toStrictEqual(settleOnce(command, UNSET));
     }
   });
 
   test('a deny path covering the project is never relaxed by an allow path over the same root', () => {
     const denyAndAllow = { denyPaths: [repo], allowPaths: [repo] };
     for (const command of sources()) {
-      const base = settle(command, UNSET);
+      const base = settleOnce(command, UNSET);
       if (!base.ok || base.value === null) continue;
       const guarded = settle(command, UNSET, denyAndAllow);
       expect(guarded.ok && guarded.value !== null, command).toBeTrue();
