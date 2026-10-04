@@ -130,6 +130,10 @@ describe('core/shell/parse', () => {
     'echo $\\\n{ rm -rf x; }',
     `echo "${'$(( '.repeat(65)}\${ rm -rf x; echo 0; }${' ))'.repeat(65)}"`,
     `: <<EOF\n${'$(( '.repeat(64)}\${ rm -rf x; echo 0; }${' ))'.repeat(64)}\nEOF`,
+    `: <<EOF\n${'$(( '.repeat(64)}0${' ))'.repeat(64)}\n\${ rm -rf x; }\nEOF`,
+    'echo $x${ rm -rf x; }',
+    'echo "$x${ rm -rf x; }"',
+    'echo $$${ rm -rf x; }',
   ])('rejects a function substitution where the shell expands it: %s', (source) => {
     const program = parseCommand(source, 'posix');
     expect(program.status).toBe('invalid');
@@ -145,9 +149,22 @@ describe('core/shell/parse', () => {
     "cat <<'EOF'\n${ rm -rf x; }\nEOF",
     'cat <<EOF\n\\${ rm -rf x; }\nEOF',
     `echo "$(( $(grep -Fc '\${ ' template.txt) + 1 ))"`,
+    'echo $x$y $HOME$PATH $$ $x$$ $x$',
   ])('leaves text the shell does not expand as a function substitution alone: %s', (source) => {
     expect(parseCommand(source, 'posix').status).toBe('complete');
   });
+
+  test.each(['echo $x$(rm -rf x)', 'echo "$x$(rm -rf x)"', 'echo $$$(rm -rf x)'])(
+    'reads a command substitution glued to a variable: %s',
+    (source) => {
+      const program = parseCommand(source, 'posix');
+      expect(program.status).toBe('complete');
+      const command = program.nodes[0];
+      expect(command?.kind === 'command' && command.nested.map((nested) => nested.source)).toEqual([
+        'rm -rf x',
+      ]);
+    },
+  );
 
   test('reads a group, a redirection into a substitution and a function definition as their nodes', () => {
     const program = parseCommand('echo x >$(git reset --hard); (rm -rf /tmp/x)', 'posix');

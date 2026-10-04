@@ -261,6 +261,29 @@ export function behavioralContractCases(paths: {
       expected: functionSubstitutionBlock,
     },
     {
+      name: 'fails closed on a function substitution glued to a variable',
+      command: 'echo $x${ rm -rf ~/; }',
+      options: options({ cwd: paths.cwd }),
+      expected: functionSubstitutionBlock,
+    },
+    {
+      name: 'fails closed on a function substitution after a depth-limited heredoc line',
+      command: `: <<EOF\n${'$(( '.repeat(64)}0${' ))'.repeat(64)}\n\${ cd ~; }\nEOF\nrm -rf *`,
+      options: options({ cwd: paths.cwd }),
+      expected: functionSubstitutionBlock,
+    },
+    {
+      name: 'blocks a home removal in a command substitution glued to a variable',
+      command: 'echo "$x$(rm -rf ~/)"',
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'rm.recursive-force-root-or-home',
+        intent: 'hard_stop',
+        reasonIncludes: 'targeting root or home',
+      },
+    },
+    {
       name: 'blocks find delete',
       command: 'find . -delete',
       options: options({ cwd: paths.cwd }),

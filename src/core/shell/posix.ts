@@ -861,7 +861,6 @@ function readHeredocBodySubstitutions(
       issues.push(FUNCTION_SUBSTITUTION_ISSUE);
     }
     i = substitution.next;
-    if (substitution.program.status === 'limited') break;
   }
   return { programs, issues };
 }
@@ -1074,8 +1073,9 @@ function readVariableEnd(source: string, start: number, end: number): number {
     const close = source.indexOf('}', start + 2);
     return close === -1 || close >= end ? end : close + 1;
   }
+  if (source[start + 1] === '$') return start + 2;
   let i = start + 1;
-  while (i < end && /[A-Za-z0-9_?@#$!*-]/.test(source[i] ?? '')) i++;
+  while (i < end && /[A-Za-z0-9_?@#!*-]/.test(source[i] ?? '')) i++;
   return i === start + 1 ? start + 1 : i;
 }
 
