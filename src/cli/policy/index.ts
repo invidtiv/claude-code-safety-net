@@ -13,7 +13,11 @@ import {
   readRuntimeUserBaseline,
 } from '@/core/policy/diff';
 import { mergeProjectPolicy } from '@/core/policy/merge';
-import { getProjectPolicyPath, getUserPolicyPath } from '@/core/policy/paths';
+import {
+  getProjectPolicyPath,
+  getUserPolicyPath,
+  projectPolicyIsUserPolicy,
+} from '@/core/policy/paths';
 import { normalizeGuiPolicy, projectPolicyProjection } from '@/core/policy/store';
 import { writeUserPolicyFromGui } from '@/core/policy/store-gui';
 import type { GuiPolicy } from '@/core/policy/types';
@@ -59,9 +63,16 @@ export async function runPolicyCommand(
     return 1;
   }
 
+  const cwd = options.cwd ?? process.cwd();
   const targetPath = parsed.flags.global
     ? getUserPolicyPath(environment)
-    : getProjectPolicyPath(options.cwd ?? process.cwd());
+    : getProjectPolicyPath(cwd);
+  if (!parsed.flags.global && projectPolicyIsUserPolicy(environment, { cwd })) {
+    console.error(
+      `${targetPath} is the user policy, not a project policy; use --global for the user scope, or run from a project directory`,
+    );
+    return 1;
+  }
   const proposal = readPolicyJson(file);
   const diagnostics = [
     ...proposal.errors,
