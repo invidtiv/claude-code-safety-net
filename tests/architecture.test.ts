@@ -28,6 +28,7 @@ const CHILD_PROCESS_ALLOWANCES: readonly string[] = [
   'hosts/amp/run.ts',
   'hosts/install/native.ts',
   'hosts/install/choices.ts',
+  'hosts/opencode/v2.ts',
   'hosts/system-info.ts',
   'gui/index.ts',
   'gui/choose-directory.ts',

@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import type { Context, Plugin } from '@opencode/plugin/effect/plugin';
 import type { ToolHooks } from '@opencode/plugin/effect/tool';
 import { Tool } from '@opencode/schema/tool';
@@ -5,6 +6,10 @@ import { Effect } from 'effect';
 import { getNonCommandToolInputKind } from '@/core/tool-input';
 import { loadBuiltinCommands } from './builtin-commands/commands';
 import { evaluateOpenCodeTool, resolveOpenCodeShellRoute } from './plugin';
+
+const POSIX_SHELL_PROBE = 'x=ccsn; case $x in ccsn) echo "$x-posix";; esac';
+const POSIX_SHELL_PROBE_TIMEOUT_MS = 10_000;
+const posixShellChecks = new Map<string, Promise<boolean>>();
 
 type V2Context = Pick<Context, 'options' | 'shell'> & {
   location: Pick<Context['location'], 'directory'>;
@@ -48,14 +53,24 @@ export function createOpenCodeV2Plugin() {
           }),
         );
         // The tool event does not expose the resolved executable.
-        yield* ctx.shell.hook('create.before', (event) => {
-          if (resolveOpenCodeShellRoute(event.shell) === shell) return Effect.void;
-          return Effect.die(
-            new Error(
-              `CC Safety Net: actual shell "${event.shell}" does not match plugin option shell "${shell}". Configure the plugin's shell option to match OpenCode; supported dialects are posix and powershell.`,
+        yield* ctx.shell.hook('create.before', (event) =>
+          Effect.promise(
+            async () =>
+              resolveOpenCodeShellRoute(event.shell) === shell &&
+              (shell === 'powershell' ||
+                runsPosixShellSyntax(event.shell, event.env, ctx.location.directory)),
+          ).pipe(
+            Effect.flatMap((matches) =>
+              matches
+                ? Effect.void
+                : Effect.die(
+                    new Error(
+                      `CC Safety Net: actual shell "${event.shell}" does not match plugin option shell "${shell}". Configure the plugin's shell option to match OpenCode; supported dialects are posix and powershell.`,
+                    ),
+                  ),
             ),
-          );
-        });
+          ),
+        );
         const commands = yield* ctx.command.list().pipe(Effect.orDie);
         if (commands.data.some((command) => command.name === 'cc-safety-net')) return;
         yield* ctx.command.transform((editor) => {
@@ -78,4 +93,23 @@ export function createOpenCodeV2Plugin() {
         });
       }),
   } satisfies Plugin;
+}
+
+function runsPosixShellSyntax(shell: string, env: NodeJS.ProcessEnv, cwd: string) {
+  const pending = posixShellChecks.get(shell);
+  if (pending) return pending;
+  const check = new Promise<boolean>((resolve) => {
+    execFile(
+      shell,
+      ['-c', POSIX_SHELL_PROBE],
+      { cwd, env, timeout: POSIX_SHELL_PROBE_TIMEOUT_MS },
+      (error, stdout) => {
+        const passed = error === null && stdout.includes('ccsn-posix');
+        if (!passed) posixShellChecks.delete(shell);
+        resolve(passed);
+      },
+    );
+  });
+  posixShellChecks.set(shell, check);
+  return check;
 }

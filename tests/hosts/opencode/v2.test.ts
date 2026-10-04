@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CommandDefinition } from '@opencode/plugin/effect/command';
 import type { Context } from '@opencode/plugin/effect/plugin';
@@ -165,36 +165,53 @@ test('PowerShell relative Git metadata moves are blocked without auto-detection'
   expect(result.returned instanceof Tool.Error ? result.returned.message : '').toContain('BLOCKED');
 });
 
+function createShell(shell: string, env: Record<string, string> = {}) {
+  const runtime = host({ shell: 'posix' });
+  return Effect.runPromise(
+    Effect.scoped(
+      runtime.register.pipe(
+        Effect.andThen(() =>
+          Effect.forEach(runtime.shells, (hook) =>
+            hook({ shell, command: 'echo safe', cwd: fixture.project, timeout: 1000, env }),
+          ),
+        ),
+        Effect.as('created'),
+      ),
+    ),
+  );
+}
+
 test.each(['/bin/fish', '/bin/pwsh', 'cmd.exe'])(
   'a POSIX adapter rejects actual shell %s before spawn',
   async (shell) => {
-    const runtime = host({ shell: 'posix' });
-    let spawned = false;
-    await expect(
-      Effect.runPromise(
-        Effect.scoped(
-          runtime.register.pipe(
-            Effect.andThen(() =>
-              Effect.forEach(runtime.shells, (hook) =>
-                hook({
-                  shell,
-                  command: 'echo safe',
-                  cwd: fixture.project,
-                  timeout: 1000,
-                  env: {},
-                }),
-              ),
-            ),
-            Effect.andThen(
-              Effect.sync(() => {
-                spawned = true;
-              }),
-            ),
-          ),
-        ),
-      ),
-    ).rejects.toThrow('shell');
-    expect(spawned).toBe(false);
+    await expect(createShell(shell)).rejects.toThrow('shell');
+  },
+);
+
+test.skipIf(process.platform === 'win32')(
+  'a POSIX adapter checks an unfamiliar POSIX shell once, then creates it',
+  async () => {
+    const shell = join(fixture.root, 'ash');
+    const checks = join(fixture.root, 'shell-checks.log');
+    writeFileSync(shell, '#!/bin/sh\nprintf . >> "$SHELL_CHECK_LOG"\nexec /bin/sh "$@"\n', {
+      mode: 0o755,
+    });
+    const env = { SHELL_CHECK_LOG: checks };
+    expect(await Promise.all([createShell(shell, env), createShell(shell, env)])).toEqual([
+      'created',
+      'created',
+    ]);
+    expect(await createShell(shell, env)).toBe('created');
+    expect(readFileSync(checks, 'utf8')).toBe('.');
+  },
+);
+
+test.skipIf(process.platform === 'win32')(
+  'a POSIX adapter rejects a shell named bash that does not run POSIX syntax',
+  async () => {
+    const shell = join(fixture.root, 'bash');
+    symlinkSync('/usr/bin/false', shell);
+    await expect(createShell(shell)).rejects.toThrow('shell');
   },
 );
 
