@@ -13,7 +13,11 @@ import {
   validateConfig,
   writeJsonAtomic,
 } from '@/core/policy/config-file';
-import { getProjectRulesConfigPath, getUserRulesConfigPath } from '@/core/policy/paths';
+import {
+  getProjectRulesConfigPath,
+  getUserRulesConfigPath,
+  projectPolicyIsUserPolicy,
+} from '@/core/policy/paths';
 import { readRulesConfig } from '@/core/policy/rules-config';
 import type { CustomRule } from '@/core/policy/types';
 import { getLegacyProjectRulesConfigPath, getScopePaths } from '@/rules-manager/paths';
@@ -48,15 +52,22 @@ export async function runRulesMigrate(
   environment: Environment,
   options: RulesMigrateOptions,
 ): Promise<number> {
+  const projectIsUser = projectPolicyIsUserPolicy(environment, { cwd: options.cwd });
+  if (projectIsUser) {
+    console.log(
+      `Skipped the project scope: ${getProjectRulesConfigPath(options.cwd)} is the user rule config, not a project rule config`,
+    );
+  }
   const results = [
-    await migrateRulesScope(environment, {
-      legacyPath: getLegacyProjectRulesConfigPath({ cwd: options.cwd }),
-      configPath: getProjectRulesConfigPath(options.cwd),
-      defaultRulebookName: 'project-rules',
-      migratedFrom: PROJECT_MIGRATED_FROM,
-      cleanup: options.cleanup,
-      syncOptions: { cwd: options.cwd },
-    }),
+    projectIsUser ||
+      (await migrateRulesScope(environment, {
+        legacyPath: getLegacyProjectRulesConfigPath({ cwd: options.cwd }),
+        configPath: getProjectRulesConfigPath(options.cwd),
+        defaultRulebookName: 'project-rules',
+        migratedFrom: PROJECT_MIGRATED_FROM,
+        cleanup: options.cleanup,
+        syncOptions: { cwd: options.cwd },
+      })),
     await migrateRulesScope(environment, {
       legacyPath: getLegacyUserRulesConfigPath(environment),
       configPath: getUserRulesConfigPath(environment),

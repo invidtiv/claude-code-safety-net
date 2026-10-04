@@ -38,7 +38,7 @@ export type GuiResponse = {
 
 export type GuiHookOptions = Omit<
   NonNullable<Parameters<typeof createPortedServer>[1]>,
-  'cwd' | 'userConfigDir' | 'userConfigPath' | 'projectConfigPath'
+  'userConfigDir' | 'userConfigPath' | 'projectConfigPath'
 >;
 
 function seedSide(prefix: string, seed: TreeSpec, env: Record<string, string> = {}): GuiSide {

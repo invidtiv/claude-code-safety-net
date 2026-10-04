@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { posix } from 'node:path';
+import { symlinkSync } from 'node:fs';
+import { join, posix } from 'node:path';
 import { RULE_DOC } from '@/cli/rule/doc';
 import { runRuleCommand } from '@/cli/rule/index';
-import { type CliOutcome, runCliCommand, seedFiles } from '../../helpers/cli-differential';
+import {
+  type CliOutcome,
+  type CliSide,
+  runCliCommand,
+  seedFiles,
+} from '../../helpers/cli-differential';
 import type { TreeSpec } from '../../helpers/fixture-tree';
 import {
   json,
@@ -24,11 +30,16 @@ afterEach(() => {
 const P = 'project/.cc-safety-net/rules';
 const U = 'home/.cc-safety-net/rules';
 
-const rule = async (args: readonly string[], files: TreeSpec = {}) =>
+const rule = async (
+  args: readonly string[],
+  files: TreeSpec = {},
+  cwd?: (side: CliSide) => string,
+) =>
   await runCliCommand(
     {
       args: ['rule', ...args],
       seed: (side) => seedFiles(side, files),
+      cwd,
       env: { CC_SAFETY_NET_NO_UPDATE_CHECK: '1' },
     },
     (environment) => runRuleCommand(environment, args),
@@ -937,5 +948,76 @@ describe('verify and doc', () => {
     expect(outcome.exitCode).toBe(0);
     expect(outcome.stdout).toBe(`${RULE_DOC}\n`);
     expect(outcome.stderr).toBe('');
+  }, 60_000);
+});
+
+describe('project-scope writes from home', () => {
+  const fromHome = (side: CliSide) => side.home;
+  const HOME_RULES = {
+    [`${U}/rule.json`]: rulesConfig(['team']),
+    [`${U}/team/rulebook.json`]: TEAM,
+    [`${U}/other/rulebook.json`]: OTHER,
+  };
+  const REFUSAL =
+    '<root>/home/.cc-safety-net/rules/rule.json is the user rule config, not a project rule config; use --global for the user scope, or run from a project directory\n';
+
+  for (const args of [
+    ['init'],
+    ['add', 'other'],
+    ['remove', 'team'],
+    ['update'],
+    ['sync'],
+    ['wrapper', 'add', 'rtk'],
+    ['wrapper', 'remove', 'rtk'],
+  ]) {
+    test(`\`rule ${args.join(' ')}\` is refused and the user config is untouched`, async () => {
+      const outcome = await rule(args, HOME_RULES, fromHome);
+      expect(outcome.exitCode).toBe(1);
+      expect(outcome.stdout).toBe('');
+      expect(outcome.stderr).toBe(REFUSAL);
+      expect(fileAt(outcome, `${U}/rule.json`)).toBe(rulesConfig(['team']));
+    }, 60_000);
+  }
+
+  test('init from a home with no rule config yet creates none', async () => {
+    const outcome = await rule(['init'], {}, fromHome);
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.stderr).toBe(REFUSAL);
+    expect(holds(outcome, 'rule.json')).toBeFalse();
+  }, 60_000);
+
+  test('init through a symlinked home with no rule config yet creates none', async () => {
+    const outcome = await runCliCommand(
+      {
+        args: ['rule', 'init'],
+        seed: (side) => {
+          const link = join(side.root, 'home-link');
+          symlinkSync(side.home, link, 'junction');
+          side.env.CC_SAFETY_NET_HOME = join(link, '.cc-safety-net');
+        },
+        cwd: fromHome,
+        env: { CC_SAFETY_NET_NO_UPDATE_CHECK: '1' },
+      },
+      (environment) => runRuleCommand(environment, ['init']),
+    );
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.stderr).toBe(REFUSAL);
+    expect(holds(outcome, 'rule.json')).toBeFalse();
+  }, 60_000);
+
+  test('--global from home still writes the user config', async () => {
+    const outcome = await rule(['add', 'other', '--global'], HOME_RULES, fromHome);
+    expect(outcome.exitCode).toBe(0);
+    expect(fileAt(outcome, `${U}/rule.json`)).toBe(rulesConfig(['team', 'other']));
+  }, 60_000);
+
+  test('wrapper list from home still reads the user config', async () => {
+    const outcome = await rule(
+      ['wrapper', 'list'],
+      { [`${U}/rule.json`]: rulesConfig([], { transparent_wrappers: ['rtk'] }) },
+      fromHome,
+    );
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.stdout).toBe('Transparent wrappers (1):\n  - rtk\n');
   }, 60_000);
 });

@@ -1,4 +1,5 @@
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { createBudget } from '@/core/budget';
 import type { Environment } from '@/core/environment';
 import {
   bindPolicyFilesystemScope,
@@ -6,7 +7,7 @@ import {
   type PolicyFilesystemScope,
   type PolicyFilesystemTarget,
 } from '@/core/io/safe-read';
-import { normalizeMsysDrivePath } from '@/core/paths/canonicalization';
+import { normalizeMsysDrivePath, resolveExistingPath } from '@/core/paths/canonicalization';
 import { RULEBOOK_FILE, RULES_DIR } from './source-syntax';
 
 const RULES_CONFIG_FILE = 'rule.json';
@@ -74,6 +75,17 @@ export function getUserPolicyPath(
   options: UserScopeOptions = {},
 ): string {
   return join(dirname(getUserRulesDir(environment, options)), POLICY_FILE);
+}
+
+export function projectPolicyIsUserPolicy(
+  environment: Environment,
+  options: RulesPolicyOptions,
+): boolean {
+  const budget = createBudget();
+  return (
+    resolveExistingPath(getProjectPolicyPath(options.cwd), environment.paths, budget) ===
+    resolveExistingPath(resolve(getUserPolicyPath(environment, options)), environment.paths, budget)
+  );
 }
 
 export function getPolicyPaths(environment: Environment, options: RulesPolicyOptions): PolicyPaths {

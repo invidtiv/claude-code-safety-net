@@ -1,8 +1,8 @@
 import { afterAll, afterEach, describe, expect, test } from 'bun:test';
-import { lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createTestEnvironment } from '@/core/environment';
+import { createTestEnvironment, type FakeEntry } from '@/core/environment';
 import {
   MAX_AUDIT_RETENTION_DAYS,
   MIN_AUDIT_RETENTION_DAYS,
@@ -440,6 +440,51 @@ describe('properties every project projection must satisfy', () => {
       expect(getUserPolicyDiagnostics(merged.policy, HOME)).toEqual([]);
     }
   }, 30_000);
+});
+
+describe('loading the policy from the directory that holds the user policy', () => {
+  afterEach(removeTempRoots);
+
+  test.each([
+    ['the home directory', (root: string) => createTestEnvironment({ home: root })],
+    [
+      'the parent of a relocated CC_SAFETY_NET_HOME',
+      (root: string) =>
+        createTestEnvironment({
+          home: HOME,
+          env: new Map([['CC_SAFETY_NET_HOME', join(root, '.cc-safety-net')]]),
+        }),
+    ],
+    [
+      'the physical path of a symlinked home',
+      (root: string) => {
+        const link = join(root, 'home-link');
+        symlinkSync(root, link, 'junction');
+        return createTestEnvironment({
+          home: link,
+          entries: new Map<string, FakeEntry>([
+            [link, { symlink: root }],
+            [root, 'directory'],
+          ]),
+        });
+      },
+    ],
+  ] as const)(
+    'from %s the user policy is not read again as a project policy',
+    (_where, environmentAt) => {
+      const root = createTempRoot('policy-user-scope-cwd-');
+      mkdirSync(join(root, '.cc-safety-net'));
+      writeFileSync(
+        join(root, '.cc-safety-net', 'policy.json'),
+        JSON.stringify({ version: 1, safety: { level: 'strict' }, audit: { retention_days: 30 } }),
+      );
+      const config = ported.loadPolicyConfig(environmentAt(root), { cwd: root });
+      expect(config.errors).toEqual([]);
+      expect(config.fallback).toBeUndefined();
+      expect(config.policyScopes).toBeUndefined();
+      expect(config.safety.level).toBe('strict');
+    },
+  );
 });
 
 describe('projecting the safety section onto the runtime shape', () => {

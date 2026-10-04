@@ -25,6 +25,8 @@ const DENY_DOCUMENTS: Record<string, object> = {
   'claude-code': PRE_TOOL_USE_DENIAL,
   codex: PRE_TOOL_USE_DENIAL,
   'kimi-code': PRE_TOOL_USE_DENIAL,
+  droid: PRE_TOOL_USE_DENIAL,
+  devin: { decision: 'block', reason: expect.any(String) },
   'gemini-cli': { decision: 'deny', reason: expect.any(String), systemMessage: expect.any(String) },
   'copilot-cli': { permissionDecision: 'deny', permissionDecisionReason: expect.any(String) },
   cursor: {
@@ -71,6 +73,7 @@ async function runSide(host: HookHost, row: HookRow) {
     row.stdin,
     { ...hostEnv(fixture, auditHome), ...row.env },
     host.ported,
+    row.processCwd,
   );
   const audit = readAuditEntries(auditHome);
   clearAuditLogs(auditHome);

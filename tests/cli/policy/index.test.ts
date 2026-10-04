@@ -11,7 +11,7 @@ import {
 } from '../../helpers/cli-differential';
 import { json, PROJECT_POLICY, USER_POLICY } from '../../helpers/cli-fixtures';
 import { createFakeOutput } from '../../helpers/fake-tty';
-import { snapshotTree, writeTree } from '../../helpers/fixture-tree';
+import { snapshotTree, type TreeSpec, writeTree } from '../../helpers/fixture-tree';
 import {
   createTempRoot,
   environmentFor,
@@ -165,11 +165,13 @@ async function driveApply(
     input: NodeJS.ReadStream;
     output: NodeJS.WriteStream;
   }) => Promise<number>,
+  from = 'project',
+  files: TreeSpec = {},
 ) {
   const root = createTempRoot(`policy-${label}-`);
   const home = join(root, 'home');
   const env = isolationEnv(home);
-  writeTree(root, { [PROPOSAL_FILE]: STRICT_PROPOSAL });
+  writeTree(root, { [PROPOSAL_FILE]: STRICT_PROPOSAL, ...files });
   const input = Object.assign(new PassThrough(), { isTTY: true }) as unknown as NodeJS.ReadStream;
   const output = createFakeOutput({ isTTY: true });
   const written: string[] = [];
@@ -182,7 +184,7 @@ async function driveApply(
     const running = call({
       home,
       env,
-      cwd: join(root, 'project'),
+      cwd: join(root, from),
       args: ['apply', join(root, PROPOSAL_FILE), ...extra],
       input,
       output: output as unknown as NodeJS.WriteStream,
@@ -202,13 +204,24 @@ async function driveApply(
   }
 }
 
-async function applyBothWays(extra: readonly string[], answer: (input: PassThrough) => void) {
-  const ported = await driveApply('ported', extra, answer, (context) =>
-    portedPolicyCommand(environmentFor(context.home, context.env), context.args, {
-      cwd: context.cwd,
-      input: context.input,
-      output: context.output,
-    }),
+async function applyBothWays(
+  extra: readonly string[],
+  answer: (input: PassThrough) => void,
+  from?: string,
+  files?: TreeSpec,
+) {
+  const ported = await driveApply(
+    'ported',
+    extra,
+    answer,
+    (context) =>
+      portedPolicyCommand(environmentFor(context.home, context.env), context.args, {
+        cwd: context.cwd,
+        input: context.input,
+        output: context.output,
+      }),
+    from,
+    files,
   );
   return { ...ported.outcome, home: ported.home };
 }
@@ -253,4 +266,44 @@ describe('policy apply at a terminal', () => {
     expect(outcome.code).toBe(0);
     expect(outcome.written).toContain('Cancelled; nothing was written.');
   }, 30_000);
+});
+
+describe('policy from the directory that holds the user policy', () => {
+  const AUDITED_USER_POLICY = json({
+    version: 1,
+    safety: { level: 'standard', overrides: {} },
+    audit: { retention_days: 30 },
+  });
+  const REFUSAL = `${posix.join('<root>', USER_POLICY)} is the user policy, not a project policy; use --global for the user scope, or run from a project directory`;
+
+  test('apply refuses the project scope before prompting and leaves the user policy as it was', async () => {
+    const outcome = await applyBothWays([], (input) => input.write('y\n'), 'home', {
+      [USER_POLICY]: AUDITED_USER_POLICY,
+    });
+    expect(outcome.written).toEqual([REFUSAL]);
+    expect(outcome.code).toBe(1);
+    expect(outcome.prompt).toBe('');
+    expect(outcome.tree.find((entry) => entry.path === USER_POLICY)?.content).toBe(
+      AUDITED_USER_POLICY,
+    );
+  }, 30_000);
+
+  test('check refuses the project scope before printing a diff', async () => {
+    const outcome = await runCliCommand(
+      {
+        args: ['policy', 'check', 'prop.json'],
+        seed: (side) =>
+          seedFiles(side, {
+            'home/prop.json': STRICT_PROPOSAL,
+            [USER_POLICY]: AUDITED_USER_POLICY,
+          }),
+        cwd: (side) => side.home,
+      },
+      (environment) =>
+        portedPolicyCommand(environment, ['check', 'prop.json'], { cwd: environment.home }),
+    );
+    expect(outcome.stderr).toBe(`${REFUSAL}\n`);
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.stdout).toBe('');
+  }, 60_000);
 });
