@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { posix } from 'node:path';
+import { symlinkSync } from 'node:fs';
+import { join, posix } from 'node:path';
 import { RULE_DOC } from '@/cli/rule/doc';
 import { runRuleCommand } from '@/cli/rule/index';
 import {
@@ -980,6 +981,25 @@ describe('project-scope writes from home', () => {
 
   test('init from a home with no rule config yet creates none', async () => {
     const outcome = await rule(['init'], {}, fromHome);
+    expect(outcome.exitCode).toBe(1);
+    expect(outcome.stderr).toBe(REFUSAL);
+    expect(holds(outcome, 'rule.json')).toBeFalse();
+  }, 60_000);
+
+  test('init through a symlinked home with no rule config yet creates none', async () => {
+    const outcome = await runCliCommand(
+      {
+        args: ['rule', 'init'],
+        seed: (side) => {
+          const link = join(side.root, 'home-link');
+          symlinkSync(side.home, link, 'junction');
+          side.env.CC_SAFETY_NET_HOME = join(link, '.cc-safety-net');
+        },
+        cwd: fromHome,
+        env: { CC_SAFETY_NET_NO_UPDATE_CHECK: '1' },
+      },
+      (environment) => runRuleCommand(environment, ['init']),
+    );
     expect(outcome.exitCode).toBe(1);
     expect(outcome.stderr).toBe(REFUSAL);
     expect(holds(outcome, 'rule.json')).toBeFalse();
