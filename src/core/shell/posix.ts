@@ -677,6 +677,9 @@ function readDoubleQuoted(
       if (
         Array.from({ length: next - i }, (_, k) => i + k).some((k) =>
           opensFunctionSubstitution(source, k),
+        ) &&
+        readSubstitution(source, i, end, limits, wordBudget, depth)?.program.issues.some(
+          (issue) => issue.code === FUNCTION_SUBSTITUTION_ISSUE.code,
         )
       ) {
         issues.push(FUNCTION_SUBSTITUTION_ISSUE);
@@ -1039,8 +1042,19 @@ const FUNCTION_SUBSTITUTION_ISSUE: CommandIssue = Object.freeze({
 });
 
 function opensFunctionSubstitution(source: string, start: number): boolean {
-  const next = source[start + 2] ?? '';
-  return source.startsWith('${', start) && (next === '|' || isShellWhitespace(next));
+  if (source[start] !== '$') return false;
+  const brace = skipLineContinuations(source, start + 1);
+  if (source[brace] !== '{') return false;
+  const next = source[skipLineContinuations(source, brace + 1)] ?? '';
+  return next === '|' || isShellWhitespace(next);
+}
+
+function skipLineContinuations(source: string, start: number): number {
+  let index = start;
+  while (source.startsWith('\\\n', index) || source.startsWith('\\\r\n', index)) {
+    index += source[index + 1] === '\r' ? 3 : 2;
+  }
+  return index;
 }
 
 function readVariableEnd(source: string, start: number, end: number): number {

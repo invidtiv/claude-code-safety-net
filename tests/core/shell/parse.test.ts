@@ -126,6 +126,8 @@ describe('core/shell/parse', () => {
     ': <<EOF\n# ${ rm -rf x; }\nEOF',
     ': <<EOF\n# $(( ${ rm -rf x; echo 0; } ))\nEOF',
     ': <<EOF\n$(echo ${ rm -rf x; })\nEOF',
+    'echo ${\\\n rm -rf x; }',
+    'echo $\\\n{ rm -rf x; }',
   ])('rejects a function substitution where the shell expands it: %s', (source) => {
     const program = parseCommand(source, 'posix');
     expect(program.status).toBe('invalid');
@@ -140,6 +142,7 @@ describe('core/shell/parse', () => {
     'echo \\${ rm -rf x; }',
     "cat <<'EOF'\n${ rm -rf x; }\nEOF",
     'cat <<EOF\n\\${ rm -rf x; }\nEOF',
+    `echo "$(( $(grep -Fc '\${ ' template.txt) + 1 ))"`,
   ])('leaves text the shell does not expand as a function substitution alone: %s', (source) => {
     expect(parseCommand(source, 'posix').status).toBe('complete');
   });
