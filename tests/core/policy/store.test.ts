@@ -1,8 +1,8 @@
 import { afterAll, afterEach, describe, expect, test } from 'bun:test';
-import { lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createTestEnvironment } from '@/core/environment';
+import { createTestEnvironment, type FakeEntry } from '@/core/environment';
 import {
   MAX_AUDIT_RETENTION_DAYS,
   MIN_AUDIT_RETENTION_DAYS,
@@ -454,6 +454,20 @@ describe('loading the policy from the directory that holds the user policy', () 
           home: HOME,
           env: new Map([['CC_SAFETY_NET_HOME', join(root, '.cc-safety-net')]]),
         }),
+    ],
+    [
+      'the physical path of a symlinked home',
+      (root: string) => {
+        const link = join(root, 'home-link');
+        symlinkSync(root, link, 'junction');
+        return createTestEnvironment({
+          home: link,
+          entries: new Map<string, FakeEntry>([
+            [link, { symlink: root }],
+            [root, 'directory'],
+          ]),
+        });
+      },
     ],
   ] as const)(
     'from %s the user policy is not read again as a project policy',
