@@ -63,9 +63,9 @@ const PROJECT_MIGRATED = (name: string) =>
     fixtures: [PUSH_FIXTURE],
   });
 
-async function runMigrate(spec: TreeSpec, cleanup = false) {
+async function runMigrate(spec: TreeSpec, cleanup = false, from: 'project' | 'home' = 'project') {
   return runManagerDifferential(spec, (side, environment) =>
-    captureConsole(() => portedRulesMigrate(environment, { cleanup, cwd: side.project })),
+    captureConsole(() => portedRulesMigrate(environment, { cleanup, cwd: side[from] })),
   );
 }
 
@@ -122,6 +122,25 @@ describe('rule migrate over both scopes', () => {
     expect(agreed.results.returned).toBe(0);
     expect(content(agreed.tree, PROJECT_CONFIG)).toBe(rulesConfig(['project-rules']));
     expect(content(agreed.tree, USER_CONFIG)).toBe(rulesConfig(['user-rules']));
+  });
+
+  test('from home, the project half is skipped and the user half still migrates', async () => {
+    const agreed = await runMigrate(
+      {
+        'home/.safety-net.json': legacyConfig([NO_FORCE_PUSH]),
+        [USER_LEGACY]: legacyConfig([NO_CURL_PIPE]),
+      },
+      false,
+      'home',
+    );
+    expect(agreed.results.returned).toBe(0);
+    expect(agreed.results.log).toEqual([
+      `Skipped the project scope: ${posix.join('<root>', USER_CONFIG)} is the user rule config, not a project rule config`,
+      `Migrated legacy config at ${posix.join('<root>', USER_LEGACY)}. Legacy file is no longer used.`,
+    ]);
+    expect(content(agreed.tree, USER_CONFIG)).toBe(rulesConfig(['user-rules']));
+    expect(content(agreed.tree, 'home/.safety-net.json')).toBe(legacyConfig([NO_FORCE_PUSH]));
+    expect(agreed.tree.some((entry) => entry.path.includes('project-rules'))).toBeFalse();
   });
 
   test('a legacy file the schema rejects fails its scope and leaves the other one reported', async () => {

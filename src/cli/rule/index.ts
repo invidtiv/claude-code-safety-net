@@ -16,6 +16,7 @@ import {
   readPolicyFile,
 } from '@/core/io/safe-read';
 import { writeJsonAtomic } from '@/core/policy/config-file';
+import { getProjectRulesConfigPath, projectPolicyIsUserPolicy } from '@/core/policy/paths';
 import { readRulesConfig } from '@/core/policy/rules-config';
 import { getRulesConfigRuntimeErrorsForConfig, loadRulesPolicy } from '@/core/policy/scope-policy';
 import { isGitHubRef, isGitHubRepositorySource, NAME_PATTERN } from '@/core/policy/source-syntax';
@@ -49,6 +50,7 @@ const RULE_SUBCOMMANDS = new Set([
   'doc',
   'verify',
 ]);
+const RULE_WRITE_SUBCOMMANDS = new Set(['init', 'add', 'remove', 'update', 'sync', 'wrapper']);
 const RULE_WRAPPER_ACTIONS = new Set(['add', 'remove', 'list']);
 const OFFICIAL_RULEBOOKS_SOURCE = 'cc-safety-net/rulebooks';
 
@@ -90,6 +92,17 @@ async function runRuleCommandInternal(
   }
   const value = flags.positionals[1];
   const options = { global: flags.global };
+  const cwd = process.cwd();
+  const writesProjectRules =
+    !flags.global &&
+    RULE_WRITE_SUBCOMMANDS.has(subcommand) &&
+    !(subcommand === 'wrapper' && value === 'list');
+  if (writesProjectRules && projectPolicyIsUserPolicy(environment, { cwd })) {
+    console.error(
+      `${getProjectRulesConfigPath(cwd)} is the user rule config, not a project rule config; use --global for the user scope, or run from a project directory`,
+    );
+    return 1;
+  }
 
   if (subcommand === 'init') {
     const scope = getScopePaths(environment, options);
@@ -152,7 +165,7 @@ async function runRuleCommandInternal(
   }
 
   if (subcommand === 'list') {
-    const policy = loadRulesPolicy(environment, { cwd: process.cwd() });
+    const policy = loadRulesPolicy(environment, { cwd });
     printRulesListReport(policy);
     return policy.errors.length > 0 ? 1 : 0;
   }
@@ -162,7 +175,7 @@ async function runRuleCommandInternal(
   }
 
   if (subcommand === 'migrate') {
-    return runRulesMigrate(environment, { cleanup: flags.cleanup, cwd: process.cwd() });
+    return runRulesMigrate(environment, { cleanup: flags.cleanup, cwd });
   }
 
   if (subcommand === 'doc') {
