@@ -76,6 +76,13 @@ export function getUserPolicyPath(
   return join(dirname(getUserRulesDir(environment, options)), POLICY_FILE);
 }
 
+export function projectPolicyIsUserPolicy(
+  environment: Environment,
+  options: RulesPolicyOptions,
+): boolean {
+  return getProjectPolicyPath(options.cwd) === resolve(getUserPolicyPath(environment, options));
+}
+
 export function getPolicyPaths(environment: Environment, options: RulesPolicyOptions): PolicyPaths {
   const userConfigPath = options.userConfigPath ?? getUserRulesConfigPath(environment, options);
   const projectConfigPath = options.projectConfigPath ?? getProjectRulesConfigPath(options.cwd);

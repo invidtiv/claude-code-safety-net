@@ -16,7 +16,12 @@ import {
 import { resolveEffectiveDestructiveCommandRules } from './effective-rules';
 import { ENV_FLAGS, envTruthy, getCCSafetyNetEnvModes, sessionSafetyLevel } from './env';
 import { mergeProjectPolicy, type ProjectPolicyProjection } from './merge';
-import { getProjectPolicyPath, getUserPolicyPath, type RulesPolicyOptions } from './paths';
+import {
+  getProjectPolicyPath,
+  getUserPolicyPath,
+  projectPolicyIsUserPolicy,
+  type RulesPolicyOptions,
+} from './paths';
 import { custom, type Issue, renderIssuePath, typed } from './rules-config';
 import { SAFETY_OVERRIDE_KEYS } from './safety-level';
 import type {
@@ -79,7 +84,12 @@ export function loadPolicyConfig(
   options: RulesPolicyOptions,
 ): PolicyConfig {
   const user = readPolicyConfig(getUserPolicyPath(environment, options), environment.home);
-  const projectFile = readPolicyFile(getProjectPolicyPath(options.cwd), environment.home);
+  const projectFile: ReturnType<typeof readPolicyFile> = projectPolicyIsUserPolicy(
+    environment,
+    options,
+  )
+    ? { exists: false, policy: createDefaultGuiPolicy(), errors: [] }
+    : readPolicyFile(getProjectPolicyPath(options.cwd), environment.home);
   const project = projectPolicyProjection(projectFile.parsed, environment.home);
   const weakeningsIgnored = envTruthy(ENV_FLAGS.projectTightenOnly, environment.env);
   const userPolicy = user.gui ?? DEFAULT_GUI_POLICY;
