@@ -165,7 +165,7 @@ test('PowerShell relative Git metadata moves are blocked without auto-detection'
   expect(result.returned instanceof Tool.Error ? result.returned.message : '').toContain('BLOCKED');
 });
 
-function createShell(shell: string, env: Record<string, string> = {}) {
+function createShell(shell: string, env: Record<string, string | undefined> = {}) {
   const runtime = host({ shell: 'posix' });
   return Effect.runPromise(
     Effect.scoped(
@@ -187,6 +187,14 @@ test.each(['/bin/fish', '/bin/pwsh', 'cmd.exe'])(
     await expect(createShell(shell)).rejects.toThrow('shell');
   },
 );
+
+test('a POSIX adapter checks and creates a real bash, Git Bash on Windows', async () => {
+  const bash =
+    process.platform === 'win32'
+      ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
+      : '/bin/bash';
+  expect(await createShell(bash, process.env)).toBe('created');
+});
 
 function writeShellStub() {
   const shell = join(fixture.root, 'ash');
