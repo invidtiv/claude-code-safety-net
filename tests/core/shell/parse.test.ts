@@ -128,6 +128,8 @@ describe('core/shell/parse', () => {
     ': <<EOF\n$(echo ${ rm -rf x; })\nEOF',
     'echo ${\\\n rm -rf x; }',
     'echo $\\\n{ rm -rf x; }',
+    `echo "${'$(( '.repeat(65)}\${ rm -rf x; echo 0; }${' ))'.repeat(65)}"`,
+    `: <<EOF\n${'$(( '.repeat(64)}\${ rm -rf x; echo 0; }${' ))'.repeat(64)}\nEOF`,
   ])('rejects a function substitution where the shell expands it: %s', (source) => {
     const program = parseCommand(source, 'posix');
     expect(program.status).toBe('invalid');

@@ -675,11 +675,9 @@ function readDoubleQuoted(
       const next = close === -1 ? end : close + 2;
       text += source.slice(i, next);
       if (
-        Array.from({ length: next - i }, (_, k) => i + k).some((k) =>
-          opensFunctionSubstitution(source, k),
-        ) &&
-        readSubstitution(source, i, end, limits, wordBudget, depth)?.program.issues.some(
-          (issue) => issue.code === FUNCTION_SUBSTITUTION_ISSUE.code,
+        containsFunctionSubstitutionOpener(source, i, next) &&
+        mayRunFunctionSubstitution(
+          readSubstitution(source, i, end, limits, wordBudget, depth)?.program,
         )
       ) {
         issues.push(FUNCTION_SUBSTITUTION_ISSUE);
@@ -856,11 +854,12 @@ function readHeredocBodySubstitutions(
       continue;
     }
     programs.push(substitution.program);
-    issues.push(
-      ...substitution.program.issues.filter(
-        (issue) => issue.code === FUNCTION_SUBSTITUTION_ISSUE.code,
-      ),
-    );
+    if (
+      containsFunctionSubstitutionOpener(source, i, substitution.next) &&
+      mayRunFunctionSubstitution(substitution.program)
+    ) {
+      issues.push(FUNCTION_SUBSTITUTION_ISSUE);
+    }
     i = substitution.next;
     if (substitution.program.status === 'limited') break;
   }
@@ -1047,6 +1046,19 @@ function opensFunctionSubstitution(source: string, start: number): boolean {
   if (source[brace] !== '{') return false;
   const next = source[skipLineContinuations(source, brace + 1)] ?? '';
   return next === '|' || isShellWhitespace(next);
+}
+
+function containsFunctionSubstitutionOpener(source: string, start: number, end: number): boolean {
+  return Array.from({ length: end - start }, (_, k) => start + k).some((k) =>
+    opensFunctionSubstitution(source, k),
+  );
+}
+
+function mayRunFunctionSubstitution(program: CommandProgram | undefined): boolean {
+  return (
+    program?.status === 'limited' ||
+    (program?.issues ?? []).some((issue) => issue.code === FUNCTION_SUBSTITUTION_ISSUE.code)
+  );
 }
 
 function skipLineContinuations(source: string, start: number): number {
