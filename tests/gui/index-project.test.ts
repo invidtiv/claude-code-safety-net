@@ -159,6 +159,40 @@ describe('the GUI project draft', () => {
     }
   });
 
+  test('refuses to draft the user policy as the project policy from home until a project is picked', async () => {
+    const userPolicyAsProject = posix.join('<root>', USER_POLICY_FILE);
+    const refusal = `${userPolicyAsProject} is the user policy, not a project policy; choose a project directory, or run the GUI from one`;
+    const row = await runGuiRow({
+      seed: S1,
+      options: (side) => ({ ...picksPicked(side), cwd: side.home }),
+      requests: [
+        READ_DRAFT,
+        draftWrite('/api/policy/project/apply', { revision: 0, proposal: PARANOID }),
+        PICK,
+        READ_DRAFT,
+      ],
+    });
+
+    expect(row.responses[0]).toMatchObject({
+      status: 200,
+      body: {
+        path: userPolicyAsProject,
+        baseline: { safety: { level: 'strict' } },
+        projectionDiagnostics: [refusal],
+      },
+    });
+    expect((row.responses[0]?.body as ProjectBody | undefined)?.projection).toStrictEqual({});
+    expect(row.responses[1]).toMatchObject({ status: 400, body: { errors: [refusal] } });
+    expect(row.tree.find((entry) => entry.path === USER_POLICY_FILE)?.content).toBe(strictUser);
+    expect(row.responses[3]).toMatchObject({
+      status: 200,
+      body: {
+        path: posix.join('<root>', 'picked/.cc-safety-net/policy.json'),
+        projectionDiagnostics: [],
+      },
+    });
+  });
+
   test('refuses a body with no revision, an audit section or a level the schema rejects', async () => {
     const row = await runGuiRow({
       seed: S1,

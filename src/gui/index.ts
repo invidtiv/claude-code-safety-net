@@ -20,7 +20,11 @@ import {
   readRuntimeUserBaseline,
 } from '@/core/policy/diff';
 import { mergeProjectPolicy } from '@/core/policy/merge';
-import { getProjectPolicyPath, type RulesPolicyOptions } from '@/core/policy/paths';
+import {
+  getProjectPolicyPath,
+  projectPolicyIsUserPolicy,
+  type RulesPolicyOptions,
+} from '@/core/policy/paths';
 import { readRetentionDays } from '@/core/policy/retention';
 import { loadRulesPolicy } from '@/core/policy/scope-policy';
 import {
@@ -315,7 +319,10 @@ async function handleRequest(
 
   if (request.method === 'GET' && url.pathname === '/api/policy/project') {
     const dir = resolveDraftProjectDir(session, options);
-    const current = readProjectPolicyFile(dir, environment.home);
+    const refusal = userPolicyDraftRefusal(environment, dir, options);
+    const current = refusal
+      ? { projection: {}, diagnostics: [refusal] }
+      : readProjectPolicyFile(dir, environment.home);
 
     const user = readRuntimeUserBaseline(environment, options);
     sendJson(response, 200, {
@@ -479,6 +486,15 @@ function resolveDraftProjectDir(
   return session.dir ?? options.cwd ?? process.cwd();
 }
 
+function userPolicyDraftRefusal(
+  environment: Environment,
+  dir: string,
+  options: PolicyGuiServerOptions,
+): string | null {
+  if (!projectPolicyIsUserPolicy(environment, { ...options, cwd: dir })) return null;
+  return `${getProjectPolicyPath(dir)} is the user policy, not a project policy; choose a project directory, or run the GUI from one`;
+}
+
 function readProjectPolicyFile(dir: string, home: string) {
   const path = getProjectPolicyPath(dir);
   const file = existsSync(path) ? readPolicyJson(path) : { value: undefined, errors: [] };
@@ -511,6 +527,11 @@ async function readProjectDraft(
   }
   if (payload.revision !== revision) {
     sendJson(response, 409, { errors: [STALE_DRAFT_REVISION] });
+    return null;
+  }
+  const refusal = userPolicyDraftRefusal(environment, dir, options);
+  if (refusal) {
+    sendJson(response, 400, { errors: [refusal] });
     return null;
   }
   const errors = getProjectProposalErrors(payload.proposal, environment.home);
