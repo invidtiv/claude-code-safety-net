@@ -171,7 +171,8 @@ const SHELL_ROUTES = [
   [undefined, 'win32', undefined, 'powershell'],
   ['/bin/zsh', 'linux', undefined, 'posix'],
   ['C:\\x\\pwsh.exe', 'win32', undefined, 'powershell'],
-  ['fish', 'linux', undefined, 'auto'],
+  ['C:\\x\\cmd.exe', 'win32', undefined, 'auto'],
+  ['fish', 'linux', undefined, 'posix'],
   ['', 'linux', '/bin/bash', 'auto'],
 ] as const;
 

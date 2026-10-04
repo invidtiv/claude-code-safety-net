@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdirSync } from 'node:fs';
+import { afterEach, beforeEach, expect, jest, test } from 'bun:test';
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CommandDefinition } from '@opencode/plugin/effect/command';
 import type { Context } from '@opencode/plugin/effect/plugin';
@@ -165,36 +165,84 @@ test('PowerShell relative Git metadata moves are blocked without auto-detection'
   expect(result.returned instanceof Tool.Error ? result.returned.message : '').toContain('BLOCKED');
 });
 
+function createShell(shell: string, env: Record<string, string | undefined> = {}) {
+  const runtime = host({ shell: 'posix' });
+  return Effect.runPromise(
+    Effect.scoped(
+      runtime.register.pipe(
+        Effect.andThen(() =>
+          Effect.forEach(runtime.shells, (hook) =>
+            hook({ shell, command: 'echo safe', cwd: fixture.project, timeout: 1000, env }),
+          ),
+        ),
+        Effect.as('created'),
+      ),
+    ),
+  );
+}
+
 test.each(['/bin/fish', '/bin/pwsh', 'cmd.exe'])(
   'a POSIX adapter rejects actual shell %s before spawn',
   async (shell) => {
-    const runtime = host({ shell: 'posix' });
-    let spawned = false;
-    await expect(
-      Effect.runPromise(
-        Effect.scoped(
-          runtime.register.pipe(
-            Effect.andThen(() =>
-              Effect.forEach(runtime.shells, (hook) =>
-                hook({
-                  shell,
-                  command: 'echo safe',
-                  cwd: fixture.project,
-                  timeout: 1000,
-                  env: {},
-                }),
-              ),
-            ),
-            Effect.andThen(
-              Effect.sync(() => {
-                spawned = true;
-              }),
-            ),
-          ),
-        ),
-      ),
-    ).rejects.toThrow('shell');
-    expect(spawned).toBe(false);
+    await expect(createShell(shell)).rejects.toThrow('shell');
+  },
+);
+
+test('a POSIX adapter checks and creates a real bash, Git Bash on Windows', async () => {
+  const bash =
+    process.platform === 'win32'
+      ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
+      : '/bin/bash';
+  expect(await createShell(bash, process.env)).toBe('created');
+});
+
+function writeShellStub() {
+  const shell = join(fixture.root, 'ash');
+  writeFileSync(
+    shell,
+    `#!/bin/sh\ntrap '' TERM\nprintf . >> "$SHELL_CHECK_LOG"\n[ -z "$SHELL_CHECK_HANG" ] || exec sleep 30\nexec /bin/sh "$@"\n`,
+    { mode: 0o755 },
+  );
+  return shell;
+}
+
+test.skipIf(process.platform === 'win32')(
+  'a POSIX adapter checks an unfamiliar POSIX shell once, then creates it',
+  async () => {
+    const shell = writeShellStub();
+    const checks = join(fixture.root, 'shell-checks.log');
+    const env = { SHELL_CHECK_LOG: checks };
+    expect(await Promise.all([createShell(shell, env), createShell(shell, env)])).toEqual([
+      'created',
+      'created',
+    ]);
+    expect(await createShell(shell, env)).toBe('created');
+    expect(readFileSync(checks, 'utf8')).toBe('.');
+  },
+);
+
+test.skipIf(process.platform === 'win32')(
+  'a POSIX adapter stops a shell check at its deadline and checks again next time',
+  async () => {
+    const shell = writeShellStub();
+    const checks = join(fixture.root, 'shell-checks.log');
+    jest.useFakeTimers();
+    const stalled = createShell(shell, { SHELL_CHECK_LOG: checks, SHELL_CHECK_HANG: '1' });
+    Array.from({ length: 500 }).some(() => existsSync(checks) || Bun.sleepSync(10));
+    jest.advanceTimersByTime(10_000);
+    jest.useRealTimers();
+    await expect(stalled).rejects.toThrow('shell');
+    expect(await createShell(shell, { SHELL_CHECK_LOG: checks })).toBe('created');
+    expect(readFileSync(checks, 'utf8')).toBe('..');
+  },
+);
+
+test.skipIf(process.platform === 'win32')(
+  'a POSIX adapter rejects a shell named bash that does not run POSIX syntax',
+  async () => {
+    const shell = join(fixture.root, 'bash');
+    symlinkSync('/usr/bin/false', shell);
+    await expect(createShell(shell)).rejects.toThrow('shell');
   },
 );
 

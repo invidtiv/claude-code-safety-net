@@ -36,7 +36,6 @@ type CCSafetyNetPluginInput = PluginInput & {
 };
 
 const POWERSHELL_EXECUTABLES = new Set(['powershell', 'pwsh']);
-const POSIX_EXECUTABLES = new Set(['bash', 'dash', 'ksh', 'sh', 'zsh']);
 
 export function createCCSafetyNetPlugin(guardDependencies: Partial<GuardDependencies> = {}) {
   return (async ({ directory, homeDir }: CCSafetyNetPluginInput) => {
@@ -187,8 +186,7 @@ export function resolveOpenCodeShellRoute(
     .replace(/\.exe$/, '');
   if (!executable) return 'auto';
   if (POWERSHELL_EXECUTABLES.has(executable)) return 'powershell';
-  if (POSIX_EXECUTABLES.has(executable)) return 'posix';
-  return 'auto';
+  return executable === 'cmd' ? 'auto' : 'posix';
 }
 
 function getOpenCodeToolRoute(toolName: string, shell: CommandToolKind): ToolRoute {

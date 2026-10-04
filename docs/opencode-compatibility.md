@@ -54,9 +54,12 @@ If you use PowerShell on Unix, or Git Bash on Windows, set the plugin's expected
 }
 ```
 
-Use `"posix"` for bash, dash, ksh, sh, or zsh; use `"powershell"` for powershell or pwsh.
+Use `"posix"` for any shell that runs POSIX sh syntax, such as ash, bash, dash, ksh, mksh, sh,
+or zsh; use `"powershell"` for powershell or pwsh.
 This option does not select OpenCode's executable. It must match the executable OpenCode uses.
-Unsupported shells, including cmd.exe, fish, and nushell, are rejected.
+With `"posix"`, the plugin runs a short POSIX snippet through `<shell> -c` the first time
+OpenCode starts each executable, and remembers an executable that runs it. Unsupported shells,
+including cmd.exe, fish, nushell, and tcsh, are rejected.
 
 OpenCode's shell hook has no typed denial channel or session ID. A dialect mismatch stops
 before spawn but may fail the current operation rather than return an ordinary tool denial.
