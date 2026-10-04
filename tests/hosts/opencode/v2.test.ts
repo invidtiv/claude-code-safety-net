@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { afterEach, beforeEach, expect, jest, test } from 'bun:test';
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CommandDefinition } from '@opencode/plugin/effect/command';
 import type { Context } from '@opencode/plugin/effect/plugin';
@@ -188,14 +188,21 @@ test.each(['/bin/fish', '/bin/pwsh', 'cmd.exe'])(
   },
 );
 
+function writeShellStub() {
+  const shell = join(fixture.root, 'ash');
+  writeFileSync(
+    shell,
+    `#!/bin/sh\ntrap '' TERM\nprintf . >> "$SHELL_CHECK_LOG"\n[ -z "$SHELL_CHECK_HANG" ] || exec sleep 30\nexec /bin/sh "$@"\n`,
+    { mode: 0o755 },
+  );
+  return shell;
+}
+
 test.skipIf(process.platform === 'win32')(
   'a POSIX adapter checks an unfamiliar POSIX shell once, then creates it',
   async () => {
-    const shell = join(fixture.root, 'ash');
+    const shell = writeShellStub();
     const checks = join(fixture.root, 'shell-checks.log');
-    writeFileSync(shell, '#!/bin/sh\nprintf . >> "$SHELL_CHECK_LOG"\nexec /bin/sh "$@"\n', {
-      mode: 0o755,
-    });
     const env = { SHELL_CHECK_LOG: checks };
     expect(await Promise.all([createShell(shell, env), createShell(shell, env)])).toEqual([
       'created',
@@ -203,6 +210,22 @@ test.skipIf(process.platform === 'win32')(
     ]);
     expect(await createShell(shell, env)).toBe('created');
     expect(readFileSync(checks, 'utf8')).toBe('.');
+  },
+);
+
+test.skipIf(process.platform === 'win32')(
+  'a POSIX adapter stops a shell check at its deadline and checks again next time',
+  async () => {
+    const shell = writeShellStub();
+    const checks = join(fixture.root, 'shell-checks.log');
+    jest.useFakeTimers();
+    const stalled = createShell(shell, { SHELL_CHECK_LOG: checks, SHELL_CHECK_HANG: '1' });
+    Array.from({ length: 500 }).some(() => existsSync(checks) || Bun.sleepSync(10));
+    jest.advanceTimersByTime(10_000);
+    jest.useRealTimers();
+    await expect(stalled).rejects.toThrow('shell');
+    expect(await createShell(shell, { SHELL_CHECK_LOG: checks })).toBe('created');
+    expect(readFileSync(checks, 'utf8')).toBe('..');
   },
 );
 

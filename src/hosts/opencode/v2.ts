@@ -99,16 +99,23 @@ function runsPosixShellSyntax(shell: string, env: NodeJS.ProcessEnv, cwd: string
   const pending = posixShellChecks.get(shell);
   if (pending) return pending;
   const check = new Promise<boolean>((resolve) => {
+    const abort = new AbortController();
+    const deadline = setTimeout(() => {
+      abort.abort();
+      resolve(false);
+    }, POSIX_SHELL_PROBE_TIMEOUT_MS);
     execFile(
       shell,
       ['-c', POSIX_SHELL_PROBE],
-      { cwd, env, timeout: POSIX_SHELL_PROBE_TIMEOUT_MS },
+      { cwd, env, signal: abort.signal, killSignal: 'SIGKILL' },
       (error, stdout) => {
-        const passed = error === null && stdout.includes('ccsn-posix');
-        if (!passed) posixShellChecks.delete(shell);
-        resolve(passed);
+        clearTimeout(deadline);
+        resolve(error === null && stdout.includes('ccsn-posix'));
       },
     );
+  }).then((passed) => {
+    if (!passed) posixShellChecks.delete(shell);
+    return passed;
   });
   posixShellChecks.set(shell, check);
   return check;
