@@ -853,6 +853,11 @@ function readHeredocBodySubstitutions(
       continue;
     }
     programs.push(substitution.program);
+    issues.push(
+      ...substitution.program.issues.filter(
+        (issue) => issue.code === FUNCTION_SUBSTITUTION_ISSUE.code,
+      ),
+    );
     i = substitution.next;
     if (substitution.program.status === 'limited') break;
   }
