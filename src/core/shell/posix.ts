@@ -399,16 +399,16 @@ function scanSequence(
           attach: (heredoc) => {
             redirection.heredoc = heredoc;
             if (heredoc.quotedDelimiter) return;
-            nested.push(
-              ...readHeredocBodySubstitutions(
-                source,
-                heredoc.bodySpan.start,
-                heredoc.bodySpan.end,
-                limits,
-                wordBudget,
-                depth + 1,
-              ),
+            const body = readHeredocBodySubstitutions(
+              source,
+              heredoc.bodySpan.start,
+              heredoc.bodySpan.end,
+              limits,
+              wordBudget,
+              depth + 1,
             );
+            nested.push(...body.programs);
+            issues.push(...body.issues);
           },
         });
       }
@@ -591,6 +591,7 @@ function readWord(
       continue;
     }
 
+    if (opensFunctionSubstitution(source, i)) issues.push(FUNCTION_SUBSTITUTION_ISSUE);
     const substitution =
       char === '$' || char === '<' || char === '>' || char === '`'
         ? readSubstitution(source, i, end, limits, wordBudget, depth)
@@ -673,6 +674,13 @@ function readDoubleQuoted(
       const close = findSubstitutionEnd(source, i + 3, end, '))');
       const next = close === -1 ? end : close + 2;
       text += source.slice(i, next);
+      if (
+        Array.from({ length: next - i }, (_, k) => i + k).some((k) =>
+          opensFunctionSubstitution(source, k),
+        )
+      ) {
+        issues.push(FUNCTION_SUBSTITUTION_ISSUE);
+      }
       if (close === -1) {
         issues.push({
           code: 'unclosed-arithmetic',
@@ -682,6 +690,7 @@ function readDoubleQuoted(
       i = next;
       continue;
     }
+    if (opensFunctionSubstitution(source, i)) issues.push(FUNCTION_SUBSTITUTION_ISSUE);
     const substitution = readSubstitution(source, i, end, limits, wordBudget, depth);
     if (substitution) {
       const collected = collectSubstitution(substitution, nested, issues);
@@ -749,6 +758,8 @@ function readSubstitution(
         depth + 1,
       );
       if (!nestedSubstitution) {
+        if (opensFunctionSubstitution(source, cursor))
+          arithmeticIssues.push(FUNCTION_SUBSTITUTION_ISSUE);
         cursor++;
         continue;
       }
@@ -822,8 +833,9 @@ function readHeredocBodySubstitutions(
   limits: CommandParserLimits,
   wordBudget: WordBudget,
   depth: number,
-): CommandProgram[] {
+) {
   const programs: CommandProgram[] = [];
+  const issues: CommandIssue[] = [];
   let i = start;
   while (i < end) {
     const char = source[i];
@@ -836,6 +848,7 @@ function readHeredocBodySubstitutions(
         ? readSubstitution(source, i, end, limits, wordBudget, depth)
         : null;
     if (!substitution) {
+      if (opensFunctionSubstitution(source, i)) issues.push(FUNCTION_SUBSTITUTION_ISSUE);
       i++;
       continue;
     }
@@ -843,7 +856,7 @@ function readHeredocBodySubstitutions(
     i = substitution.next;
     if (substitution.program.status === 'limited') break;
   }
-  return programs;
+  return { programs, issues };
 }
 
 function collectSubstitution(
@@ -1015,6 +1028,16 @@ function isShellWhitespace(char: string): boolean {
   return /\s/u.test(char);
 }
 
+const FUNCTION_SUBSTITUTION_ISSUE: CommandIssue = Object.freeze({
+  code: 'unsupported-function-substitution',
+  message: '${ list; } function substitutions run in the current shell and cannot be analyzed',
+});
+
+function opensFunctionSubstitution(source: string, start: number): boolean {
+  const next = source[start + 2] ?? '';
+  return source.startsWith('${', start) && (next === '|' || isShellWhitespace(next));
+}
+
 function readVariableEnd(source: string, start: number, end: number): number {
   if (source[start + 1] === '{') {
     const close = source.indexOf('}', start + 2);
@@ -1106,7 +1129,8 @@ function getParseStatus(issues: readonly CommandIssue[], limited = false): Comma
         issue.code === 'missing-heredoc-delimiter' ||
         issue.code === 'ambiguous-heredoc-delimiter' ||
         issue.code === 'unterminated-heredoc' ||
-        issue.code === 'unsupported-heredoc-context',
+        issue.code === 'unsupported-heredoc-context' ||
+        issue.code === 'unsupported-function-substitution',
     )
   ) {
     return 'invalid';

@@ -115,6 +115,33 @@ describe('core/shell/parse', () => {
     ]);
   });
 
+  test.each([
+    'echo ${ rm -rf x; }',
+    'echo ${|REPLY=x; }',
+    'echo "${ rm -rf x; }"',
+    'echo $(echo ${ rm -rf x; })',
+    'echo $(( ${ rm -rf x; echo 0; } ))',
+    'echo "$(( ${ rm -rf x; echo 0; } ))"',
+    '(( ${ rm -rf x; echo 0; } ))',
+    ': <<EOF\n# ${ rm -rf x; }\nEOF',
+  ])('rejects a function substitution where the shell expands it: %s', (source) => {
+    const program = parseCommand(source, 'posix');
+    expect(program.status).toBe('invalid');
+    expect(program.issues.map((issue) => issue.code)).toContain(
+      'unsupported-function-substitution',
+    );
+  });
+
+  test.each([
+    'echo ${HOME} ${x:-a b} ${#x}',
+    "echo '${ rm -rf x; }'",
+    'echo \\${ rm -rf x; }',
+    "cat <<'EOF'\n${ rm -rf x; }\nEOF",
+    'cat <<EOF\n\\${ rm -rf x; }\nEOF',
+  ])('leaves text the shell does not expand as a function substitution alone: %s', (source) => {
+    expect(parseCommand(source, 'posix').status).toBe('complete');
+  });
+
   test('reads a group, a redirection into a substitution and a function definition as their nodes', () => {
     const program = parseCommand('echo x >$(git reset --hard); (rm -rf /tmp/x)', 'posix');
     expect(program.nodes.map((node) => node.kind)).toContain('connector');

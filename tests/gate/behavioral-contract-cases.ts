@@ -73,6 +73,12 @@ export function behavioralContractCases(paths: {
   const invalidConfig = {
     configFallbackReason: 'invalid policy config: fix the file named in the diagnostic.',
   };
+  const functionSubstitutionBlock: BehavioralContractCase['expected'] = {
+    kind: 'block',
+    ruleId: 'analysis.strict-unparseable',
+    intent: 'stop_and_explain',
+    reasonIncludes: 'could not be safely analyzed',
+  };
   const everydayCommands = [
     'git status',
     'git add -A',
@@ -235,6 +241,24 @@ export function behavioralContractCases(paths: {
         intent: 'manual_only',
         reasonIncludes: 'dynamic command name',
       },
+    },
+    {
+      name: 'fails closed on a function substitution, which runs its commands in the current shell',
+      command: 'echo ${ rm -rf ~/; }',
+      options: options({ cwd: paths.cwd }),
+      expected: functionSubstitutionBlock,
+    },
+    {
+      name: 'fails closed on a function substitution inside a nested shell',
+      command: "bash -c 'echo ${ rm -rf ~/; }'",
+      options: options({ cwd: paths.cwd }),
+      expected: functionSubstitutionBlock,
+    },
+    {
+      name: 'fails closed on a harmless function substitution too',
+      command: 'echo ${ date; }',
+      options: options({ cwd: paths.cwd }),
+      expected: functionSubstitutionBlock,
     },
     {
       name: 'blocks find delete',
