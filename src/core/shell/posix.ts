@@ -1048,9 +1048,10 @@ function opensFunctionSubstitution(source: string, start: number): boolean {
 }
 
 function containsFunctionSubstitutionOpener(source: string, start: number, end: number): boolean {
-  return Array.from({ length: end - start }, (_, k) => start + k).some((k) =>
-    opensFunctionSubstitution(source, k),
-  );
+  for (let k = source.indexOf('$', start); k !== -1 && k < end; k = source.indexOf('$', k + 1)) {
+    if (opensFunctionSubstitution(source, k)) return true;
+  }
+  return false;
 }
 
 function mayRunFunctionSubstitution(program: CommandProgram | undefined): boolean {
