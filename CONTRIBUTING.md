@@ -1,59 +1,101 @@
 # Contributing to CC Safety Net
 
-First off, thanks for taking the time to contribute! This document provides guidelines and instructions for contributing to cc-safety-net.
+Bug reports, feature requests, and technical analysis are welcome through
+[GitHub Issues](https://github.com/kenryu42/cc-safety-net/issues).
 
-## Table of Contents
+Pull request creation is restricted to invited collaborators. If you want
+something fixed or improved, please describe the problem in an issue before
+spending time on an implementation.
 
-- [Code of Conduct](#code-of-conduct)
-- [Before You Start: Proposing New Features](#before-you-start-proposing-new-features)
-- [Getting Started](#getting-started)
+## Table of contents
+
+- [Why pull requests are restricted](#why-pull-requests-are-restricted)
+- [Reporting a bug](#reporting-a-bug)
+- [Requesting a feature](#requesting-a-feature)
+- [Code of conduct](#code-of-conduct)
+- [Development setup](#development-setup)
   - [Prerequisites](#prerequisites)
-  - [Development Setup](#development-setup)
-  - [Testing Your Changes Locally](#testing-your-changes-locally)
-- [Development Workflow](#development-workflow)
-  - [Build Commands](#build-commands)
+  - [Install and build](#install-and-build)
+  - [Testing your changes locally](#testing-your-changes-locally)
+- [Development workflow](#development-workflow)
+  - [Build commands](#build-commands)
   - [Conventions](#conventions)
-- [Pull Request Process](#pull-request-process)
+- [Pull request process for invited collaborators](#pull-request-process-for-invited-collaborators)
 - [Publishing](#publishing)
-- [Getting Help](#getting-help)
+- [Getting help](#getting-help)
 
-## Code of Conduct
+## Why pull requests are restricted
 
-Be respectful, inclusive, and constructive. We're all here to make better tools together.
+AI-generated submissions have increased the work required to review outside
+contributions. A plausible patch still needs someone to verify the problem,
+understand the changes, check their effects on the rest of the project, and
+work through revisions.
 
-## Before You Start: Proposing New Features
+I use coding agents to implement fixes myself. A detailed issue report often
+helps me resolve a problem faster than reviewing and reworking an unsolicited
+pull request. Reproduction steps and technical analysis are especially useful.
 
-**Please open an issue to discuss new features before implementing them.**
+## Reporting a bug
 
-This project has a focused scope: **preventing coding agents from making accidental mistakes that cause data loss** (e.g., `rm -rf ~/`, `git reset --hard`). It is NOT a general security hardening tool or an attack prevention system.
+Most issues are written by coding agents. Whether you are an agent or a person,
+follow these rules:
 
-### Why Discuss First?
+- Search existing issues first (`gh issue list --search "<keywords>" --state all`).
+  If the problem has already been reported, add new evidence to that issue
+  instead of opening another.
+- Report one problem per issue.
+- Reproduce the problem on the latest release. Only describe a reproduction you
+  actually ran; if you could not run it, say so.
+- Lead with the problem and the evidence: what you did, what you expected, and
+  what happened. Keep the report short.
+- Include your CC Safety Net version, operating system, coding agent or CLI and
+  its version, and how CC Safety Net is installed. `npx cc-safety-net doctor --json`
+  covers most of this and shows whether custom rules are in play.
+- Root-cause analysis is welcome. Put it after the evidence and label it as a
+  hypothesis unless a test or a trace confirms it.
+- Do not attach a patch or diff. Describe the fix you suggest in prose.
+- Have the person you are working for review the issue before you submit it.
 
-1. **Scope alignment** — Your idea might be great but outside the project's scope
-2. **Approach feedback** — We can suggest the best way to implement it
-3. **Avoid wasted effort** — Save time for both you and maintainers
+For an incorrect command decision, a destructive command that was allowed or a
+safe one that was blocked, also include:
 
-### When to Open an Issue First
+- The full command, including the whole chain, not just the segment that matched.
+- The working directory and the safety level.
+- The output of `npx cc-safety-net explain --cwd <dir> "<command>"`.
+- For a block that already happened, the entry from `npx cc-safety-net logs`
+  (`npx cc-safety-net logs --id <id> --json`).
+- Why the decision should have been different.
 
-| Scenario | Open Issue First? |
-|----------|-------------------|
-| New detection rule (git, rm, etc.) | **Yes** |
-| New command category to block | **Yes** |
-| Architectural changes | **Yes** |
-| New configuration options | **Yes** |
-| Typo/documentation fixes | No, just PR |
-| Small bug fixes with obvious solution | No, just PR |
+A missed destructive command is a public bug, not a vulnerability. See
+[SECURITY.md](SECURITY.md) for the few issues that must be reported privately.
 
-### What to Include in Your Proposal
+Before you submit, remove credentials and tokens. Logs redact secrets but not
+file paths: replace private directory names with `<project>` and `~`, keeping
+the path structure intact so the command still reproduces.
 
-- **What** you want to add/change
-- **Why** it fits the project scope (preventing accidental data loss)
-- **Real-world scenario** where this would help
-- Any **trade-offs** you've considered
+## Requesting a feature
 
-A quick 5-minute issue can save hours of implementation time on both sides.
+Explain the problem you need to solve, the behavior you want, and a concrete
+example of where it would help. The rules above apply: search first, one
+request per issue, and no patches.
 
-## Getting Started
+CC Safety Net has a focused scope: preventing coding agents from making
+accidental mistakes that cause data loss, such as `rm -rf ~/` or
+`git reset --hard`. It is not a general security hardening tool or an attack
+prevention system.
+
+Requests for detection rules, configuration changes, documentation corrections,
+and small bug fixes should all start with an issue. An accepted proposal does
+not automatically authorize a pull request.
+
+## Code of conduct
+
+Be respectful and constructive. Keep reports focused on the problem and
+provide enough information for someone else to investigate it.
+
+## Development setup
+
+This section is for invited collaborators and for anyone running a local build.
 
 ### Prerequisites
 
@@ -68,7 +110,7 @@ this requires network access on first use or after cache eviction. To run anothe
 command with the project runtime, use `bun scripts/project-bun.ts run check`.
 To upgrade Bun, change `packageManager`, rebuild, and commit the regenerated artifacts.
 
-### Development Setup
+### Install and build
 
 ```bash
 # Clone the repository
@@ -85,9 +127,9 @@ bun run build
 bun run check
 ```
 
-### Testing Your Changes Locally
+### Testing your changes locally
 
-## Claude Code
+#### Claude Code
 
 1. **Build the project**:
    ```bash
@@ -113,7 +155,7 @@ bun run check
 > [!NOTE]
 > See the [official documentation](https://docs.anthropic.com/en/docs/claude-code/plugins#test-your-plugins-locally) for more details on testing plugins locally.
 
-## OpenCode
+#### OpenCode
 
 1. **Build the project**:
    ```bash
@@ -158,9 +200,9 @@ bun run check
 > [!NOTE]
 > See the [official documentation](https://opencode.ai/docs/plugins/) for more details on OpenCode plugins.
 
-## Development Workflow
+## Development workflow
 
-### Build Commands
+### Build commands
 
 ```bash
 # Run all checks (lint, type check, dead code, tests)
@@ -177,7 +219,7 @@ bun run check-duplicates  # Duplicate-code detection (jscpd)
 bun test              # Run tests
 
 # Run specific test
-bun test tests/rules-git.test.ts
+bun test tests/gate/analyzer/git-rules.test.ts
 
 # Run tests matching pattern
 bun test --test-name-pattern "checkout"
@@ -195,35 +237,39 @@ bun run build
 | Package Manager | **bun only** (`bun install`, `bun run`) |
 | Formatter | **Oxfmt** |
 | Linter | **Oxlint** (type-aware) |
-| Type Hints | Required on all functions |
+| Type Hints | Rely on inference; annotate exports only where it adds clarity |
 | Type Syntax | `type \| null` preferred over `type \| undefined` |
 | File Naming | `kebab-case` (e.g., `worktree-relaxation.ts`, not `worktreeRelaxation.ts`) |
 | Function Naming | `camelCase` for functions, `PascalCase` for types/interfaces |
 | Constants | `SCREAMING_SNAKE_CASE` for reason constants |
 | Imports | Relative imports within package |
 
-## Pull Request Process
+## Pull request process for invited collaborators
 
-1. **Fork** the repository and create your branch from `main`
-2. **Make changes** following the conventions above
-3. **Run all checks** locally:
-   ```bash
-   bun run check  # Must pass with no errors
-   ```
-4. **Test in Claude Code and OpenCode** using the local plugin method described above
-5. **Commit** with clear, descriptive messages:
-   - Use present tense ("Add rule" not "Added rule")
-   - Reference issues if applicable ("Fix #123")
-6. **Push** to your fork and create a Pull Request
-7. **Describe** your changes clearly in the PR description
+This section applies only to invited collaborators. Everyone else should
+report problems or propose changes through GitHub Issues.
 
-### PR Checklist
+Before implementing a change, agree on its scope with the maintainer in the
+related issue.
 
-- [ ] Code follows project conventions (type hints, naming, etc.)
+1. Create a branch from `main`.
+2. Follow `AGENTS.md` and the project conventions.
+3. For behavior changes, start with a meaningful failing test and verify that
+   the fix makes it pass.
+4. Run focused tests during development, then `bun run check` after completing
+   the changes.
+5. Verify the affected behavior in the relevant supported CLI when applicable.
+6. Use a conventional commit message.
+7. Open a pull request linking the issue. Explain the problem, the change, and
+   how you verified it.
+
+### PR checklist
+
+- [ ] Code follows `AGENTS.md` and the project conventions
 - [ ] `bun run check` passes (lint, types, dead code, tests)
 - [ ] Tests added for new rules (minimum 90% coverage required)
-- [ ] Tested locally with Codex, Claude Code, Devin CLI, Factory Droid, Gemini CLI, GitHub Copilot CLI, Grok Build, Kimi Code or Pi
-- [ ] Updated documentation if needed (README, AGENTS.md)
+- [ ] Tested locally in each host CLI the change affects
+- [ ] README untouched unless a supported CLI, headline feature, or Quick start command changed (see `AGENTS.md`)
 - [ ] No version changes in `package.json`
 
 ## Publishing
@@ -256,7 +302,7 @@ bun run build
   completing only the missing release assets. Any npm version collision before tag creation is a
   hard stop.
 
-## Getting Help
+## Getting help
 
 - **Diagnostics**: Run `bunx cc-safety-net doctor` to verify your setup is working correctly
 - **Debug Analysis**: Run `bunx cc-safety-net explain "git command"` to see step-by-step how a command is analyzed
@@ -267,4 +313,4 @@ bun run build
 
 ---
 
-Thank you for contributing to CC Safety Net! Your efforts help keep AI-assisted coding safer for everyone.
+Thank you for taking the time to report problems and share ideas. It helps keep AI-assisted coding safer for everyone.

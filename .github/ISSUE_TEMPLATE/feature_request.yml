@@ -6,67 +6,12 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for suggesting a feature! Please describe your idea below.
+        Follow the rules in [CONTRIBUTING.md](https://github.com/kenryu42/cc-safety-net/blob/main/CONTRIBUTING.md#requesting-a-feature). If a coding agent is writing this issue, point it at that file.
 
   - type: textarea
-    id: problem
+    id: request
     attributes:
-      label: Problem Statement
-      description: Is your feature request related to a problem? Please describe.
-      placeholder: I'm always frustrated when...
+      label: Request
+      description: The problem you need to solve, the behavior you want, and a concrete example of where it would help.
     validations:
       required: true
-
-  - type: textarea
-    id: solution
-    attributes:
-      label: Proposed Solution
-      description: Describe the solution you'd like.
-      placeholder: I would like...
-    validations:
-      required: true
-
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives Considered
-      description: Describe any alternative solutions or features you've considered.
-    validations:
-      required: false
-
-  - type: dropdown
-    id: scope
-    attributes:
-      label: Feature Scope
-      description: What area of the plugin does this affect?
-      options:
-        - Built-in Rules (git, rm, etc.)
-        - Custom Rules
-        - CLI/Binary
-        - Claude Code Integration
-        - OpenCode Integration
-        - Audit Logging
-        - Configuration
-        - Documentation
-        - Other
-    validations:
-      required: true
-
-  - type: textarea
-    id: examples
-    attributes:
-      label: Use Case Examples
-      description: Provide concrete examples of how you would use this feature.
-      placeholder: |
-        Example 1: ...
-        Example 2: ...
-    validations:
-      required: false
-
-  - type: textarea
-    id: context
-    attributes:
-      label: Additional Context
-      description: Add any other context, mockups, or references about the feature request here.
-    validations:
-      required: false

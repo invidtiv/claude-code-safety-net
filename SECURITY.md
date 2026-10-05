@@ -83,7 +83,7 @@ Include as much detail as you can safely share:
 - Your operating system and runtime version
 - The affected integration, such as Claude Code, OpenCode, Gemini CLI, GitHub Copilot CLI, Grok Build, Factory Droid, Devin CLI, or Codex
 - Steps to reproduce the issue
-- The command or input that bypasses, weakens, or abuses CC Safety Net
+- The input that makes CC Safety Net leak a secret, write outside its intended directory, or distribute tampered code
 - Any relevant output from `cc-safety-net explain` or `cc-safety-net doctor`
 - Whether the issue can cause data loss, command execution, secret exposure, or another concrete security impact
 
