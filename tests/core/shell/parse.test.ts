@@ -212,6 +212,10 @@ describe('core/shell/parse', () => {
     "echo ${x:-'}'$(rm -rf x)\\'}",
     'echo ${x:-"}"$(rm -rf x)\\"}',
     'echo ${x:-$\\\n(rm -rf x)}',
+    "echo ${x:-'\"'\"}'$(rm -rf x)'\"}'\"\\'",
+    "echo ${x:-'\\''}'$(rm -rf x)'}'\\'}",
+    'echo ${x:-"a"} "$(date)"',
+    'echo "${x#\\"}" `date`',
   ])(
     'refuses a parameter expansion whose quote or backslash hides a substitution: %s',
     (source) => {
@@ -222,6 +226,16 @@ describe('core/shell/parse', () => {
       );
     },
   );
+
+  test.each([
+    'echo "${MSG:-it\'s done}"',
+    'echo $(date) ${x:-"a"}',
+    'cat ${x:-"a"} <<EOF\n$(date)\nEOF',
+  ])('keeps a quoted parameter expansion that no substitution follows: %s', (source) => {
+    const program = parseCommand(source, 'posix');
+    expect(program.status).toBe('complete');
+    expect(program.issues).toEqual([]);
+  });
 
   test.each(['echo ${x', 'echo ${x:-$(date)', 'echo "${x"', "echo ${x:-'${'}; rm -rf x"])(
     'refuses a parameter expansion without its closing brace: %s',
@@ -247,22 +261,24 @@ describe('core/shell/parse', () => {
     'echo `echo \\\\"$(rm -rf x)\\\\"`',
     "echo `echo \\\\\\\n'$(rm -rf x)\\\\\\\n'`",
     "echo `echo \\\n\\\\'$(rm -rf x)\\\n\\\\'`",
+    'echo `r\\\\m -rf x`',
+    'echo `r\\\nm -rf x`',
+    "echo `printf '%s\\\\n' x`",
+    'echo `echo "$x" \\\\$y`',
   ])('refuses a backtick body whose escapes change what the shell runs: %s', (source) => {
     const program = parseCommand(source, 'posix');
     expect(program.status).toBe('invalid');
     expect(program.issues.map((issue) => issue.code)).toContain('unsupported-backtick-escape');
   });
 
-  test.each([
-    'echo `date`',
-    "echo `printf '%s\\\\n' x`",
-    'echo `echo "$x" \\\\$y`',
-    'echo `echo $(rm -rf x)`',
-  ])('keeps a backtick body whose escapes do not hide an expansion: %s', (source) => {
-    const program = parseCommand(source, 'posix');
-    expect(program.status).toBe('complete');
-    expect(program.issues).toEqual([]);
-  });
+  test.each(['echo `date`', "echo `printf '%s\\n' x`", 'echo `echo $(rm -rf x)`'])(
+    'keeps a backtick body whose escapes do not hide an expansion: %s',
+    (source) => {
+      const program = parseCommand(source, 'posix');
+      expect(program.status).toBe('complete');
+      expect(program.issues).toEqual([]);
+    },
+  );
 
   test('reads a group, a redirection into a substitution and a function definition as their nodes', () => {
     const program = parseCommand('echo x >$(git reset --hard); (rm -rf /tmp/x)', 'posix');

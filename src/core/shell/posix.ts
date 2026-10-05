@@ -9,6 +9,7 @@ import {
   type CommandParseStatus,
   type CommandProgram,
   type CommandRedirection,
+  type CommandSpan,
   type CommandView,
   type CommandWord,
   type CommandWordPart,
@@ -36,9 +37,10 @@ type WordResult = {
   limited: boolean;
 };
 
-type WordBudget = {
-  used: number;
-  readonly max: number;
+type ParseState = {
+  wordsUsed: number;
+  readonly maxWords: number;
+  quotedExpansionEnd: number;
 };
 
 type AnsiEscapeResult = {
@@ -88,24 +90,22 @@ export function parsePosixCommand(source: string, limits: CommandParserLimits): 
     });
   }
 
-  const result = scanSequence(
+  const parseState = { wordsUsed: 0, maxWords: limits.maxWords, quotedExpansionEnd: Infinity };
+  const result = scanSequence(source, 0, source.length, limits, parseState, 0);
+  const issues = substitutionFollowsQuotedExpansion(
     source,
-    0,
-    source.length,
-    limits,
-    {
-      used: 0,
-      max: limits.maxWords,
-    },
-    0,
-  );
+    parseState.quotedExpansionEnd,
+    result.nodes,
+  )
+    ? [...result.issues, QUOTED_PARAMETER_EXPANSION_ISSUE]
+    : result.issues;
   return freezeCommandProgram({
     kind: 'program',
     dialect: 'posix',
     source,
     span,
-    status: getParseStatus(result.issues, result.limited),
-    issues: result.issues,
+    status: getParseStatus(issues, result.limited),
+    issues,
     nodes: result.nodes,
   });
 }
@@ -115,7 +115,7 @@ function scanSequence(
   start: number,
   end: number,
   limits: CommandParserLimits,
-  wordBudget: WordBudget,
+  parseState: ParseState,
   depth: number,
   closing?: ')' | '}',
 ): ScanResult {
@@ -198,7 +198,7 @@ function scanSequence(
       if (depth >= limits.maxDepth) {
         return limitedResult(nodes, issues, i, 'depth-limit', limits.maxDepth);
       }
-      if (!consumeWord(wordBudget)) {
+      if (!consumeWord(parseState)) {
         return limitedResult(nodes, issues, i, 'word-limit', limits.maxWords);
       }
       const inner = scanSequence(
@@ -206,7 +206,7 @@ function scanSequence(
         functionOpening.braceIndex + 1,
         end,
         limits,
-        wordBudget,
+        parseState,
         depth + 1,
         '}',
       );
@@ -281,7 +281,7 @@ function scanSequence(
         return limitedResult(nodes, issues, i, 'depth-limit', limits.maxDepth);
       }
       const close = char === '(' ? ')' : '}';
-      const inner = scanSequence(source, i + 1, end, limits, wordBudget, depth + 1, close);
+      const inner = scanSequence(source, i + 1, end, limits, parseState, depth + 1, close);
       const groupEnd = inner.next;
       const bodySpan = { start: i + 1, end: inner.closed ? groupEnd - 1 : groupEnd };
       const body = buildNestedCommandProgram(source, bodySpan, inner);
@@ -351,14 +351,14 @@ function scanSequence(
             limited: false,
           }
         : !targetIsBoundary
-          ? readWord(source, targetStart, end, limits, wordBudget, depth)
+          ? readWord(source, targetStart, end, limits, parseState, depth)
           : undefined;
       if (targetResult) {
         issues.push(...targetResult.issues);
         if (targetResult.limited) {
           return propagatedLimitResult(nodes, issues, targetResult.next);
         }
-        if (!consumeWord(wordBudget)) {
+        if (!consumeWord(parseState)) {
           return limitedResult(nodes, issues, targetResult.next, 'word-limit', limits.maxWords);
         }
       }
@@ -404,7 +404,7 @@ function scanSequence(
               heredoc.bodySpan.start,
               heredoc.bodySpan.end,
               limits,
-              wordBudget,
+              parseState,
               depth + 1,
             );
             nested.push(...body.programs);
@@ -428,7 +428,7 @@ function scanSequence(
 
     const commandStart = accumulator.start === -1;
     if (commandStart) appendMissingConnectorIssue(nodes, issues);
-    const wordResult = readWord(source, i, end, limits, wordBudget, depth);
+    const wordResult = readWord(source, i, end, limits, parseState, depth);
     issues.push(...wordResult.issues);
     if (wordResult.limited) {
       return propagatedLimitResult(nodes, issues, wordResult.next);
@@ -437,7 +437,7 @@ function scanSequence(
       ? expandLiteralCommandWord(
           source,
           wordResult.word,
-          wordBudget.max - wordBudget.used,
+          parseState.maxWords - parseState.wordsUsed,
           limits.maxDepth,
           limits.maxInputLength,
         )
@@ -457,7 +457,7 @@ function scanSequence(
     }
     const words = expanded?.words ?? [wordResult.word];
     for (const word of words) {
-      if (!consumeWord(wordBudget)) {
+      if (!consumeWord(parseState)) {
         return limitedResult(nodes, issues, wordResult.next, 'word-limit', limits.maxWords);
       }
       accumulator.words.push(word);
@@ -503,7 +503,7 @@ function readWord(
   start: number,
   end: number,
   limits: CommandParserLimits,
-  wordBudget: WordBudget,
+  parseState: ParseState,
   depth: number,
 ): WordResult {
   let text = '';
@@ -546,7 +546,7 @@ function readWord(
 
     if (char === '"') {
       quoted = true;
-      const result = readDoubleQuoted(source, i, end, limits, wordBudget, depth);
+      const result = readDoubleQuoted(source, i, end, limits, parseState, depth);
       text += result.text;
       nested.push(...result.nested);
       issues.push(...result.issues);
@@ -594,11 +594,11 @@ function readWord(
     if (opensFunctionSubstitution(source, i)) issues.push(FUNCTION_SUBSTITUTION_ISSUE);
     const substitution =
       char === '$' || char === '<' || char === '>' || char === '`'
-        ? readSubstitution(source, i, end, limits, wordBudget, depth)
+        ? readSubstitution(source, i, end, limits, parseState, depth)
         : null;
     const collected = substitution
       ? collectSubstitution(substitution, nested, issues)
-      : readParameterExpansion(source, i, end, limits, wordBudget, depth, nested, issues);
+      : readParameterExpansion(source, i, end, limits, parseState, depth, nested, issues);
     if (collected) {
       if (collected.provenance === 'variable') text += source.slice(i, collected.next);
       limited ||= collected.limited;
@@ -645,7 +645,7 @@ function readDoubleQuoted(
   start: number,
   end: number,
   limits: CommandParserLimits,
-  wordBudget: WordBudget,
+  parseState: ParseState,
   depth: number,
 ): Omit<WordResult, 'word'> & { text: string; provenance: WordProvenance } {
   let text = '';
@@ -674,10 +674,10 @@ function readDoubleQuoted(
       continue;
     }
     if (opensFunctionSubstitution(source, i)) issues.push(FUNCTION_SUBSTITUTION_ISSUE);
-    const substitution = readSubstitution(source, i, end, limits, wordBudget, depth);
+    const substitution = readSubstitution(source, i, end, limits, parseState, depth);
     const collected = substitution
       ? collectSubstitution(substitution, nested, issues)
-      : readParameterExpansion(source, i, end, limits, wordBudget, depth, nested, issues);
+      : readParameterExpansion(source, i, end, limits, parseState, depth, nested, issues);
     if (collected) {
       if (collected.provenance !== 'command-substitution') text += source.slice(i, collected.next);
       i = collected.next;
@@ -708,7 +708,7 @@ function readSubstitution(
   start: number,
   end: number,
   limits: CommandParserLimits,
-  wordBudget: WordBudget,
+  parseState: ParseState,
   depth: number,
 ): { program: CommandProgram; next: number; provenance: WordProvenance } | null {
   const opening = readSubstitutionOpening(source, start);
@@ -739,7 +739,7 @@ function readSubstitution(
         cursor,
         innerEnd,
         limits,
-        wordBudget,
+        parseState,
         depth + 1,
       );
       if (!nestedSubstitution) {
@@ -774,7 +774,7 @@ function readSubstitution(
       provenance: 'arithmetic',
     };
   }
-  const inner = scanSequence(source, start + openLength, innerEnd, limits, wordBudget, depth + 1);
+  const inner = scanSequence(source, start + openLength, innerEnd, limits, parseState, depth + 1);
   const substitutionIssue =
     close === -1
       ? [
@@ -794,7 +794,7 @@ function readSubstitution(
         ]
       : [];
   const escapeIssue =
-    backtick && backtickBodyHidesExpansion(source, start + openLength, innerEnd)
+    backtick && /\\[\\$`\n]/.test(source.slice(start + openLength, innerEnd))
       ? [BACKTICK_ESCAPE_ISSUE]
       : [];
   const issues = [...inner.issues, ...substitutionIssue, ...contextIssue, ...escapeIssue];
@@ -818,7 +818,7 @@ function readHeredocBodySubstitutions(
   start: number,
   end: number,
   limits: CommandParserLimits,
-  wordBudget: WordBudget,
+  parseState: ParseState,
   depth: number,
 ) {
   const programs: CommandProgram[] = [];
@@ -832,7 +832,7 @@ function readHeredocBodySubstitutions(
     }
     const substitution =
       char === '$' || char === '`'
-        ? readSubstitution(source, i, end, limits, wordBudget, depth)
+        ? readSubstitution(source, i, end, limits, parseState, depth)
         : null;
     if (!substitution) {
       if (opensFunctionSubstitution(source, i)) issues.push(FUNCTION_SUBSTITUTION_ISSUE);
@@ -1075,8 +1075,38 @@ const UNCLOSED_PARAMETER_EXPANSION_ISSUE: CommandIssue = Object.freeze({
 const QUOTED_PARAMETER_EXPANSION_ISSUE: CommandIssue = Object.freeze({
   code: 'unsupported-parameter-expansion',
   message:
-    'an unbalanced quote, a line continuation, or a quote or backslash beside a substitution inside ${ } cannot be analyzed',
+    'a line continuation inside ${ }, or a quote or backslash inside ${ } with a substitution in or after it, cannot be analyzed',
 });
+
+const SUBSTITUTION_OPENER = /\$\(|`|[<>]\(/g;
+
+function substitutionFollowsQuotedExpansion(
+  source: string,
+  quotedExpansionEnd: number,
+  nodes: readonly CommandNode[],
+): boolean {
+  const heredocBodies = heredocBodySpans(nodes);
+  return [...source.slice(quotedExpansionEnd).matchAll(SUBSTITUTION_OPENER)].some((match) => {
+    const index = quotedExpansionEnd + match.index;
+    return !heredocBodies.some((body) => index >= body.start && index < body.end);
+  });
+}
+
+function heredocBodySpans(nodes: readonly CommandNode[]): CommandSpan[] {
+  return nodes.flatMap((node) => {
+    if (node.kind === 'command') {
+      return [
+        ...node.redirections.flatMap((redirection) =>
+          redirection.heredoc ? [redirection.heredoc.bodySpan] : [],
+        ),
+        ...node.nested.flatMap((program) => heredocBodySpans(program.nodes)),
+      ];
+    }
+    return node.kind === 'group' || node.kind === 'function'
+      ? heredocBodySpans(node.body.nodes)
+      : [];
+  });
+}
 
 const BACKTICK_ESCAPE_ISSUE: CommandIssue = Object.freeze({
   code: 'unsupported-backtick-escape',
@@ -1089,7 +1119,7 @@ function readParameterExpansion(
   start: number,
   end: number,
   limits: CommandParserLimits,
-  wordBudget: WordBudget,
+  parseState: ParseState,
   depth: number,
   nested: CommandProgram[],
   issues: CommandIssue[],
@@ -1098,15 +1128,17 @@ function readParameterExpansion(
   const expansion = scanParameterExpansion(source, start + 2, end);
   const next = expansion.close === -1 ? end : expansion.close + 1;
   if (expansion.close === -1) issues.push(UNCLOSED_PARAMETER_EXPANSION_ISSUE);
-  if ((expansion.quoted && expansion.substitutions.length > 0) || expansion.unreadable) {
+  if ((expansion.quoted && expansion.substitutions.length > 0) || expansion.continued) {
     issues.push(QUOTED_PARAMETER_EXPANSION_ISSUE);
   }
+  if (expansion.quoted)
+    parseState.quotedExpansionEnd = Math.min(parseState.quotedExpansionEnd, next);
   const limited = expansion.substitutions.some((index) => {
     if (opensFunctionSubstitution(source, index)) {
       issues.push(FUNCTION_SUBSTITUTION_ISSUE);
       return false;
     }
-    const substitution = readSubstitution(source, index, next, limits, wordBudget, depth);
+    const substitution = readSubstitution(source, index, next, limits, parseState, depth);
     return substitution !== null && collectSubstitution(substitution, nested, issues).limited;
   });
   return { provenance: 'variable' as const, next, limited };
@@ -1115,8 +1147,6 @@ function readParameterExpansion(
 export function scanParameterExpansion(source: string, start: number, end: number) {
   const substitutions: number[] = [];
   let quoted = false;
-  let oddSingleQuotes = false;
-  let oddDoubleQuotes = false;
   let continued = false;
   let nesting = 1;
   let i = start;
@@ -1125,8 +1155,6 @@ export function scanParameterExpansion(source: string, start: number, end: numbe
     if (char === '$' && opensFunctionSubstitution(source, i)) substitutions.push(i);
     if (char === '\\' || char === "'" || char === '"') {
       quoted = true;
-      oddSingleQuotes = oddSingleQuotes !== (char === "'");
-      oddDoubleQuotes = oddDoubleQuotes !== (char === '"');
       continued ||= char === '\\' && source[i + 1] === '\n';
       i += char === '\\' ? 2 : 1;
       continue;
@@ -1144,37 +1172,10 @@ export function scanParameterExpansion(source: string, start: number, end: numbe
       i += 2;
       continue;
     }
-    if (char === '}' && --nesting === 0) {
-      return {
-        close: i,
-        substitutions,
-        quoted,
-        unreadable: oddSingleQuotes || oddDoubleQuotes || continued,
-      };
-    }
+    if (char === '}' && --nesting === 0) return { close: i, substitutions, quoted, continued };
     i++;
   }
-  return { close: -1, substitutions, quoted, unreadable: false };
-}
-
-function backtickBodyHidesExpansion(source: string, start: number, end: number): boolean {
-  for (let i = start; i < end; i++) {
-    if (source[i] !== '\\') continue;
-    if (source[i + 1] === '\n') {
-      i++;
-      continue;
-    }
-    if (source[i + 1] === '$' || source[i + 1] === '`') return true;
-    if (source[i + 1] === '\\') {
-      let afterPair = i + 2;
-      while (afterPair < end && source[afterPair] === '\\' && source[afterPair + 1] === '\n') {
-        afterPair += 2;
-      }
-      if (source[afterPair] === "'" || source[afterPair] === '"') return true;
-    }
-    i++;
-  }
-  return false;
+  return { close: -1, substitutions, quoted, continued };
 }
 
 function readVariableEnd(source: string, start: number, end: number): number {
@@ -1665,7 +1666,7 @@ function decodePosixLiteralWord(value: string, maxDepth: number): string | null 
     0,
     source.length,
     { maxInputLength: source.length, maxWords: 1, maxDepth },
-    { used: 0, max: 1 },
+    { wordsUsed: 0, maxWords: 1, quotedExpansionEnd: Infinity },
     0,
   );
   if (
@@ -1722,9 +1723,9 @@ function propagatedLimitResult(
   return { nodes, issues, next, closed: false, limited: true, pendingHeredocs: [] };
 }
 
-function consumeWord(budget: WordBudget): boolean {
-  budget.used++;
-  return budget.used <= budget.max;
+function consumeWord(parseState: ParseState): boolean {
+  parseState.wordsUsed++;
+  return parseState.wordsUsed <= parseState.maxWords;
 }
 
 function readFunctionOpening(

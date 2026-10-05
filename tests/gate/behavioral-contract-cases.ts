@@ -347,6 +347,26 @@ export function behavioralContractCases(paths: {
             'echo ${x:-$\\\n(rm -rf ~/)}',
             unparseableBlock,
           ],
+          [
+            'fails closed on balanced mixed quotes that end a parameter expansion early',
+            "echo ${x:-'\"'\"}'$(rm -rf ~/)'\"}'\"\\'",
+            unparseableBlock,
+          ],
+          [
+            'fails closed on an escaped quote that ends a parameter expansion early',
+            "echo ${x:-'\\''}'$(rm -rf ~/)'}'\\'}",
+            unparseableBlock,
+          ],
+          [
+            'fails closed on a backtick body whose doubled backslash joins a command name',
+            'echo `r\\\\m -rf ~/`',
+            unparseableBlock,
+          ],
+          [
+            'allows an apostrophe in a double-quoted default-value operand',
+            'echo "${MSG:-it\'s done}"',
+            { kind: 'allow' },
+          ],
           ['allows a nested parameter expansion', 'echo ${x:-${y}}', { kind: 'allow' }],
           [
             'allows a harmless generator in a default-value operand',
