@@ -10,6 +10,7 @@ import {
   getCalledCommandName,
 } from '@/core/shell/model';
 import { DEFAULT_COMMAND_PARSER_LIMITS, parseCommand } from '@/core/shell/parse';
+import { scanParameterExpansion } from '@/core/shell/posix';
 import { getBasename, hasUnclosedQuotes } from '@/core/shell/tokens';
 import type { EnvironmentContext } from '@/gate/analysis';
 import { stripWrappers } from '@/gate/analyzer/wrapper-prelude';
@@ -739,7 +740,9 @@ function readExpansion(
 ) {
   const char = raw[start + 1];
   if (char === '{') {
-    const close = findExpansionClose(raw, start + 2);
+    const close = powershell
+      ? findExpansionClose(raw, start + 2)
+      : scanParameterExpansion(raw, start + 2, raw.length).close;
     if (close === -1) {
       flags.invalid = true;
       return { text: '', next: raw.length };

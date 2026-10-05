@@ -73,11 +73,17 @@ export function behavioralContractCases(paths: {
   const invalidConfig = {
     configFallbackReason: 'invalid policy config: fix the file named in the diagnostic.',
   };
-  const functionSubstitutionBlock: BehavioralContractCase['expected'] = {
+  const unparseableBlock: BehavioralContractCase['expected'] = {
     kind: 'block',
     ruleId: 'analysis.strict-unparseable',
     intent: 'stop_and_explain',
     reasonIncludes: 'could not be safely analyzed',
+  };
+  const homeRemovalBlock: BehavioralContractCase['expected'] = {
+    kind: 'block',
+    ruleId: 'rm.recursive-force-root-or-home',
+    intent: 'hard_stop',
+    reasonIncludes: 'targeting root or home',
   };
   const everydayCommands = [
     'git status',
@@ -246,31 +252,31 @@ export function behavioralContractCases(paths: {
       name: 'fails closed on a function substitution, which runs its commands in the current shell',
       command: 'echo ${ rm -rf ~/; }',
       options: options({ cwd: paths.cwd }),
-      expected: functionSubstitutionBlock,
+      expected: unparseableBlock,
     },
     {
       name: 'fails closed on a function substitution inside a nested shell',
       command: "bash -c 'echo ${ rm -rf ~/; }'",
       options: options({ cwd: paths.cwd }),
-      expected: functionSubstitutionBlock,
+      expected: unparseableBlock,
     },
     {
       name: 'fails closed on a harmless function substitution too',
       command: 'echo ${ date; }',
       options: options({ cwd: paths.cwd }),
-      expected: functionSubstitutionBlock,
+      expected: unparseableBlock,
     },
     {
       name: 'fails closed on a function substitution glued to a variable',
       command: 'echo $x${ rm -rf ~/; }',
       options: options({ cwd: paths.cwd }),
-      expected: functionSubstitutionBlock,
+      expected: unparseableBlock,
     },
     {
       name: 'fails closed on a function substitution after a depth-limited heredoc line',
       command: `: <<EOF\n${'$(( '.repeat(64)}0${' ))'.repeat(64)}\n\${ cd ~; }\nEOF\nrm -rf *`,
       options: options({ cwd: paths.cwd }),
-      expected: functionSubstitutionBlock,
+      expected: unparseableBlock,
     },
     {
       name: 'blocks a home removal in a command substitution glued to a variable',
@@ -283,6 +289,73 @@ export function behavioralContractCases(paths: {
         reasonIncludes: 'targeting root or home',
       },
     },
+    ...[false, true].flatMap((strict) =>
+      (
+        [
+          [
+            'blocks a home removal in a parameter-expansion operand',
+            'echo ${x:-$(rm -rf ~/)}',
+            homeRemovalBlock,
+          ],
+          [
+            'blocks a home removal in a double-quoted parameter-expansion operand',
+            'echo "${x:-$(rm -rf ~/)}"',
+            homeRemovalBlock,
+          ],
+          [
+            'blocks a home removal behind a process substitution in a pattern operand',
+            'echo "${y#<(rm -rf ~/)}"',
+            homeRemovalBlock,
+          ],
+          [
+            'blocks a home removal inside double-quoted arithmetic',
+            'echo "$(( $(rm -rf ~/) ))"',
+            homeRemovalBlock,
+          ],
+          [
+            'fails closed on a backtick body whose escaped dollar hides a substitution',
+            'echo `echo "\\$(rm -rf ~/)"`',
+            unparseableBlock,
+          ],
+          [
+            'fails closed on a backtick body whose doubled backslash unquotes a substitution',
+            "echo `echo \\\\'$(rm -rf ~/)\\\\'`",
+            unparseableBlock,
+          ],
+          [
+            'fails closed on a backtick body whose doubled backslash reaches a quote across a line continuation',
+            "echo `echo \\\\\\\n'$(rm -rf ~/)\\\\\\\n'`",
+            unparseableBlock,
+          ],
+          [
+            'fails closed on a quote beside a substitution in a parameter expansion',
+            'echo ${x:-"$(date)"}',
+            unparseableBlock,
+          ],
+          [
+            'fails closed on a function substitution in a parameter-expansion operand',
+            'echo ${x:-${ rm -rf ~/; }}',
+            unparseableBlock,
+          ],
+          ['allows a nested parameter expansion', 'echo ${x:-${y}}', { kind: 'allow' }],
+          [
+            'allows a harmless generator in a default-value operand',
+            'EDITOR=${EDITOR:-$(command -v vim)}',
+            { kind: 'allow' },
+          ],
+          [
+            'allows harmless double-quoted arithmetic over a substitution',
+            'echo "$(( $(date +%s) - 60 ))"',
+            { kind: 'allow' },
+          ],
+        ] satisfies [string, string, BehavioralContractCase['expected']][]
+      ).map(([name, command, expected]) => ({
+        name: `${name}${strict ? ' at strict safety' : ''}`,
+        command,
+        options: options({ cwd: paths.cwd, strict }),
+        expected,
+      })),
+    ),
     {
       name: 'blocks find delete',
       command: 'find . -delete',
