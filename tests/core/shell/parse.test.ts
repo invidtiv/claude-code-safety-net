@@ -128,12 +128,13 @@ describe('core/shell/parse', () => {
     ': <<EOF\n$(echo ${ rm -rf x; })\nEOF',
     'echo ${\\\n rm -rf x; }',
     'echo $\\\n{ rm -rf x; }',
-    `echo "${'$(( '.repeat(65)}\${ rm -rf x; echo 0; }${' ))'.repeat(65)}"`,
     `: <<EOF\n${'$(( '.repeat(64)}\${ rm -rf x; echo 0; }${' ))'.repeat(64)}\nEOF`,
     `: <<EOF\n${'$(( '.repeat(64)}0${' ))'.repeat(64)}\n\${ rm -rf x; }\nEOF`,
     'echo $x${ rm -rf x; }',
     'echo "$x${ rm -rf x; }"',
     'echo $$${ rm -rf x; }',
+    'echo ${x:-${ rm -rf x; }}',
+    'echo "${x:+${ rm -rf x; }}"',
   ])('rejects a function substitution where the shell expands it: %s', (source) => {
     const program = parseCommand(source, 'posix');
     expect(program.status).toBe('invalid');
@@ -165,6 +166,133 @@ describe('core/shell/parse', () => {
       ]);
     },
   );
+
+  test.each([
+    'echo ${x:-$(rm -rf x)}',
+    'echo "${x:-$(rm -rf x)}"',
+    'echo ${x:+`rm -rf x`}',
+    'echo ${x:-${y:-$(rm -rf x)}}',
+    'echo "${y#<(rm -rf x)}"',
+    'echo ${x:-$(( $(rm -rf x) ))}',
+    'echo "$(( $(rm -rf x) ))"',
+    'echo "$(( 1 + $(( $(rm -rf x) )) ))"',
+    'echo ${x:-$(dirname "$(rm -rf x)")}',
+  ])(
+    'reads a substitution inside a parameter expansion or double-quoted arithmetic: %s',
+    (source) => {
+      const program = parseCommand(source, 'posix');
+      expect(program.status).toBe('complete');
+      expect(
+        projectCommandViews(program).map((view) => view.words.map((word) => word.text).join(' ')),
+      ).toContain('rm -rf x');
+    },
+  );
+
+  test.each([
+    ['echo ${x:-${y}}', '${x:-${y}}'],
+    ['echo "${A:-${B:-c}}"', '${A:-${B:-c}}'],
+    [': ${FOO:=${BAR}}', '${FOO:=${BAR}}'],
+    ['echo ${x:-a\\}b}', '${x:-a\\}b}'],
+  ])('reads a nested parameter expansion as one variable part: %s', (source, expansion) => {
+    const program = parseCommand(source, 'posix');
+    expect(program.status).toBe('complete');
+    const command = program.nodes[0];
+    const word = command?.kind === 'command' ? command.words[1] : undefined;
+    expect(
+      word?.parts.filter((part) => part.provenance === 'variable').map((part) => part.raw),
+    ).toEqual([expansion]);
+  });
+
+  test.each([
+    'echo ${x:-"$(rm -rf x)"}',
+    'echo "${x:-\'$(rm -rf x)\'}"',
+    "echo ${x:-$(rm -rf x)'}'}",
+    'echo ${x:-\\"$(rm -rf x)}',
+    "echo ${x:-$'\\x41'$(rm -rf x)}",
+    'FILES=(${(f)"$(sed -n p list)"})',
+    "echo ${x:-'}'$(rm -rf x)\\'}",
+    'echo ${x:-"}"$(rm -rf x)\\"}',
+    'echo ${x:-$\\\n(rm -rf x)}',
+    "echo ${x:-'\"'\"}'$(rm -rf x)'\"}'\"\\'",
+    "echo ${x:-'\\''}'$(rm -rf x)'}'\\'}",
+    'echo ${x:-"a"} "$(date)"',
+    'echo "${x#\\"}" `date`',
+  ])(
+    'refuses a parameter expansion whose quote or backslash hides a substitution: %s',
+    (source) => {
+      const program = parseCommand(source, 'posix');
+      expect(program.status).toBe('invalid');
+      expect(program.issues.map((issue) => issue.code)).toContain(
+        'unsupported-parameter-expansion',
+      );
+    },
+  );
+
+  test.each([
+    'echo "${MSG:-it\'s done}"',
+    'echo $(date) ${x:-"a"}',
+    'cat ${x:-"a"} <<EOF\n$(date)\nEOF',
+  ])('keeps a quoted parameter expansion that no substitution follows: %s', (source) => {
+    const program = parseCommand(source, 'posix');
+    expect(program.status).toBe('complete');
+    expect(program.issues).toEqual([]);
+  });
+
+  test.each(['echo ${x', 'echo ${x:-$(date)', 'echo "${x"', "echo ${x:-'${'}; rm -rf x"])(
+    'refuses a parameter expansion without its closing brace: %s',
+    (source) => {
+      const program = parseCommand(source, 'posix');
+      expect(program.status).toBe('invalid');
+      expect(program.issues.map((issue) => issue.code)).toContain('unclosed-parameter-expansion');
+    },
+  );
+
+  test.each([
+    `echo "${'$(( '.repeat(65)}\${ rm -rf x; echo 0; }${' ))'.repeat(65)}"`,
+    `echo "${'$(( '.repeat(65)}0${' ))'.repeat(65)}"`,
+  ])('limits double-quoted arithmetic at the same depth as unquoted arithmetic: %s', (source) => {
+    expect(parseCommand(source, 'posix').status).toBe('limited');
+  });
+
+  test.each([
+    'echo `echo "\\$(rm -rf x)"`',
+    'echo `echo \\`rm -rf x\\``',
+    'echo `echo \\${ rm -rf x; }`',
+    "echo `echo \\\\'$(rm -rf x)\\\\'`",
+    'echo `echo \\\\"$(rm -rf x)\\\\"`',
+    "echo `echo \\\\\\\n'$(rm -rf x)\\\\\\\n'`",
+    "echo `echo \\\n\\\\'$(rm -rf x)\\\n\\\\'`",
+    'echo `r\\\\m -rf x`',
+    'echo `r\\\nm -rf x`',
+    "echo `printf '%s\\\\n' x`",
+    'echo `echo "$x" \\\\$y`',
+  ])('refuses a backtick body whose escapes change what the shell runs: %s', (source) => {
+    const program = parseCommand(source, 'posix');
+    expect(program.status).toBe('invalid');
+    expect(program.issues.map((issue) => issue.code)).toContain('unsupported-backtick-escape');
+  });
+
+  test.each(['echo `date`', "echo `printf '%s\\n' x`", 'echo `echo $(rm -rf x)`'])(
+    'keeps a backtick body whose escapes do not hide an expansion: %s',
+    (source) => {
+      const program = parseCommand(source, 'posix');
+      expect(program.status).toBe('complete');
+      expect(program.issues).toEqual([]);
+    },
+  );
+
+  test.each([
+    'echo $(dirname "$(command -v node)") tail',
+    'echo "$(dirname "$(command -v node)")" tail',
+  ])('reads a double-quoted substitution nested in a substitution: %s', (source) => {
+    const program = parseCommand(source, 'posix');
+    expect(program.status).toBe('complete');
+    const command = program.nodes[0];
+    expect(command?.kind === 'command' && command.words.map((word) => word.text)).toHaveLength(3);
+    expect(command?.kind === 'command' && command.nested.map((nested) => nested.source)).toEqual([
+      'dirname "$(command -v node)"',
+    ]);
+  });
 
   test('reads a group, a redirection into a substitution and a function definition as their nodes', () => {
     const program = parseCommand('echo x >$(git reset --hard); (rm -rf /tmp/x)', 'posix');
@@ -205,7 +333,10 @@ describe('core/shell/parse', () => {
   });
 
   test('a reserved word that starts a command is a command of its own', () => {
-    const rows: readonly { readonly source: string; readonly views: string[][] }[] = [
+    const rows: readonly {
+      readonly source: string;
+      readonly views: string[][];
+    }[] = [
       {
         source: 'if vault read s; then :; fi',
         views: [['if'], ['vault', 'read', 's'], ['then'], [':'], ['fi']],
@@ -318,8 +449,15 @@ describe('core/shell/parse', () => {
 });
 
 describe('parser caps yield status limited without throwing', () => {
-  const small: CommandParserLimits = { maxInputLength: 40, maxWords: 6, maxDepth: 2 };
-  const overCap: readonly { readonly source: string; readonly dialects: readonly ShellKind[] }[] = [
+  const small: CommandParserLimits = {
+    maxInputLength: 40,
+    maxWords: 6,
+    maxDepth: 2,
+  };
+  const overCap: readonly {
+    readonly source: string;
+    readonly dialects: readonly ShellKind[];
+  }[] = [
     { source: 'x'.repeat(41), dialects: ['posix', 'powershell'] },
     { source: 'a b c d e f g', dialects: ['posix', 'powershell'] },
     { source: 'echo $($($(deep)))', dialects: ['posix', 'powershell'] },
