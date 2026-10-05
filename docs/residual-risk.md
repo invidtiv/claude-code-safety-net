@@ -98,9 +98,15 @@ fail-closed promise is must-fix, but its remedy is limited: refuse the shape fai
 parser reports it `invalid` and every level denies it, as `${ list; }` function substitutions are
 refused. Never make the parser read a constructed shape more faithfully. Quote, operand-grammar,
 subscript, or shell-version emulation is not a remedy for a constructed input, because each
-refinement exposes the next constructed shape. Measure the refusal's cost with an audit-log
-replay; if it would deny commands agents actually run, narrow it to exclude those commands'
-shape or ask the maintainer.
+refinement exposes the next constructed shape. The refusal must be positionless: keyed to the
+presence of a construct (a quote, an escape, a substitution opener anywhere later in the command),
+never to where quotes or escapes sit or whether they balance, because a position-based check is
+emulation too and the next constructed shape defeats it. Measure the refusal's cost with an
+audit-log replay. It is accepted without asking the maintainer, and its cost recorded in the
+commit and the PR, when every command it newly denies at standard is already denied at strict on
+main or cannot be parsed by the shell, or when the new denials total at most 0.01% of the replayed
+commands. Otherwise narrow it to exclude those commands' shape without tracking positions, or
+record the finding as a known gap.
 
 ## Adjudicated Families
 

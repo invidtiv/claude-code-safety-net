@@ -82,8 +82,9 @@ fixture for `tests/gate/behavioral-contract-cases.ts` is welcome.
   denial, a documented residual-risk entry, or an OS-level sandbox recommendation.
 - A reviewer-constructed input that defeats a catastrophic protection or a strict or paranoid
   fail-closed promise is blocking, but propose only a fail-closed refusal of its shape: the parser
-  reports it `invalid`, so every level denies it. Never propose quote, operand-grammar, subscript,
-  or shell-version fidelity for a constructed input.
+  reports it `invalid`, so every level denies it. The refusal must key on the presence of a
+  construct, not on where quotes or escapes sit or whether they balance. Never propose quote,
+  operand-grammar, subscript, or shell-version fidelity for a constructed input.
 - Propose the smallest sufficient remediation for each finding. Proposals that add process
   automation, registries, attestations, or new validation frameworks are non-blocking suggestions
   for the maintainer, not remediations.
