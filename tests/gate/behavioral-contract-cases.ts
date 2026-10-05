@@ -303,6 +303,11 @@ export function behavioralContractCases(paths: {
             homeRemovalBlock,
           ],
           [
+            'blocks a home removal in an operand inside a double-quoted argument of a substitution',
+            'echo $(printf "%s" "${U:-$(rm -rf ~/)}")',
+            homeRemovalBlock,
+          ],
+          [
             'blocks a home removal behind a process substitution in a pattern operand',
             'echo "${y#<(rm -rf ~/)}"',
             homeRemovalBlock,
@@ -371,6 +376,11 @@ export function behavioralContractCases(paths: {
           [
             'allows a harmless generator in a default-value operand',
             'EDITOR=${EDITOR:-$(command -v vim)}',
+            { kind: 'allow' },
+          ],
+          [
+            'allows a double-quoted substitution nested in a default-value operand',
+            'NODE_DIR=${NODE_DIR:-$(dirname "$(command -v node)")}',
             { kind: 'allow' },
           ],
           [

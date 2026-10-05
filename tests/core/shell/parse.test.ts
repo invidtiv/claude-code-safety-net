@@ -176,6 +176,7 @@ describe('core/shell/parse', () => {
     'echo ${x:-$(( $(rm -rf x) ))}',
     'echo "$(( $(rm -rf x) ))"',
     'echo "$(( 1 + $(( $(rm -rf x) )) ))"',
+    'echo ${x:-$(dirname "$(rm -rf x)")}',
   ])(
     'reads a substitution inside a parameter expansion or double-quoted arithmetic: %s',
     (source) => {
@@ -279,6 +280,19 @@ describe('core/shell/parse', () => {
       expect(program.issues).toEqual([]);
     },
   );
+
+  test.each([
+    'echo $(dirname "$(command -v node)") tail',
+    'echo "$(dirname "$(command -v node)")" tail',
+  ])('reads a double-quoted substitution nested in a substitution: %s', (source) => {
+    const program = parseCommand(source, 'posix');
+    expect(program.status).toBe('complete');
+    const command = program.nodes[0];
+    expect(command?.kind === 'command' && command.words.map((word) => word.text)).toHaveLength(3);
+    expect(command?.kind === 'command' && command.nested.map((nested) => nested.source)).toEqual([
+      'dirname "$(command -v node)"',
+    ]);
+  });
 
   test('reads a group, a redirection into a substitution and a function definition as their nodes', () => {
     const program = parseCommand('echo x >$(git reset --hard); (rm -rf /tmp/x)', 'posix');
