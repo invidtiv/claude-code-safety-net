@@ -90,6 +90,7 @@ beforeAll(() => {
     'home/work/node_modules/pkg/deploy_rsa': 'PRIVATE KEY',
     'home/work/secrets.pem': 'PEM',
     'home/work/keys/server.key': 'KEY',
+    'home/work/keys/query&id=.asc': 'PGP',
     'home/work/id_rsa.pub': 'PUBLIC KEY',
     'home/work/src/app.ts': 'export {};',
     'home/work/report.txt': 'text',
@@ -227,6 +228,16 @@ describe('shell operands against the built-in secret catalog', () => {
         expected: { target: 'keys/server.key', ruleId: 'secret.ext-pattern.key' },
       },
       {
+        name: 'a sensitive extension matches before the file exists',
+        command: 'cat keys/private.asc',
+        expected: { target: 'keys/private.asc', ruleId: 'secret.ext.asc' },
+      },
+      {
+        name: 'an existing file whose name looks like a query keeps its extension',
+        command: "cat 'keys/query&id=.asc'",
+        expected: { target: 'keys/query&id=.asc', ruleId: 'secret.ext.asc' },
+      },
+      {
         name: 'a home kube config',
         command: 'cat ~/.kube/config',
         expected: { target: '~/.kube/config', ruleId: 'secret.home.kube-config' },
@@ -257,6 +268,31 @@ describe('shell operands against the built-in secret catalog', () => {
       {
         name: 'a .sample variant is a template too',
         command: 'cat .env.sample.local',
+        expected: null,
+      },
+      {
+        name: 'a PostgREST sort order passed to a script is query text, not a PGP key',
+        command: "bash query.sh 'orders?select=id&order=created_at.asc'",
+        expected: null,
+      },
+      {
+        name: 'a query value keeps its query context when it holds a slash',
+        command: "bash query.sh 'jobs?path=2026/keys.asc'",
+        expected: null,
+      },
+      {
+        name: 'a query value in a remote URL is not a path',
+        command: "curl 'https://example.supabase.co/rest/v1/todos?order=id.asc'",
+        expected: null,
+      },
+      {
+        name: 'a query value in a schemeless local URL is not a path',
+        command: "curl 'localhost:3000/todos?order=id.asc'",
+        expected: null,
+      },
+      {
+        name: 'curl data without @ is request body, not a path',
+        command: 'curl -G http://localhost:3000/todos -d order=id.asc',
         expected: null,
       },
       {
