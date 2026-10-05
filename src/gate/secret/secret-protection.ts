@@ -602,7 +602,14 @@ function extractSegmentPathTargets(
   if (command === 'curl') {
     return [
       ...assignmentValues,
-      ...post.flatMap((token) => extractOperandPathCandidates(command, token)).map(here),
+      ...post
+        .filter(
+          (token, index) =>
+            attachedCurlUploadOperand(token) === null &&
+            curlOperandUploadFlag(post[index - 1]) === null,
+        )
+        .flatMap((token) => extractOperandPathCandidates(command, token))
+        .map(here),
       ...extractCurlUploadPathTargets(post).map(here),
     ];
   }
@@ -907,7 +914,9 @@ function extractOperandPathCandidates(command: string, token: string): string[] 
   if (token === '--') return [];
   const candidates: string[] = [];
   const equals = token.indexOf('=');
-  if (equals > 0 && equals < token.length - 1) candidates.push(token.slice(equals + 1));
+  if (equals > 0 && equals < token.length - 1 && !token.slice(0, equals).includes('?')) {
+    candidates.push(token.slice(equals + 1));
+  }
   if (token.startsWith('-')) return candidates;
   if (command === 'tar' && /\.(?:tar|tgz|tar\.gz|zip)$/i.test(token)) return candidates;
   if (command === 'zip' && /\.zip$/i.test(token)) return candidates;
@@ -1710,6 +1719,8 @@ function candidateAbsolutePath(
   }
 }
 
+const QUERY_PARAMETER = /[?&][^?&=/]+=/;
+
 const SKIPPABLE_PATH_SEGMENTS = new Set(['node_modules', '__pycache__']);
 
 const SKIPPABLE_PATH_SEGMENT_PAIRS = [
@@ -1804,6 +1815,9 @@ function isSensitivePath(
     isSecretRuleEnabled(SECRET_BROAD_SSH_KEY_BASENAME_RULE.id, config)
   ) {
     return SECRET_BROAD_SSH_KEY_BASENAME_RULE.id;
+  }
+  if (QUERY_PARAMETER.test(target) && !candidateExistsOnDisk(target, cwd, environment, budget)) {
+    return null;
   }
   const extensionRuleId = hasSensitiveExtension(comparableName, config);
   if (extensionRuleId) return extensionRuleId;
