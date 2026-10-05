@@ -93,6 +93,15 @@ triggering input is:
 - Secret redaction failing in audit or diagnostic output, or the tool itself becoming a harmful
   vector (`SECURITY.md`, "The Boundary: Bug or Vulnerability?").
 
+A reviewer-constructed input that defeats a catastrophic protection or a strict or paranoid
+fail-closed promise is must-fix, but its remedy is limited: refuse the shape fail-closed, so the
+parser reports it `invalid` and every level denies it, as `${ list; }` function substitutions are
+refused. Never make the parser read a constructed shape more faithfully. Quote, operand-grammar,
+subscript, or shell-version emulation is not a remedy for a constructed input, because each
+refinement exposes the next constructed shape. Measure the refusal's cost with an audit-log
+replay; if it would deny commands agents actually run, narrow it to exclude those commands'
+shape or ask the maintainer.
+
 ## Adjudicated Families
 
 ### RR-1: Dynamic Executables and Computed Command Names

@@ -80,6 +80,10 @@ fixture for `tests/gate/behavioral-contract-cases.ts` is welcome.
   close a crafted standard-mode bypass.
 - Prefer, in order: a simpler ownership boundary, a bounded conservative check, a strict-only
   denial, a documented residual-risk entry, or an OS-level sandbox recommendation.
+- A reviewer-constructed input that defeats a catastrophic protection or a strict or paranoid
+  fail-closed promise is blocking, but propose only a fail-closed refusal of its shape: the parser
+  reports it `invalid`, so every level denies it. Never propose quote, operand-grammar, subscript,
+  or shell-version fidelity for a constructed input.
 - Propose the smallest sufficient remediation for each finding. Proposals that add process
   automation, registries, attestations, or new validation frameworks are non-blocking suggestions
   for the maintainer, not remediations.

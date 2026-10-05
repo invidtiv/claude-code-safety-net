@@ -10,7 +10,7 @@
 - Findings that require intentionally adversarial construction in standard mode should be classified as accepted residual risk or follow-up hardening unless the user explicitly expands the threat model.
 - Adjudicated bypass families live in `docs/residual-risk.md`; consult it before debating a finding. Matches are pre-adjudicated residual risk, and the productive response to a crafted bypass in a listed family is a strict or paranoid fail-closed fixture, not a standard-mode parser patch.
 - A standard-mode false-negative finding enters remediation only with plausible non-adversarial provenance: a realistic agent task or real-world sighting that produces the command shape. New behavioral-contract corpus entries come from field evidence, not reviewer construction.
-- Allow one review-driven remediation pass and one confirmation review. If another independent bypass family appears, stop and classify the remaining findings as must-fix, accepted residual risk, or evidence-invalid before adding more parser logic.
+- Allow one review-driven remediation pass and one confirmation review per PR; findings from autoreview and from review bots count alike. If the confirmation review finds another gap, do not patch it: classify each remaining finding as must-fix, accepted residual risk, or evidence-invalid. When a must-fix finding targets the same mechanism (the same scanner, walker, or matcher) as an earlier fix, the remedy is a fail-closed refusal of the shapes that mechanism cannot read, never a further refinement of it. Any further remediation pass needs maintainer approval.
 - Every finding must propose the smallest sufficient remediation, per the Scope Discipline section of `AGENTS.md`. A proposal that adds process automation, registries, attestations, or new validation frameworks is a suggestion for the maintainer — never merge-blocking, and never implemented in the same remediation pass without explicit user approval. Reviewers do not answer "how could this process be subverted?" with new machinery; unenforceable-process concerns are documented limitations, not findings.
 - When invoking isolated autoreview, pass `--prompt-file docs/review-prompt.md`; it inlines this threat model, the ranked review priorities, and the residual-risk families for the isolated reviewer.
 - Also pass `--prompt` with a concise task-specific overview: why the change exists, its intended behavior, its scope and ownership boundary, and any deliberately unchanged or generated code. When generated artifacts relocate unchanged source, say so explicitly and direct the reviewer to evaluate the generator and artifact contract instead of treating the relocated logic as newly introduced.
@@ -25,7 +25,8 @@ Classify findings in this order:
 
 1. Unchanged or unrelated behavior is **out-of-scope**.
 2. Anything listed under "What Is Never Residual Risk" is **must-fix**, even if its command shape
-   resembles an existing family.
+   resembles an existing family. When the triggering input is reviewer-constructed, the fix is
+   limited to the fail-closed refusal that section describes.
 3. A match for an existing `docs/residual-risk.md` family is
    **accepted-existing-residual** and does not create a new entry.
 4. A standard-mode false negative with realistic non-adversarial provenance or field evidence is
@@ -36,7 +37,7 @@ Classify findings in this order:
    **accepted-new-residual** candidate.
 
 Uncertainty never creates a new family. If uncertainty touches a never-residual guarantee, classify
-the finding as must-fix. Otherwise classify it as evidence-invalid.
+the finding as must-fix, with the same remedy limit. Otherwise classify it as evidence-invalid.
 
 ### Independent confirmation for a new family
 
