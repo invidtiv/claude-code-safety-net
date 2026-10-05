@@ -209,8 +209,11 @@ describe('core/shell/parse', () => {
     'echo ${x:-\\"$(rm -rf x)}',
     "echo ${x:-$'\\x41'$(rm -rf x)}",
     'FILES=(${(f)"$(sed -n p list)"})',
+    "echo ${x:-'}'$(rm -rf x)\\'}",
+    'echo ${x:-"}"$(rm -rf x)\\"}',
+    'echo ${x:-$\\\n(rm -rf x)}',
   ])(
-    'refuses a quote or backslash beside a substitution in a parameter expansion: %s',
+    'refuses a parameter expansion whose quote or backslash hides a substitution: %s',
     (source) => {
       const program = parseCommand(source, 'posix');
       expect(program.status).toBe('invalid');

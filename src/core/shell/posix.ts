@@ -1074,7 +1074,8 @@ const UNCLOSED_PARAMETER_EXPANSION_ISSUE: CommandIssue = Object.freeze({
 
 const QUOTED_PARAMETER_EXPANSION_ISSUE: CommandIssue = Object.freeze({
   code: 'unsupported-parameter-expansion',
-  message: 'a quote or backslash beside a substitution inside ${ } cannot be analyzed',
+  message:
+    'an unbalanced quote, a line continuation, or a quote or backslash beside a substitution inside ${ } cannot be analyzed',
 });
 
 const BACKTICK_ESCAPE_ISSUE: CommandIssue = Object.freeze({
@@ -1097,7 +1098,7 @@ function readParameterExpansion(
   const expansion = scanParameterExpansion(source, start + 2, end);
   const next = expansion.close === -1 ? end : expansion.close + 1;
   if (expansion.close === -1) issues.push(UNCLOSED_PARAMETER_EXPANSION_ISSUE);
-  if (expansion.quoted && expansion.substitutions.length > 0) {
+  if ((expansion.quoted && expansion.substitutions.length > 0) || expansion.unreadable) {
     issues.push(QUOTED_PARAMETER_EXPANSION_ISSUE);
   }
   const limited = expansion.substitutions.some((index) => {
@@ -1114,6 +1115,9 @@ function readParameterExpansion(
 export function scanParameterExpansion(source: string, start: number, end: number) {
   const substitutions: number[] = [];
   let quoted = false;
+  let oddSingleQuotes = false;
+  let oddDoubleQuotes = false;
+  let continued = false;
   let nesting = 1;
   let i = start;
   while (i < end) {
@@ -1121,6 +1125,9 @@ export function scanParameterExpansion(source: string, start: number, end: numbe
     if (char === '$' && opensFunctionSubstitution(source, i)) substitutions.push(i);
     if (char === '\\' || char === "'" || char === '"') {
       quoted = true;
+      oddSingleQuotes = oddSingleQuotes !== (char === "'");
+      oddDoubleQuotes = oddDoubleQuotes !== (char === '"');
+      continued ||= char === '\\' && source[i + 1] === '\n';
       i += char === '\\' ? 2 : 1;
       continue;
     }
@@ -1137,10 +1144,17 @@ export function scanParameterExpansion(source: string, start: number, end: numbe
       i += 2;
       continue;
     }
-    if (char === '}' && --nesting === 0) return { close: i, substitutions, quoted };
+    if (char === '}' && --nesting === 0) {
+      return {
+        close: i,
+        substitutions,
+        quoted,
+        unreadable: oddSingleQuotes || oddDoubleQuotes || continued,
+      };
+    }
     i++;
   }
-  return { close: -1, substitutions, quoted };
+  return { close: -1, substitutions, quoted, unreadable: false };
 }
 
 function backtickBodyHidesExpansion(source: string, start: number, end: number): boolean {

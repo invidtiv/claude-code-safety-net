@@ -337,6 +337,16 @@ export function behavioralContractCases(paths: {
             'echo ${x:-${ rm -rf ~/; }}',
             unparseableBlock,
           ],
+          [
+            'fails closed on a quoted closing brace that ends a parameter expansion early',
+            "echo ${x:-'}'$(rm -rf ~/)\\'}",
+            unparseableBlock,
+          ],
+          [
+            'fails closed on a line continuation that hides a substitution in a parameter expansion',
+            'echo ${x:-$\\\n(rm -rf ~/)}',
+            unparseableBlock,
+          ],
           ['allows a nested parameter expansion', 'echo ${x:-${y}}', { kind: 'allow' }],
           [
             'allows a harmless generator in a default-value operand',
