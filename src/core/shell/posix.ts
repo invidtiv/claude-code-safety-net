@@ -399,16 +399,16 @@ function scanSequence(
           attach: (heredoc) => {
             redirection.heredoc = heredoc;
             if (heredoc.quotedDelimiter) return;
-            nested.push(
-              ...readHeredocBodySubstitutions(
-                source,
-                heredoc.bodySpan.start,
-                heredoc.bodySpan.end,
-                limits,
-                wordBudget,
-                depth + 1,
-              ),
+            const body = readHeredocBodySubstitutions(
+              source,
+              heredoc.bodySpan.start,
+              heredoc.bodySpan.end,
+              limits,
+              wordBudget,
+              depth + 1,
             );
+            nested.push(...body.programs);
+            issues.push(...body.issues);
           },
         });
       }
@@ -591,6 +591,7 @@ function readWord(
       continue;
     }
 
+    if (opensFunctionSubstitution(source, i)) issues.push(FUNCTION_SUBSTITUTION_ISSUE);
     const substitution =
       char === '$' || char === '<' || char === '>' || char === '`'
         ? readSubstitution(source, i, end, limits, wordBudget, depth)
@@ -673,6 +674,14 @@ function readDoubleQuoted(
       const close = findSubstitutionEnd(source, i + 3, end, '))');
       const next = close === -1 ? end : close + 2;
       text += source.slice(i, next);
+      if (
+        containsFunctionSubstitutionOpener(source, i, next) &&
+        mayRunFunctionSubstitution(
+          readSubstitution(source, i, end, limits, wordBudget, depth)?.program,
+        )
+      ) {
+        issues.push(FUNCTION_SUBSTITUTION_ISSUE);
+      }
       if (close === -1) {
         issues.push({
           code: 'unclosed-arithmetic',
@@ -682,6 +691,7 @@ function readDoubleQuoted(
       i = next;
       continue;
     }
+    if (opensFunctionSubstitution(source, i)) issues.push(FUNCTION_SUBSTITUTION_ISSUE);
     const substitution = readSubstitution(source, i, end, limits, wordBudget, depth);
     if (substitution) {
       const collected = collectSubstitution(substitution, nested, issues);
@@ -749,6 +759,8 @@ function readSubstitution(
         depth + 1,
       );
       if (!nestedSubstitution) {
+        if (opensFunctionSubstitution(source, cursor))
+          arithmeticIssues.push(FUNCTION_SUBSTITUTION_ISSUE);
         cursor++;
         continue;
       }
@@ -822,8 +834,9 @@ function readHeredocBodySubstitutions(
   limits: CommandParserLimits,
   wordBudget: WordBudget,
   depth: number,
-): CommandProgram[] {
+) {
   const programs: CommandProgram[] = [];
+  const issues: CommandIssue[] = [];
   let i = start;
   while (i < end) {
     const char = source[i];
@@ -836,14 +849,20 @@ function readHeredocBodySubstitutions(
         ? readSubstitution(source, i, end, limits, wordBudget, depth)
         : null;
     if (!substitution) {
+      if (opensFunctionSubstitution(source, i)) issues.push(FUNCTION_SUBSTITUTION_ISSUE);
       i++;
       continue;
     }
     programs.push(substitution.program);
+    if (
+      containsFunctionSubstitutionOpener(source, i, substitution.next) &&
+      mayRunFunctionSubstitution(substitution.program)
+    ) {
+      issues.push(FUNCTION_SUBSTITUTION_ISSUE);
+    }
     i = substitution.next;
-    if (substitution.program.status === 'limited') break;
   }
-  return programs;
+  return { programs, issues };
 }
 
 function collectSubstitution(
@@ -1015,13 +1034,49 @@ function isShellWhitespace(char: string): boolean {
   return /\s/u.test(char);
 }
 
+const FUNCTION_SUBSTITUTION_ISSUE: CommandIssue = Object.freeze({
+  code: 'unsupported-function-substitution',
+  message: '${ list; } function substitutions run in the current shell and cannot be analyzed',
+});
+
+function opensFunctionSubstitution(source: string, start: number): boolean {
+  if (source[start] !== '$') return false;
+  const brace = skipLineContinuations(source, start + 1);
+  if (source[brace] !== '{') return false;
+  const next = source[skipLineContinuations(source, brace + 1)] ?? '';
+  return next === '|' || isShellWhitespace(next);
+}
+
+function containsFunctionSubstitutionOpener(source: string, start: number, end: number): boolean {
+  for (let k = source.indexOf('$', start); k !== -1 && k < end; k = source.indexOf('$', k + 1)) {
+    if (opensFunctionSubstitution(source, k)) return true;
+  }
+  return false;
+}
+
+function mayRunFunctionSubstitution(program: CommandProgram | undefined): boolean {
+  return (
+    program?.status === 'limited' ||
+    (program?.issues ?? []).some((issue) => issue.code === FUNCTION_SUBSTITUTION_ISSUE.code)
+  );
+}
+
+function skipLineContinuations(source: string, start: number): number {
+  let index = start;
+  while (source.startsWith('\\\n', index) || source.startsWith('\\\r\n', index)) {
+    index += source[index + 1] === '\r' ? 3 : 2;
+  }
+  return index;
+}
+
 function readVariableEnd(source: string, start: number, end: number): number {
   if (source[start + 1] === '{') {
     const close = source.indexOf('}', start + 2);
     return close === -1 || close >= end ? end : close + 1;
   }
+  if (source[start + 1] === '$') return start + 2;
   let i = start + 1;
-  while (i < end && /[A-Za-z0-9_?@#$!*-]/.test(source[i] ?? '')) i++;
+  while (i < end && /[A-Za-z0-9_?@#!*-]/.test(source[i] ?? '')) i++;
   return i === start + 1 ? start + 1 : i;
 }
 
@@ -1106,7 +1161,8 @@ function getParseStatus(issues: readonly CommandIssue[], limited = false): Comma
         issue.code === 'missing-heredoc-delimiter' ||
         issue.code === 'ambiguous-heredoc-delimiter' ||
         issue.code === 'unterminated-heredoc' ||
-        issue.code === 'unsupported-heredoc-context',
+        issue.code === 'unsupported-heredoc-context' ||
+        issue.code === 'unsupported-function-substitution',
     )
   ) {
     return 'invalid';
