@@ -181,6 +181,7 @@ function checkCarriers(cases: readonly CarrierCase[]): void {
 const env = (target: string): Verdict => ({ target, ruleId: 'secret.basename.env' });
 const ssh = (target: string): Verdict => ({ target, ruleId: 'secret.home.ssh' });
 const aws = (target: string): Verdict => ({ target, ruleId: 'secret.home.aws' });
+const python = (...lines: string[]) => `python3 - <<'EOF'\n${lines.join('\n')}\nEOF`;
 
 describe('shell operands against the built-in secret catalog', () => {
   test('a path operand is decided by the catalog rule that names its shape', () => {
@@ -1249,6 +1250,100 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         name: 'a python command literal reaching subprocess.run through a tuple assignment',
         command:
           'python3 -c \'import subprocess\ncmd, check = "cat .env", True\nsubprocess.run(cmd, shell=True, check=check)\'',
+        expected: env('.env'),
+      },
+    ]);
+  });
+
+  test('an argument list run without a shell, interpreter, or code flag walks only its own literals in standard mode', () => {
+    checkCarriers([
+      {
+        name: 'prose beside an ffprobe argument list holding a name',
+        command: python(
+          'import subprocess',
+          "f = 'a.mp3'",
+          "subprocess.run(['ffprobe', '-v', 'error', f])",
+          "texts = ['It keeps SSH keys and .env files out of reach.']",
+        ),
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'prose beside an ffprobe argument tuple holding a name',
+        command: python(
+          'import subprocess',
+          "f = 'a.mp3'",
+          "subprocess.run(('ffprobe', '-v', 'error', f), check=True)",
+          "texts = ['It keeps SSH keys and .env files out of reach.']",
+        ),
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a printed hint beside a git argument list holding a name',
+        command: python(
+          'import subprocess',
+          "path = 'src'",
+          "subprocess.check_output(['git', 'diff', '--cached', '--name-only', path])",
+          "print('copy .env.example to .env first')",
+        ),
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+    ]);
+  });
+
+  test('an argument list that can run code, or is not a plain list, walks every literal as shell', () => {
+    const cmd = "cmd = 'cat .env'";
+    checkCarriers([
+      ...[
+        'subprocess.run(cmd, shell=True)',
+        "subprocess.run(['sh', '-c', cmd])",
+        "subprocess.run(['bash', '-lc', cmd])",
+        "subprocess.run(['env', 'sh', '-c', cmd])",
+        "subprocess.run(['timeout', '5', 'sh', '-c', cmd])",
+        "subprocess.run(['sudo', sh, '-c', cmd])",
+        "subprocess.run(['su', 'root', '-c', cmd])",
+        "subprocess.run(['bash', cmd])",
+        'subprocess.run([prog, cmd])',
+        "subprocess.run([f'{prog}', cmd])",
+        'subprocess.run([cmd], shell=True)',
+        "args = ['nice', cmd]\nsubprocess.run(args)",
+        "subprocess.run(['nice', cmd] + extra)",
+        "subprocess.run(['env', *argv, cmd])",
+        "subprocess.run(['nice', [cmd]])",
+      ].map((call) => ({
+        name: `a command literal reaching ${call}`,
+        command: python('import subprocess', cmd, call),
+        expected: env('.env'),
+      })),
+      {
+        name: 'node code reaching an argument list with an eval flag',
+        command: python(
+          'import subprocess',
+          `code = "require('fs').readFileSync('.env')"`,
+          "subprocess.run(['node', '-e', code])",
+        ),
+        expected: env('.env'),
+      },
+      {
+        name: 'a path literal held in a name an argument list receives',
+        command: python('import subprocess', "f = '.env'", "subprocess.run(['cat', f])"),
+        expected: env('.env'),
+      },
+      {
+        name: 'a home key path held in a name an argument list receives',
+        command: python('import subprocess', "f = '~/.ssh/id_rsa'", "subprocess.run(['cat', f])"),
+        expected: ssh('~/.ssh/id_rsa'),
+      },
+      {
+        name: 'command literals looped into a shell argument list',
+        command: python(
+          'import subprocess',
+          "cmds = ['cat .env']",
+          'for c in cmds:',
+          "    subprocess.run(['sh', '-c', c])",
+        ),
         expected: env('.env'),
       },
     ]);

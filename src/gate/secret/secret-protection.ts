@@ -1369,7 +1369,11 @@ function extractInlineCodePathTargets(
     : [];
   const literalsExecCallsReceive =
     !literalsPresumedData ||
-    execCalls.some((call) => firstArgumentHasName(masked.masked, call.start))
+    execCalls.some(
+      (call) =>
+        firstArgumentHasName(masked.masked, call.start) &&
+        !runsArgvWithoutCodeFlag(masked, call.start),
+    )
       ? masked.literals
       : masked.literals.filter(
           (literal) =>
@@ -1450,6 +1454,29 @@ function namesCommandExecution(masked: string): boolean {
   return Array.from(masked.matchAll(/[A-Za-z_$][\w$]*/g), (match) =>
     identifierParts(match[0]),
   ).some((parts) => parts.some((part) => COMMAND_EXECUTION_IDENTIFIER_PART.test(part)));
+}
+
+function runsArgvWithoutCodeFlag(
+  masked: Extract<MaskedCode, { kind: 'masked' }>,
+  start: number,
+): boolean {
+  const opener = nextNonWhitespaceIndex(masked.masked, start);
+  const closer = BRACKET_CLOSERS[masked.masked[opener] ?? ''];
+  if (closer === undefined || closer === '}') return false;
+  const end = masked.masked.indexOf(closer, opener + 1);
+  const elements = masked.masked.slice(opener + 1, end);
+  return (
+    end !== -1 &&
+    /^\s*,[\w\s,]*$/.test(elements) &&
+    /^[,)]/.test(masked.masked.slice(nextNonWhitespaceIndex(masked.masked, end + 1))) &&
+    !masked.literals.some(
+      (literal) =>
+        literal.tokenStart > opener &&
+        literal.tokenStart < end &&
+        (CODE_EVAL_FLAGS.has(literal.text) ||
+          isCodeInterpreter(basename(literal.text).toLowerCase())),
+    )
+  );
 }
 
 function innermostOpeners(masked: string): number[] {
