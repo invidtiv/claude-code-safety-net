@@ -1262,6 +1262,13 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         relaxedInStandard: true,
       },
       {
+        name: 'a comparison operand in a list comprehension beside a subprocess call',
+        command:
+          "python3 -c \"import subprocess; paths = subprocess.check_output(['git', 'ls-files']).decode().splitlines(); print([p for p in paths if p != '.env'])\"",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
         name: 'a set member a loop opens is data too, the accepted trade-off',
         command: 'python3 -c "for f in {\'.env\'}: print(open(f).read())"',
         expected: env('.env'),

@@ -1375,13 +1375,13 @@ function inDataPosition(
 ): boolean {
   const opener = openers[literal.tokenStart] ?? -1;
   const bracket = masked[opener] ?? '';
-  if (sequencesMayHoldArguments && (bracket === '[' || bracket === '(')) return false;
   const before = previousNonWhitespaceIndex(masked, literal.tokenStart);
   const after = nextNonWhitespaceIndex(masked, literal.tokenEnd);
   if (/(?:^|[^\w$])in$|[=!]=$/.test(masked.slice(Math.max(0, before - 3), before + 1))) {
     return true;
   }
   if (/^(?:(?:not\s+)?in(?![\w$])|[=!]=)/.test(masked.slice(after, after + 8))) return true;
+  if (sequencesMayHoldArguments && (bracket === '[' || bracket === '(')) return false;
   const previous = masked[before];
   const next = masked[after];
   if (bracket === '{' && previous === ':') return startsObjectEntry(masked, before);
