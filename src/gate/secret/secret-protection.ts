@@ -1359,7 +1359,7 @@ function namesCommandExecution(masked: string): boolean {
 
 function innermostOpeners(masked: string): number[] {
   const open: number[] = [];
-  return Array.from(masked, (char, index) => {
+  return masked.split('').map((char, index) => {
     const innermost = open.at(-1) ?? -1;
     if (char in BRACKET_CLOSERS) open.push(index);
     if (char === ')' || char === ']' || char === '}') open.pop();

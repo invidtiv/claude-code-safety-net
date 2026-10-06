@@ -1262,6 +1262,12 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         relaxedInStandard: true,
       },
       {
+        name: 'dict labels after a comment of astral characters',
+        command: `python3 - <<'EOF'\nimport json\n# ${'🚀'.repeat(16)}\nlabels = {'.env': 'x'}\njson.dump(labels, open('labels.json', 'w'))\nEOF`,
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
         name: 'a comparison operand in a list comprehension beside a subprocess call',
         command:
           "python3 -c \"import subprocess; paths = subprocess.check_output(['git', 'ls-files']).decode().splitlines(); print([p for p in paths if p != '.env'])\"",
