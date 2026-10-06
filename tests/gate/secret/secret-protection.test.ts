@@ -845,6 +845,13 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
     ]);
   });
 
+  test('a literal too long to be a file name is decided, not a failure', () => {
+    const command = `python3 - <<'PY'\ns = open('notes.txt').read()\nprint(s.count('credentials-store holds ${'word '.repeat(80)}'))\nPY`;
+    for (const mode of MODES) {
+      expect(secretIn(command, mode), JSON.stringify(mode)).toBeNull();
+    }
+  });
+
   test('a string literal in interpreter code is a candidate path', () => {
     checkCarriers([
       {

@@ -33,9 +33,14 @@ export const processPathResolver: PathResolver = {
     }
   },
   entryKind: (path) => {
-    const stats = lstatSync(path, { throwIfNoEntry: false });
-    if (!stats) return 'missing';
-    return stats.isSymbolicLink() ? 'symlink' : 'present';
+    try {
+      const stats = lstatSync(path, { throwIfNoEntry: false });
+      if (!stats) return 'missing';
+      return stats.isSymbolicLink() ? 'symlink' : 'present';
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENAMETOOLONG') return 'missing';
+      throw error;
+    }
   },
 
   isDirectory: (path) => {
