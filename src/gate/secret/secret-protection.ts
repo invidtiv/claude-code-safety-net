@@ -205,6 +205,7 @@ type SecretCandidate = {
   readonly isRedirectionWriteTarget?: true;
   readonly isCreatedPath?: true;
   readonly literalRole?: 'data' | 'write';
+  readonly loopVariable?: string;
 };
 
 type SecretProtectionPolicy = {
@@ -330,10 +331,19 @@ export function findSensitiveTargetInSemanticFacts(
   if (target === null || target.ruleId === 'secret.deny-path' || options.strict !== false) {
     return target;
   }
-  const refinedCandidates = extractToolPathTargets(facts, environment, budget, {
+  const refinedWithLoopWords = extractToolPathTargets(facts, environment, budget, {
     skipMetadataOnlySegments: true,
     inlineLiteralsPresumedData: true,
   });
+  const refinedCandidates = refinedWithLoopWords.filter(
+    ({ loopVariable }) =>
+      loopVariable === undefined ||
+      refinedWithLoopWords.some(
+        (other) =>
+          other.loopVariable !== loopVariable &&
+          referencesShellVariable(other.target, loopVariable),
+      ),
+  );
   const pathRoleTargets = new Set(
     refinedCandidates
       .filter((candidate) => candidate.literalRole === undefined)
@@ -485,7 +495,7 @@ function extractCommandPathTargets(
   if (syntax.status === 'unclosed-quote') return [];
   if (syntax.status === 'invalid') throw new Error('Unable to parse command for secret protection');
 
-  const targets = [
+  const targets: SecretCandidate[] = [
     ...syntax.assignmentFallbacks.map((target) => ({ target, cwd })),
     ...extractCommandSubstitutionPathTargets(
       projectSensitiveShellText(syntax.source, environment),
@@ -500,6 +510,7 @@ function extractCommandPathTargets(
   const map = (text: string) =>
     projectSensitiveShellText(rewritePowerShellHomePrefix(text, powershell), environment);
   const holdsProcessSubstitution = /[<>=]\(/.test(syntax.source);
+  const pipedWords: string[] = [];
   const withPipeAhead = (pipeAhead: boolean) => ({
     ...options,
     commandHoldsPipe: options.commandHoldsPipe === true || pipeAhead,
@@ -509,6 +520,7 @@ function extractCommandPathTargets(
     segment: (tokens, state, pipeProducer, boundary, shellWords, pipeAhead) => {
       if (tokens.length === 0) return null;
       const scriptOptions = withPipeAhead(pipeAhead);
+      if (scriptOptions.commandHoldsPipe) pipedWords.push(...tokens);
       targets.push(
         ...extractSegmentPathTargets(
           tokens,
@@ -572,7 +584,17 @@ function extractCommandPathTargets(
     },
   });
 
-  return targets;
+  return targets.map(({ loopVariable, ...candidate }) =>
+    loopVariable === undefined ||
+    holdsProcessSubstitution ||
+    pipedWords.some((word) => referencesShellVariable(word, loopVariable))
+      ? candidate
+      : { ...candidate, loopVariable },
+  );
+}
+
+function referencesShellVariable(text: string, name: string): boolean {
+  return text === name || new RegExp(`\\$(?:\\{!|\\{?${name}(?![A-Za-z0-9_]))`).test(text);
 }
 
 function walkShellText(
@@ -600,6 +622,30 @@ function extractSegmentPathTargets(
   shellWords?: ReadonlySet<number>,
 ): SecretCandidate[] {
   const here = (target: string) => ({ target, cwd });
+  const reservedPrefix = tokens.findIndex((token) => !SHELL_RESERVED_WORDS.has(token));
+  if (options.skipMetadataOnlySegments === true && reservedPrefix > 0) {
+    return extractSegmentPathTargets(
+      tokens.slice(reservedPrefix),
+      store,
+      options,
+      environment,
+      cwd,
+      budget,
+      new Set([...(shellWords ?? [])].map((index) => index - reservedPrefix)),
+    );
+  }
+  const loopVariable = tokens[1] ?? '';
+  if (
+    options.skipMetadataOnlySegments === true &&
+    tokens[0] === 'for' &&
+    tokens[2] === 'in' &&
+    /^[A-Za-z_][A-Za-z0-9_]*$/.test(loopVariable)
+  ) {
+    return tokens
+      .slice(3)
+      .flatMap((token) => extractOperandPathCandidates('for', token))
+      .map((target) => ({ ...here(target), loopVariable }));
+  }
   if (shellWords?.size) {
     const argv = tokens.filter((_, index) => !shellWords.has(index));
     if (
@@ -618,18 +664,15 @@ function extractSegmentPathTargets(
   const executable = stripped[0] ?? '';
   const command = basename(executable).toLowerCase();
   const post = stripped.slice(1);
-  const firstNonReservedWordIndex = stripped.findIndex((token) => !SHELL_RESERVED_WORDS.has(token));
-  const metadataCommand = basename(stripped[firstNonReservedWordIndex] ?? '').toLowerCase();
   const metadataOutputMayFeedReader =
     (options.segmentMayFeedReader === true ||
       options.commandHoldsPipe === true ||
       options.displayOperandsAreCapturedOutput === true) &&
-    NAME_LISTING_METADATA_COMMANDS.has(metadataCommand);
+    NAME_LISTING_METADATA_COMMANDS.has(command);
   if (
     options.skipMetadataOnlySegments === true &&
-    firstNonReservedWordIndex !== -1 &&
     !metadataOutputMayFeedReader &&
-    isMetadataOnlyArgv(metadataCommand, stripped.slice(firstNonReservedWordIndex + 1))
+    isMetadataOnlyArgv(command, post)
   ) {
     return assignmentValues;
   }
@@ -1429,6 +1472,7 @@ function extractInlineCodePathTargets(
         )
       : []),
     ...(codeRolesReadable ? [] : (masked.masked.match(BARE_PATH_PATTERN) ?? []).map(here)),
+    ...(literalsPresumedData ? (code.match(/\$\{[^}]*\}|\$[A-Za-z_]\w*/g) ?? []).map(here) : []),
   ];
 }
 
