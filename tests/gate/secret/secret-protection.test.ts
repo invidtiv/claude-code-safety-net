@@ -736,6 +736,7 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         command:
           "uv run python - <<'PY'\nimport tempfile\nfrom pathlib import Path\nwith tempfile.TemporaryDirectory() as cwd:\n Path(cwd,'private.key').write_text('dummy')\nPY",
         expected: { target: 'private.key', ruleId: 'secret.ext-pattern.key' },
+        relaxedInStandard: true,
       },
       {
         name: 'a uv run python heredoc whose literal is inert command text in standard mode',
@@ -1383,11 +1384,174 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         command: "node -e \"require('child_process').execFileSync('cat', ['.env'])\"",
         expected: env('.env'),
       },
+    ]);
+  });
+
+  test('a generic name that interpreter code only writes, where no such file exists, is relaxed only in standard mode', () => {
+    const key = (target: string): Verdict => ({ target, ruleId: 'secret.ext-pattern.key' });
+    const envVariant = (target: string): Verdict => ({
+      target,
+      ruleId: 'secret.pattern.env-variant',
+    });
+    checkCarriers([
       {
-        name: 'a call argument naming a key file that is only written, a known false positive',
+        name: 'a joined Path argument written with write_text',
         command:
           "python3 - <<'EOF'\nimport tempfile\nfrom pathlib import Path\ntmp = tempfile.mkdtemp()\nPath(tmp, 'private.key').write_text('dummy')\nEOF",
-        expected: { target: 'private.key', ruleId: 'secret.ext-pattern.key' },
+        expected: key('private.key'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a pathlib.Path argument written with write_bytes',
+        command: "python3 -c \"import pathlib; pathlib.Path('x.key').write_bytes(b'x')\"",
+        expected: key('x.key'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'the file of an open in write mode',
+        command: "python3 -c \"open('.env.local', 'w').write('A=1')\"",
+        expected: envVariant('.env.local'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'the file of an open in append mode',
+        command: "python3 -c \"open('.env.local', 'a').write('A=1')\"",
+        expected: envVariant('.env.local'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'the file of an open with an exclusive binary mode keyword and an encoding',
+        command: "python3 -c \"open('x.key', mode='xb', buffering=0).write(b'x')\"",
+        expected: key('x.key'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'the first argument of writeFileSync',
+        command: "node -e \"require('fs').writeFileSync('.env.local', 'A=1')\"",
+        expected: envVariant('.env.local'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'the first argument of appendFile',
+        command: "node -e \"require('fs').appendFile('.env.local', 'A=1', () => {})\"",
+        expected: envVariant('.env.local'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'the first argument of Bun.write',
+        command: "bun -e \"await Bun.write('x.key', 'x')\"",
+        expected: key('x.key'),
+        relaxedInStandard: true,
+      },
+    ]);
+  });
+
+  test('a written generic name still denies when it is also read, opened readable, already exists, or an execution call receives it', () => {
+    const key = (target: string): Verdict => ({ target, ruleId: 'secret.ext-pattern.key' });
+    const envVariant = (target: string): Verdict => ({
+      target,
+      ruleId: 'secret.pattern.env-variant',
+    });
+    checkCarriers([
+      {
+        name: 'an open in the default read mode',
+        command: 'python3 -c "print(open(\'.env.local\').read())"',
+        expected: envVariant('.env.local'),
+      },
+      {
+        name: 'an open in read-write mode',
+        command: "python3 -c \"f = open('.env.local', 'r+'); print(f.read())\"",
+        expected: envVariant('.env.local'),
+      },
+      {
+        name: 'an open in append-read mode',
+        command: "python3 -c \"f = open('.env.local', 'a+'); f.seek(0); print(f.read())\"",
+        expected: envVariant('.env.local'),
+      },
+      {
+        name: 'an open whose mode is a name',
+        command: "python3 -c \"open('.env.local', mode).write('x')\"",
+        expected: envVariant('.env.local'),
+      },
+      {
+        name: 'an open whose mode is a conditional',
+        command: "python3 -c \"print(open('.env.local', 'w' if fresh else 'r').read())\"",
+        expected: envVariant('.env.local'),
+      },
+      {
+        name: 'a Path read with read_text',
+        command: 'python3 -c "from pathlib import Path; print(Path(\'.env.local\').read_text())"',
+        expected: envVariant('.env.local'),
+      },
+      {
+        name: 'a Path held in a name before it is written',
+        command:
+          "python3 -c \"from pathlib import Path; p = Path('.env.local'); p.write_text('x'); print(p.read_text())\"",
+        expected: envVariant('.env.local'),
+      },
+      {
+        name: 'a written name opened again for reading',
+        command:
+          "python3 -c \"from pathlib import Path; Path('.env.local').write_text('x'); print(open('.env.local').read())\"",
+        expected: envVariant('.env.local'),
+      },
+      {
+        name: 'a copy source',
+        command: "python3 -c \"import shutil; shutil.copy('.env.local', 'out')\"",
+        expected: envVariant('.env.local'),
+      },
+      {
+        name: 'a read whose content a write receives',
+        command: "python3 -c \"open('out', 'w').write(open('.env.local').read())\"",
+        expected: envVariant('.env.local'),
+      },
+      {
+        name: 'a JS read whose content writeFileSync receives',
+        command:
+          "node -e \"const fs = require('fs'); fs.writeFileSync('out', fs.readFileSync('.env.local'))\"",
+        expected: envVariant('.env.local'),
+      },
+      {
+        name: 'a JS file written and then read',
+        command:
+          "node -e \"const fs = require('fs'); fs.writeFileSync('.env.local', 'x'); console.log(fs.readFileSync('.env.local', 'utf8'))\"",
+        expected: envVariant('.env.local'),
+      },
+      {
+        name: 'an existing secret file overwritten by open',
+        command: "python3 -c \"open('.env', 'w').write('A=1')\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'an existing secret file overwritten by write_text',
+        command: "python3 -c \"from pathlib import Path; Path('.env').write_text('A=1')\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'an existing secret file overwritten by writeFileSync',
+        command: "node -e \"require('fs').writeFileSync('.env', 'A=1')\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'a written name an execution call also reads',
+        command: "python3 -c \"import os; open('x.key', 'w').close(); os.system('cat x.key')\"",
+        expected: key('x.key'),
+      },
+      {
+        name: 'a literal an execution call receives beside a write',
+        command:
+          "python3 -c \"import subprocess; subprocess.run(['cat', '.env']); open('x.key', 'w')\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'a home SSH key opened for writing',
+        command: `python3 -c "open('${shellPath(userHome, '.ssh', 'id_rsa')}', 'w').write('x')"`,
+        expected: ssh(shellPath(userHome, '.ssh', 'id_rsa')),
+      },
+      {
+        name: 'a coding-CLI credential store written by writeFileSync',
+        command: `node -e "require('fs').writeFileSync('${shellPath(codexHome, 'auth.json')}', '{}')"`,
+        expected: { target: shellPath(codexHome, 'auth.json'), ruleId: 'secret.cli.codex' },
       },
     ]);
   });

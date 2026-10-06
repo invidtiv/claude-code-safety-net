@@ -204,7 +204,7 @@ type SecretCandidate = {
   readonly cwd: string;
   readonly isRedirectionWriteTarget?: true;
   readonly isCreatedPath?: true;
-  readonly isDataRoleLiteral?: true;
+  readonly literalRole?: 'data' | 'write';
 };
 
 type SecretProtectionPolicy = {
@@ -246,7 +246,7 @@ function findSensitivePolicyPathTarget(
   configCwd: string,
   environment: EnvironmentContext,
   budget: Budget,
-  activeDefaultTargets?: ReadonlyMap<string, 'path' | 'data'>,
+  activeDefaultTargets?: ReadonlyMap<string, 'path' | 'data' | 'write'>,
 ): SecretTarget | null {
   for (const candidate of candidates) {
     const target = candidate.target;
@@ -280,7 +280,8 @@ function findSensitivePolicyPathTarget(
       if (dataRoleLiteral) continue;
       const writeCreatesNewFile =
         standardModeFileNameRule &&
-        candidate.isRedirectionWriteTarget === true &&
+        (candidate.isRedirectionWriteTarget === true ||
+          activeDefaultTargets?.get(target) === 'write') &&
         !target.includes('$') &&
         !candidateExistsOnDisk(target, candidate.cwd, environment, budget);
       if (writeCreatesNewFile) continue;
@@ -335,7 +336,12 @@ export function findSensitiveTargetInSemanticFacts(
   });
   const pathRoleTargets = new Set(
     refinedCandidates
-      .filter((candidate) => candidate.isDataRoleLiteral !== true)
+      .filter((candidate) => candidate.literalRole === undefined)
+      .map((candidate) => candidate.target),
+  );
+  const writeRoleTargets = new Set(
+    refinedCandidates
+      .filter((candidate) => candidate.literalRole === 'write')
       .map((candidate) => candidate.target),
   );
   const refinedTarget = findSensitivePolicyPathTarget(
@@ -347,7 +353,11 @@ export function findSensitiveTargetInSemanticFacts(
     new Map(
       refinedCandidates.map((candidate) => [
         candidate.target,
-        pathRoleTargets.has(candidate.target) ? 'path' : 'data',
+        pathRoleTargets.has(candidate.target)
+          ? 'path'
+          : writeRoleTargets.has(candidate.target)
+            ? 'write'
+            : 'data',
       ]),
     ),
   );
@@ -1376,13 +1386,15 @@ function extractInlineCodePathTargets(
   return [
     ...literals
       .filter((literal) => literal.text !== '')
-      .map((literal) =>
-        literalRolesReadable &&
-        !literalsWalkedAsShell.has(literal) &&
-        inDataPosition(masked.masked, literal, openers, sequencesMayHoldArguments)
-          ? { ...here(literal.text), isDataRoleLiteral: true as const }
-          : here(literal.text),
-      ),
+      .map((literal) => {
+        if (!literalRolesReadable || literalsWalkedAsShell.has(literal)) return here(literal.text);
+        if (inDataPosition(masked.masked, literal, openers, sequencesMayHoldArguments)) {
+          return { ...here(literal.text), literalRole: 'data' as const };
+        }
+        return feedsOnlyWrite(masked, literal, openers)
+          ? { ...here(literal.text), literalRole: 'write' as const }
+          : here(literal.text);
+      }),
     ...literals.flatMap((literal) => decodeBase64PathCandidate(literal.text)).map(here),
     ...(literalsPresumedData
       ? []
@@ -1473,6 +1485,44 @@ function inDataPosition(
     (next === ',' || next === BRACKET_CLOSERS[bracket] || (bracket === '{' && next === ':'));
   if (bracket !== '(') return element && bracket !== '';
   return element && (previous === ',' || next === ',') && isGroupingParenthesis(masked, opener);
+}
+
+const PATH_CONSTRUCTOR_CALL = /(?:^|[^\w$.])(?:pathlib\s*\.\s*)?Path\s*$/;
+const PATH_WRITE_METHOD = /^\s*\.\s*write_(?:text|bytes)\s*\(/;
+const BARE_OPEN_CALL = /(?:^|[^\w$.])open\s*$/;
+const WRITE_ONLY_OPEN_MODE = /^[bt]*[awx][abtwx]*$/;
+const WRITE_FIRST_ARGUMENT_CALL =
+  /(?:^|[^\w$])(?:writeFile|writeFileSync|appendFile|appendFileSync|Bun\s*\.\s*write)\s*$/;
+
+function feedsOnlyWrite(
+  masked: Extract<MaskedCode, { kind: 'masked' }>,
+  literal: CodeLiteral,
+  openers: readonly number[],
+): boolean {
+  const opener = openers[literal.tokenStart] ?? -1;
+  if (masked.masked[opener] !== '(') return false;
+  const previous = previousNonWhitespaceIndex(masked.masked, literal.tokenStart);
+  const after = nextNonWhitespaceIndex(masked.masked, literal.tokenEnd);
+  const next = masked.masked[after];
+  const callee = masked.masked.slice(Math.max(0, opener - 40), opener);
+  if (PATH_CONSTRUCTOR_CALL.test(callee)) {
+    return (
+      (previous === opener || masked.masked[previous] === ',') &&
+      (next === ',' || next === ')') &&
+      PATH_WRITE_METHOD.test(masked.masked.slice(closingParenthesis(masked.masked, opener + 1) + 1))
+    );
+  }
+  if (previous !== opener || next !== ',') return false;
+  if (WRITE_FIRST_ARGUMENT_CALL.test(callee)) return true;
+  if (!BARE_OPEN_CALL.test(callee)) return false;
+  const mode = masked.literals.find((candidate) =>
+    /^,\s*(?:mode\s*=\s*)?$/.test(masked.masked.slice(after, candidate.tokenStart)),
+  );
+  return (
+    mode !== undefined &&
+    WRITE_ONLY_OPEN_MODE.test(mode.text) &&
+    /^[,)]/.test(masked.masked.slice(nextNonWhitespaceIndex(masked.masked, mode.tokenEnd)))
+  );
 }
 
 function startsObjectEntry(masked: string, colon: number): boolean {

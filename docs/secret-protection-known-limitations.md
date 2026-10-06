@@ -117,9 +117,9 @@ tokens are not kept as path candidates: operand-less commands, `echo` and
 with no path-like literal. Standard mode's interpreter literal relaxations
 (code with no filesystem, command-execution, or eval marker, and Python or
 JavaScript literals in a data position such as a collection element or a
-comparison operand) apply only to the built-in rules, so every interpreter
-string literal is still checked against a deny path in every mode. Strict mode
-also scans inside literal text.
+comparison operand, or naming only the file a write creates) apply only to the
+built-in rules, so every interpreter string literal is still checked against a
+deny path in every mode. Strict mode also scans inside literal text.
 
 The failure is loud, not silent. Each denial carries `Rule: secret.deny-path`
 in the hook message (`formatBlockedMessage` in `src/integrations/format.ts`), and
