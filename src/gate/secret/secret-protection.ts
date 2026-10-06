@@ -204,6 +204,7 @@ type SecretCandidate = {
   readonly cwd: string;
   readonly isRedirectionWriteTarget?: true;
   readonly isCreatedPath?: true;
+  readonly isCertificateInput?: true;
   readonly literalRole?: 'data' | 'write';
   readonly loopVariable?: string;
 };
@@ -286,7 +287,12 @@ function findSensitivePolicyPathTarget(
         !target.includes('$') &&
         !candidateExistsOnDisk(target, candidate.cwd, environment, budget);
       if (writeCreatesNewFile) continue;
-      if (standardModeFileNameRule && candidate.isCreatedPath === true) continue;
+      if (
+        standardModeFileNameRule &&
+        (candidate.isCreatedPath === true || candidate.isCertificateInput === true)
+      ) {
+        continue;
+      }
       const spacedNonPathWord =
         standardModeFileNameRule &&
         /\s/.test(target) &&
@@ -792,10 +798,28 @@ function extractSegmentPathTargets(
       ...extractInterpreterPathTargets(command, post, store, options, environment, cwd, budget),
     ];
   }
+  const optionValue = (option: string, index: number) =>
+    new RegExp(`^--?${option}=`).test(post[index] ?? '') ||
+    new RegExp(`^--?${option}$`).test(post[index - 1] ?? '');
+  const writesTailscaleCertFiles = runsTailscaleCert(stripped);
+  const readsOnlyCertificate = command === 'openssl' && post[0] === 'x509';
   return [
     ...assignmentValues,
-    ...post.flatMap((token) => extractOperandPathCandidates(command, token)).map(here),
+    ...post.flatMap((token, index) =>
+      extractOperandPathCandidates(command, token).map((target) =>
+        writesTailscaleCertFiles && optionValue('(?:cert|key)-file', index)
+          ? { ...here(target), isCreatedPath: true as const }
+          : readsOnlyCertificate && optionValue('in', index)
+            ? { ...here(target), isCertificateInput: true as const }
+            : here(target),
+      ),
+    ),
   ];
+}
+
+function runsTailscaleCert(argv: readonly string[]): boolean {
+  const program = basename(argv[0] ?? '').toLowerCase() === 'timeout' ? argv.slice(2) : argv;
+  return basename(program[0] ?? '').toLowerCase() === 'tailscale' && program[1] === 'cert';
 }
 
 function extractSafetyNetExplainPathTargets(
@@ -833,15 +857,18 @@ function extractPipeCarrierPathTargets(
 ): SecretCandidate[] {
   if (xargsReadsPipeInputAsPath(consumer, store, options, environment, cwd, budget)) {
     const stripped = stripLeadingWrappersAndEnvAssignments(producer);
-    const namesListedByMetadataProducer = isMetadataOnlyArgv(
+    const namesListedByProducer = isMetadataOnlyArgv(
       basename(stripped[0] ?? '').toLowerCase(),
       stripped.slice(1),
     )
       ? stripped.slice(1).filter((token) => !token.startsWith('-'))
-      : [];
-    return [...extractDisplayCommandOperands(producer), ...namesListedByMetadataProducer].map(
-      (target) => ({ target, cwd }),
-    );
+      : runsTailscaleCert(stripped)
+        ? stripped.slice(1).flatMap((token) => extractOperandPathCandidates('', token))
+        : [];
+    return [...extractDisplayCommandOperands(producer), ...namesListedByProducer].map((target) => ({
+      target,
+      cwd,
+    }));
   }
 
   return extractStdinScriptPathTargets(
