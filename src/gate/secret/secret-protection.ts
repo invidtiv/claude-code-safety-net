@@ -1647,6 +1647,9 @@ function feedsOnlyWrite(
     return (
       (previous === opener || masked.masked[previous] === ',') &&
       (next === ',' || next === ')') &&
+      !masked.literals.some(
+        (other) => other.tokenStart > opener && other.tokenStart < literal.tokenStart,
+      ) &&
       PATH_WRITE_METHOD.test(masked.masked.slice(closingParenthesis(masked.masked, opener + 1) + 1))
     );
   }

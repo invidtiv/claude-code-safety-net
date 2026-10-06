@@ -1623,6 +1623,12 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
       {
+        name: 'an existing secret file overwritten through a joined literal directory',
+        command:
+          "python3 -c \"from pathlib import Path; Path('fixtures', '.env.test').write_text('A=1')\"",
+        expected: envVariant('.env.test'),
+      },
+      {
         name: 'an existing secret file overwritten by writeFileSync',
         command: "node -e \"require('fs').writeFileSync('.env', 'A=1')\"",
         expected: env('.env'),
