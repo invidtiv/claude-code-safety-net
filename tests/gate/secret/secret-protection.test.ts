@@ -271,6 +271,11 @@ describe('shell operands against the built-in secret catalog', () => {
         expected: null,
       },
       {
+        name: 'a .tpl variant is a template too',
+        command: 'cat .env.tpl',
+        expected: null,
+      },
+      {
         name: 'a PostgREST sort order passed to a script is query text, not a PGP key',
         command: "bash query.sh 'orders?select=id&order=created_at.asc'",
         expected: null,
@@ -1766,6 +1771,93 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: aws('~/.aws/credentials'),
         relaxedInStandard: true,
       },
+      {
+        name: 'a line count of a secret',
+        command: 'wc -l .env',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'clustered long and short wc counts of a secret',
+        command: 'wc -lw --chars .env',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'grep listing the files that match',
+        command: 'grep -l KEY ~/.zshrc .env',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'grep listing the files that do not match',
+        command: 'grep -L KEY .env',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'grep counting matches',
+        command: 'grep -ic KEY .env',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a quiet grep for status only',
+        command: 'grep --quiet KEY .env',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'rg listing the files that match',
+        command: 'rg --files-with-matches KEY .env',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'wc reading its file names from a secret',
+        command: 'wc -l --files0-from=.env',
+        expected: env('.env'),
+      },
+      {
+        name: 'grep printing matching lines',
+        command: 'grep KEY .env',
+        expected: env('.env'),
+      },
+      {
+        name: 'grep printing only the matched text',
+        command: 'grep -o KEY .env',
+        expected: env('.env'),
+      },
+      {
+        name: 'grep -l reading its patterns from a secret',
+        command: 'grep -l -f .env src',
+        expected: env('.env'),
+      },
+      {
+        name: 'a names-only letter that is the value of a pattern option',
+        command: 'grep -e -l .env',
+        expected: env('.env'),
+      },
+      {
+        name: 'a names-only letter clustered after a pattern option',
+        command: 'grep -el .env',
+        expected: env('.env'),
+      },
+      {
+        name: 'rg -L follows links and prints matching lines',
+        command: 'rg -L KEY .env',
+        expected: env('.env'),
+      },
+      {
+        name: 'rg handing each file to a preprocessor',
+        command: 'rg --pre ./upload -l KEY .env',
+        expected: env('.env'),
+      },
+      {
+        name: 'a sed redaction cannot be verified',
+        command: "sed 's/=.*/=<set>/' .env",
+        expected: env('.env'),
+      },
     ]);
   });
 
@@ -1905,6 +1997,67 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         name: 'creating a file under a protected home directory',
         command: 'echo key >> ~/.ssh/authorized_keys',
         expected: ssh('~/.ssh/authorized_keys'),
+      },
+    ]);
+  });
+
+  test('creating a secret-named path with mkdir or touch is relaxed only in standard mode', () => {
+    checkCarriers([
+      {
+        name: 'a fixture directory named credentials beside a touched .env',
+        command: 'mkdir -p $S/fx/packages/credentials && touch $S/fx/.env',
+        expected: {
+          target: '${S}/fx/packages/credentials',
+          ruleId: 'secret.basename.credentials',
+        },
+        relaxedInStandard: true,
+      },
+      {
+        name: 'touching an existing secret',
+        command: 'touch .env',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'touching a new key file with a timestamp option',
+        command: 'touch -t 202601010000 fresh.pem',
+        expected: { target: 'fresh.pem', ruleId: 'secret.ext.pem' },
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a created path that is then read',
+        command: 'mkdir -p fx/credentials && cat fx/credentials',
+        expected: { target: 'fx/credentials', ruleId: 'secret.basename.credentials' },
+      },
+      {
+        name: 'a directory under a protected home directory',
+        command: 'mkdir -p ~/.ssh/x',
+        expected: ssh('~/.ssh/x'),
+      },
+      {
+        name: 'touching a home credential file',
+        command: 'touch ~/.aws/credentials',
+        expected: aws('~/.aws/credentials'),
+      },
+      {
+        name: 'a touch reference names a file it inspects',
+        command: 'touch -r .env stamp.txt',
+        expected: env('.env'),
+      },
+      {
+        name: 'a clustered touch reference',
+        command: 'touch -cr .env stamp.txt',
+        expected: env('.env'),
+      },
+      {
+        name: 'a long touch reference',
+        command: 'touch --reference=.env stamp.txt',
+        expected: env('.env'),
+      },
+      {
+        name: 'a long touch reference as a separate word',
+        command: 'touch --reference .env stamp.txt',
+        expected: env('.env'),
       },
     ]);
   });

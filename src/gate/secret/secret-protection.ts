@@ -140,6 +140,13 @@ const INTERPRETERS_BY_CLUSTERED_CODE_EVAL_FLAG = new Map([
 ]);
 
 const PATTERN_FIRST_COMMANDS = new Set(['grep', 'rg']);
+const SEARCH_NAMES_ONLY_LONG = new Set([
+  'files-with-matches',
+  'files-without-match',
+  'count',
+  'quiet',
+]);
+const WC_COUNT_OPTION = /^(?:-[lwcm]+|--(?:lines|words|bytes|chars))$/;
 const GH_TEXT_FLAGS = new Set(['--search', '-S', '--title', '-t', '--body', '-b', '--jq', '-q']);
 const GIT_MESSAGE_SUBCOMMANDS = new Set(['commit', 'merge', 'notes', 'stash', 'tag']);
 const GIT_MESSAGE_FLAGS = new Set(['-m', '--message']);
@@ -189,6 +196,7 @@ type SecretCandidate = {
   readonly target: string;
   readonly cwd: string;
   readonly isRedirectionWriteTarget?: true;
+  readonly isCreatedPath?: true;
   readonly isDataRoleLiteral?: true;
 };
 
@@ -267,6 +275,7 @@ function findSensitivePolicyPathTarget(
         !target.includes('$') &&
         !candidateExistsOnDisk(target, candidate.cwd, environment, budget);
       if (writeCreatesNewFile) continue;
+      if (standardModeFileNameRule && candidate.isCreatedPath === true) continue;
       const spacedNonPathWord =
         standardModeFileNameRule &&
         /\s/.test(target) &&
@@ -371,8 +380,30 @@ function isMetadataOnlyArgv(command: string, args: readonly string[]): boolean {
     return args.length === 3 && (args[0] === '-e' || args[0] === '-f') && args[2] === ']';
   }
   if (command === 'git') return args[0] === 'check-ignore';
+  if (command === 'wc')
+    return args.every((arg) => !arg.startsWith('-') || WC_COUNT_OPTION.test(arg));
+  if (PATTERN_FIRST_COMMANDS.has(command)) return isNamesOrCountsOnlySearch(command, args);
   if (command !== 'find') return false;
   return !args.some((arg) => FIND_NON_METADATA_ARGS.has(arg));
+}
+
+function isNamesOrCountsOnlySearch(command: string, args: readonly string[]): boolean {
+  const optionArgs = args.includes('--') ? args.slice(0, args.indexOf('--')) : args;
+  if (optionArgs.some((arg) => /^--(?:file|pre)(?:=|$)/.test(arg) || /^-[^-]*f/.test(arg))) {
+    return false;
+  }
+  const valueFlag = command === 'rg' ? /[ABCEMTdegjmrt]/ : /[ABCDdefm]/;
+  const namesOnlyFlag = command === 'rg' ? /[clq]/ : /[Lclq]/;
+  const isShortCluster = (arg: string) => /^-[^-]/.test(arg);
+  return optionArgs.some((arg, index) => {
+    const previous = optionArgs[index - 1] ?? '';
+    const consumedAsValue =
+      (/^--[^=]+$/.test(previous) && !SEARCH_NAMES_ONLY_LONG.has(previous.slice(2))) ||
+      (isShortCluster(previous) && previous.slice(1).search(valueFlag) === previous.length - 2);
+    if (consumedAsValue) return false;
+    if (arg.startsWith('--')) return SEARCH_NAMES_ONLY_LONG.has(arg.slice(2));
+    return isShortCluster(arg) && namesOnlyFlag.test(arg.slice(1).split(valueFlag)[0] ?? '');
+  });
 }
 
 function extractToolPathTargets(
@@ -607,6 +638,19 @@ function extractSegmentPathTargets(
     return [
       ...assignmentValues,
       ...extractFindCommandTargets(post, store, options, environment, cwd, budget).map(here),
+    ];
+  }
+  if (command === 'mkdir' || command === 'touch') {
+    return [
+      ...assignmentValues,
+      ...post.flatMap((token, index) =>
+        extractOperandPathCandidates(command, token).map((target) =>
+          token.startsWith('-') ||
+          (command === 'touch' && /^(?:--reference$|-[^-]*r)/.test(post[index - 1] ?? ''))
+            ? here(target)
+            : { ...here(target), isCreatedPath: true as const },
+        ),
+      ),
     ];
   }
   if (AWK_INTERPRETERS.has(command)) {
@@ -1848,6 +1892,7 @@ const ENV_EXEMPTION_BASENAMES = new Set([
   '.env.example',
   '.env.sample',
   '.env.template',
+  '.env.tpl',
   '.env.defaults',
 ]);
 
