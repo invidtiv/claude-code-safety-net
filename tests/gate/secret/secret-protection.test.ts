@@ -865,9 +865,10 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
       {
-        name: 'an f-string interpolation leaves the code unmaskable',
+        name: 'an f-string literal no statement reads is inert in standard mode',
         command: 'python3 -c "x = f\'{a}.env\'"',
         expected: env('.env'),
+        relaxedInStandard: true,
       },
       {
         name: 'a ruby backtick command leaves the code unmaskable',
@@ -1199,6 +1200,96 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
     ]);
+  });
+
+  test('a word outside the string literals of python or JS code is not a path in standard mode', () => {
+    checkCarriers([
+      {
+        name: 'a JS property access that ends in .key',
+        command:
+          'node -e \'const fs=require("fs"); const rows=JSON.parse(fs.readFileSync("rows.json")); console.log(rows.map(x=>x.key))\'',
+        expected: { target: 'x.key', ruleId: 'secret.ext-pattern.key' },
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a JS property access that ends in .pem',
+        command:
+          'node -e \'const cfg=JSON.parse(require("fs").readFileSync("cfg.json")); console.log(cfg.pem)\'',
+        expected: { target: 'cfg.pem', ruleId: 'secret.ext.pem' },
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a python comment that names .env beside a read of another file',
+        command:
+          "python3 - <<'EOF'\nhtml = open('index.html').read()\n# drop the .env group from the nav\nopen('index.html', 'w').write(html)\nEOF",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+    ]);
+  });
+
+  test('an f-string or template hole is code, and the text around it is a literal', () => {
+    checkCarriers([
+      {
+        name: 'a python f-string beside prose that names .env',
+        command: "python3 -c \"n=3; print(f'{n} rows'); print('.env is ignored')\"",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a python f-string path built beside a read of another file and prose naming .env',
+        command:
+          "python3 - <<'EOF'\nimport json\nfor v in json.load(open('voices.json')):\n    print(f\"audio/{v['name']}.mp3\")\nprint('set the key in .env first')\nEOF",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a JS template beside prose that names .env',
+        command: 'node -e \'const n=3; console.log(`${n} rows`); console.log(".env is ignored")\'',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'an f-string before a read of a literal',
+        command: "python3 -c \"print(f'{1}', open('.env').read())\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'an f-string hole that supplies the directory of a read',
+        command: String.raw`python3 -c "import os; print(open(f'{os.environ[\"HOME\"]}/.ssh/id_rsa').read())"`,
+        expected: { target: '{}/.ssh/id_rsa', ruleId: 'secret.basename.id-rsa' },
+      },
+      {
+        name: 'an f-string hole that reads a literal',
+        command: String.raw`python3 -c "print(f\"{open('.env').read()}\")"`,
+        expected: env('.env'),
+      },
+      {
+        name: 'a JS template hole that reads a literal',
+        command: 'node -e \'const fs=require("fs"); console.log(`${fs.readFileSync(".env")}`)\'',
+        expected: env('.env'),
+      },
+      {
+        name: 'a tagged template leaves the code unmaskable',
+        command:
+          'node -e \'const n=3; console.log(String.raw`${n} rows`); console.log(".env is ignored")\'',
+        expected: env('.env'),
+      },
+      {
+        name: 'an f-string hole that never closes leaves the code unmaskable',
+        command: "python3 -c \"print(f'{n rows'); print('.env is ignored')\"",
+        expected: env('.env'),
+      },
+    ]);
+    const interpolatedShellCommands = [
+      "python3 -c \"import subprocess; d='.'; subprocess.run(f'cat {d}/.env', shell=True)\"",
+      'node -e \'const d="."; require("child_process").execSync(`cat ${d}/.env`)\'',
+    ];
+    for (const command of interpolatedShellCommands) {
+      for (const mode of MODES) {
+        expect(secretIn(command, mode)?.ruleId, command).toBe('secret.basename.env');
+      }
+    }
   });
 
   test('a heredoc body of thousands of calls is decided without a per-call blow-up', () => {

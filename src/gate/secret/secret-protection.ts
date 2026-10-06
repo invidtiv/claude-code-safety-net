@@ -205,6 +205,8 @@ type LiteralFamily = 'python' | 'javascript' | 'simple' | 'opaque';
 
 type CodeLiteral = { readonly start: number; readonly text: string };
 
+type LiteralScan = { readonly masked: string[]; readonly literals: CodeLiteral[] };
+
 type MaskedCode =
   | { readonly kind: 'masked'; readonly masked: string; readonly literals: readonly CodeLiteral[] }
   | { readonly kind: 'unmaskable' };
@@ -1225,7 +1227,8 @@ function extractInlineCodePathTargets(
   budget: Budget,
 ): SecretCandidate[] {
   const here = (target: string) => ({ target, cwd });
-  const masked = maskStringLiterals(code, literalFamily(command));
+  const family = literalFamily(command);
+  const masked = maskStringLiterals(code, family);
   if (masked.kind === 'unmaskable') return extractAllPathCandidatesUnmasked(code).map(here);
 
   const shellExec =
@@ -1294,7 +1297,9 @@ function extractInlineCodePathTargets(
           ),
         )
       : []),
-    ...(masked.masked.match(BARE_PATH_PATTERN) ?? []).map(here),
+    ...(literalsPresumedData && (family === 'python' || family === 'javascript')
+      ? []
+      : (masked.masked.match(BARE_PATH_PATTERN) ?? []).map(here)),
   ];
 }
 
@@ -1309,35 +1314,89 @@ function literalFamily(command: string): LiteralFamily {
 
 function maskStringLiterals(code: string, family: LiteralFamily): MaskedCode {
   if (family === 'opaque') return { kind: 'unmaskable' };
-  const masked = code.split('');
-  const literals: CodeLiteral[] = [];
-  for (let index = 0; index < code.length; index++) {
+  const scan: LiteralScan = { masked: code.split(''), literals: [] };
+  return maskCode(code, 0, family, scan, false) === null
+    ? { kind: 'unmaskable' }
+    : { kind: 'masked', masked: scan.masked.join(''), literals: scan.literals };
+}
+
+function maskCode(
+  code: string,
+  from: number,
+  family: LiteralFamily,
+  scan: LiteralScan,
+  insideHole: boolean,
+): number | null {
+  let openBraces = 0;
+  for (let index = from; index < code.length; index++) {
     const char = code[index] ?? '';
+    if (insideHole && char === '}' && openBraces === 0) return index;
+    if (char === '{') openBraces++;
+    if (char === '}') openBraces--;
     if (family === 'simple' && (char === '`' || char === '%' || char === '<')) {
-      if (UNMASKABLE_SIMPLE_CODE.test(code.slice(index))) return { kind: 'unmaskable' };
+      if (UNMASKABLE_SIMPLE_CODE.test(code.slice(index))) return null;
     }
     const quote =
       char === "'" || char === '"' || (family === 'javascript' && char === '`') ? char : null;
     if (quote === null) continue;
-    if (quote === '`' && isTaggedTemplate(code, index)) return { kind: 'unmaskable' };
+    if (quote === '`' && isTaggedTemplate(code, index)) return null;
 
     const prefix = family === 'python' ? pythonStringPrefix(code, index) : '';
     const delimiter =
       family === 'python' && code.startsWith(quote.repeat(3), index) ? quote.repeat(3) : quote;
     const start = index + delimiter.length;
-    const end = findLiteralEnd(code, start, delimiter);
-    if (end === null) return { kind: 'unmaskable' };
-
-    const text = code.slice(start, end);
-    if (/[fF]/.test(prefix) && text.includes('{')) return { kind: 'unmaskable' };
-    if (family === 'simple' && quote === '"' && SIMPLE_INTERPOLATION.test(text)) {
-      return { kind: 'unmaskable' };
+    const interpolated = quote === '`' || /[fF]/.test(prefix);
+    const end = interpolated
+      ? maskInterpolatedLiteral(code, start, delimiter, family, scan)
+      : findLiteralEnd(code, start, delimiter);
+    if (end === null) return null;
+    if (!interpolated) {
+      const text = code.slice(start, end);
+      if (family === 'simple' && quote === '"' && SIMPLE_INTERPOLATION.test(text)) return null;
+      scan.literals.push({ start, text });
+      scan.masked.fill(' ', start, end);
     }
-    literals.push({ start, text });
-    for (let cursor = index; cursor < end + delimiter.length; cursor++) masked[cursor] = ' ';
+    scan.masked.fill(' ', index, start);
+    scan.masked.fill(' ', end, end + delimiter.length);
     index = end + delimiter.length - 1;
   }
-  return { kind: 'masked', masked: masked.join(''), literals };
+  return insideHole ? null : code.length;
+}
+
+function maskInterpolatedLiteral(
+  code: string,
+  start: number,
+  delimiter: string,
+  family: LiteralFamily,
+  scan: LiteralScan,
+): number | null {
+  const holeOpener = family === 'python' ? '{' : '${';
+  const multiline = delimiter === '`' || delimiter.length === 3;
+  let text = '';
+  for (let cursor = start; cursor < code.length; cursor++) {
+    const char = code[cursor] ?? '';
+    if (code.startsWith(delimiter, cursor)) {
+      scan.literals.push({ start, text });
+      return cursor;
+    }
+    if (!multiline && (char === '\n' || char === '\r')) return null;
+    const pythonDoubledBrace =
+      family === 'python' && (char === '{' || char === '}') && code[cursor + 1] === char;
+    if (!pythonDoubledBrace && code.startsWith(holeOpener, cursor)) {
+      const holeEnd = maskCode(code, cursor + holeOpener.length, family, scan, true);
+      if (holeEnd === null) return null;
+      text += `${holeOpener}}`;
+      scan.masked.fill(' ', cursor, cursor + holeOpener.length);
+      scan.masked[holeEnd] = ' ';
+      cursor = holeEnd;
+      continue;
+    }
+    const width = char === '\\' || pythonDoubledBrace ? 2 : 1;
+    text += code.slice(cursor, cursor + width);
+    scan.masked.fill(' ', cursor, cursor + width);
+    cursor += width - 1;
+  }
+  return null;
 }
 
 function pythonStringPrefix(code: string, index: number): string {
@@ -1345,15 +1404,13 @@ function pythonStringPrefix(code: string, index: number): string {
 }
 
 function findLiteralEnd(code: string, start: number, delimiter: string): number | null {
-  const interpolated = delimiter === '`';
-  const multiline = interpolated || delimiter.length === 3;
+  const multiline = delimiter.length === 3;
   for (let cursor = start; cursor < code.length; cursor++) {
     const char = code[cursor];
     if (char === '\\') {
       cursor++;
       continue;
     }
-    if (interpolated && char === '$' && code[cursor + 1] === '{') return null;
     if (!multiline && (char === '\n' || char === '\r')) return null;
     if (code.startsWith(delimiter, cursor)) return cursor;
   }
