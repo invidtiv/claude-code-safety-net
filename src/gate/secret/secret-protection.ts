@@ -490,19 +490,22 @@ function extractCommandPathTargets(
   const map = (text: string) =>
     projectSensitiveShellText(rewritePowerShellHomePrefix(text, powershell), environment);
   const holdsProcessSubstitution = /[<>=]\(/.test(syntax.source);
-  const holdsPipe = options.commandHoldsPipe === true || /(?:^|[^|])\|(?!\|)/.test(syntax.source);
-  const scriptOptions = { ...options, commandHoldsPipe: holdsPipe };
+  const withPipeAhead = (pipeAhead: boolean) => ({
+    ...options,
+    commandHoldsPipe: options.commandHoldsPipe === true || pipeAhead,
+  });
   walkGuardSyntax(syntax, cwd, environment, budget, {
     word: map,
-    segment: (tokens, state, pipeProducer, boundary, shellWords) => {
+    segment: (tokens, state, pipeProducer, boundary, shellWords, pipeAhead) => {
       if (tokens.length === 0) return null;
+      const scriptOptions = withPipeAhead(pipeAhead);
       targets.push(
         ...extractSegmentPathTargets(
           tokens,
           store,
           holdsProcessSubstitution || boundary === '|' || boundary === '|&'
-            ? { ...options, segmentMayFeedReader: true, commandHoldsPipe: holdsPipe }
-            : { ...options, commandHoldsPipe: holdsPipe },
+            ? { ...scriptOptions, segmentMayFeedReader: true }
+            : scriptOptions,
           environment,
           state.cwd,
           budget,
@@ -524,8 +527,9 @@ function extractCommandPathTargets(
       }
       return null;
     },
-    redirection: (redirection, state) => {
+    redirection: (redirection, state, pipeAhead) => {
       if (redirection.body !== undefined && redirection.consumer !== undefined) {
+        const scriptOptions = withPipeAhead(pipeAhead);
         targets.push(
           ...extractStdinScriptPathTargets(
             redirection.consumer,

@@ -1953,6 +1953,66 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
       {
+        name: 'matching names from a for loop piped to a reader',
+        command: 'for f in a; do grep -l KEY .env; done | xargs cat',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from a while loop piped to a reader',
+        command: 'while true; do grep -l KEY .env; done | xargs cat',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from a case arm piped to a reader',
+        command: 'case x in x) grep -l KEY .env;; esac | xargs cat',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from a called function piped to a reader',
+        command: 'f() { grep -l KEY .env; }; f | xargs cat',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from a nested subshell piped to a reader',
+        command: '{ (grep -l KEY .env); } | xargs cat',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from bash -c in a piped brace group',
+        command: "{ bash -c 'grep -l KEY .env'; } | xargs cat",
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from a quoted shell heredoc piped to a reader',
+        command: "bash <<'EOF' | xargs cat\ngrep -l KEY .env\nEOF",
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from an unquoted shell heredoc piped to a reader',
+        command: 'bash <<EOF | xargs cat\ngrep -l KEY .env\nEOF',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names and errors piped to a reader',
+        command: 'grep -l KEY .env |& xargs cat',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names moved to another descriptor and piped to a reader',
+        command: '{ grep -l KEY .env >&3; } 3>&1 | xargs cat',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names read from an input process substitution',
+        command: 'xargs cat < <(grep -l KEY .env)',
+        expected: env('.env'),
+      },
+      {
+        name: 'a line count in a loop over a secret piped to a sort',
+        command: 'for f in .env; do wc -l $f; done | sort',
+        expected: env('.env'),
+      },
+      {
         name: 'a names-only flag after the pattern is a file to a non-permuting grep',
         command: 'grep KEY -l .env',
         expected: env('.env'),
@@ -1990,6 +2050,28 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         command: 'stat -f %z .env; ps -p 1',
         expected: env('.env'),
         relaxedInStandard: true,
+      },
+      {
+        name: 'a line count after an unrelated earlier pipeline',
+        command: 'cat a | head -60; wc -l .env',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a quoted alternation pattern in a compound grep',
+        command: "cd x && grep -lE 'foo|bar' .env",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a line count before an unrelated later pipeline',
+        command: 'wc -l .env; cat a | head',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names before an unrelated later pipeline',
+        command: 'grep -l KEY .env; ls | head',
+        expected: env('.env'),
       },
       {
         name: 'a metadata look followed by a read of the same secret',

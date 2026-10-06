@@ -49,10 +49,12 @@ export type GuardWalkVisitor = Readonly<{
     pipeProducer: readonly string[] | null,
     boundary: string | null,
     shellWords: ReadonlySet<number>,
+    pipeAhead: boolean,
   ) => string | null;
   redirection: (
     redirection: GuardRedirection,
     state: ProtectedPathShellState,
+    pipeAhead: boolean,
   ) => string | null | typeof ADOPT_AS_OPERAND;
 }>;
 
@@ -180,7 +182,18 @@ export function walkGuardSyntax(
     readonly shellWords: Set<number>;
     readonly pipeProducer: string[] | null;
   }[] = [];
-  for (const event of guardEvents(syntax)) {
+  const events = guardEvents(syntax);
+  const lastPipe = events.findLastIndex(
+    (event) => event.kind === 'operator' && PIPE_OPERATORS.has(event.operator),
+  );
+  const shellHeredocBehindPipe =
+    lastPipe !== -1 &&
+    events.some(
+      (event) =>
+        event.kind === 'redirection' && event.operator === '<<' && event.body === undefined,
+    );
+  for (const [index, event] of events.entries()) {
+    const pipeAhead = shellHeredocBehindPipe || index <= lastPipe;
     if (event.kind === 'scope') {
       if (event.edge === 'enter') {
         frames.push({
@@ -191,7 +204,7 @@ export function walkGuardSyntax(
         });
         continue;
       }
-      const target = visitor.segment(segment, state, pipeProducer, null, shellWords);
+      const target = visitor.segment(segment, state, pipeProducer, null, shellWords, pipeAhead);
       if (target) return target;
       const frame = frames.pop();
       if (frame === undefined) throw new Error('scope exit without a matching enter');
@@ -203,7 +216,14 @@ export function walkGuardSyntax(
     }
     if (event.kind === 'operator') {
       if (!event.boundary) continue;
-      const target = visitor.segment(segment, state, pipeProducer, event.operator, shellWords);
+      const target = visitor.segment(
+        segment,
+        state,
+        pipeProducer,
+        event.operator,
+        shellWords,
+        pipeAhead,
+      );
       if (target) return target;
       state = applyShellState(segment, state, environment, budget);
       pipeProducer = segment.length > 0 && PIPE_OPERATORS.has(event.operator) ? segment : null;
@@ -223,6 +243,7 @@ export function walkGuardSyntax(
           ...(event.body === undefined ? {} : { body: event.body, consumer: event.consumer }),
         },
         state,
+        pipeAhead,
       );
       if (outcome === ADOPT_AS_OPERAND) {
         shellWords.add(segment.length);
@@ -234,7 +255,7 @@ export function walkGuardSyntax(
     }
     segment.push(mapWord(event.text));
   }
-  return visitor.segment(segment, state, pipeProducer, null, shellWords);
+  return visitor.segment(segment, state, pipeProducer, null, shellWords, shellHeredocBehindPipe);
 }
 
 export function readGuardTokens(syntax: GuardSyntax): readonly GuardToken[] {
