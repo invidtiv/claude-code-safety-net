@@ -1391,7 +1391,8 @@ function maskInterpolatedLiteral(
       cursor = holeEnd;
       continue;
     }
-    const width = char === '\\' || pythonDoubledBrace ? 2 : 1;
+    const escapesNext = char === '\\' && !(family === 'python' && code[cursor + 1] === '{');
+    const width = escapesNext || pythonDoubledBrace ? 2 : 1;
     text += code.slice(cursor, cursor + width);
     scan.masked.fill(' ', cursor, cursor + width);
     cursor += width - 1;

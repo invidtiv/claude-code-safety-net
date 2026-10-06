@@ -1265,6 +1265,11 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
       {
+        name: 'an f-string hole after a backslash that reads a literal',
+        command: String.raw`python3 -c "print(f'\{open(\".env\").read()}')"`,
+        expected: env('.env'),
+      },
+      {
         name: 'a JS template hole that reads a literal',
         command: 'node -e \'const fs=require("fs"); console.log(`${fs.readFileSync(".env")}`)\'',
         expected: env('.env'),
