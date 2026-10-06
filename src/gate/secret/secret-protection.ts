@@ -1312,6 +1312,11 @@ function literalFamily(command: string): LiteralFamily {
     : 'simple';
 }
 
+const HOLE_UNREADABLE_CHARACTER: Partial<Record<LiteralFamily, string>> = {
+  python: '#',
+  javascript: '/',
+};
+
 function maskStringLiterals(code: string, family: LiteralFamily): MaskedCode {
   if (family === 'opaque') return { kind: 'unmaskable' };
   const scan: LiteralScan = { masked: code.split(''), literals: [] };
@@ -1331,6 +1336,7 @@ function maskCode(
   for (let index = from; index < code.length; index++) {
     const char = code[index] ?? '';
     if (insideHole && char === '}' && openBraces === 0) return index;
+    if (insideHole && char === HOLE_UNREADABLE_CHARACTER[family]) return null;
     if (char === '{') openBraces++;
     if (char === '}') openBraces--;
     if (family === 'simple' && (char === '`' || char === '%' || char === '<')) {

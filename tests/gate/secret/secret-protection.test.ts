@@ -1281,6 +1281,23 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
       {
+        name: 'a brace in a JS comment inside a template hole leaves the code unmaskable',
+        command:
+          'node -e \'const fs=require("fs"); console.log(`${/* } */ fs.readFileSync(".env")}`)\'',
+        expected: env('.env'),
+      },
+      {
+        name: 'a brace in a JS regex inside a template hole leaves the code unmaskable',
+        command:
+          'node -e \'const fs=require("fs"); console.log(`${"a".replace(/}/g, fs.readFileSync(".env"))}`)\'',
+        expected: env('.env'),
+      },
+      {
+        name: 'a brace in a python comment inside an f-string hole leaves the code unmaskable',
+        command: 'python3 - <<\'EOF\'\nprint(f"""{1 # }\n+ len(open(\'.env\').read())}""")\nEOF',
+        expected: env('.env'),
+      },
+      {
         name: 'an f-string hole that never closes leaves the code unmaskable',
         command: "python3 -c \"print(f'{n rows'); print('.env is ignored')\"",
         expected: env('.env'),
