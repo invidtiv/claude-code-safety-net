@@ -153,6 +153,7 @@ const SEARCH_VALUELESS_LONG = new Set([
   'hidden',
 ]);
 const NAME_LISTING_METADATA_COMMANDS = new Set(['wc', ...PATTERN_FIRST_COMMANDS]);
+const CERTIFICATE_PIPE_PROGRAMS = new Set(['cd', 'grep', 'head', 'openssl', 'tail', 'tailscale']);
 const WC_COUNT_OPTION = /^(?:-[lwcm]+|--(?:lines|words|bytes|chars))$/;
 const GH_TEXT_FLAGS = new Set(['--search', '-S', '--title', '-t', '--body', '-b', '--jq', '-q']);
 const GIT_MESSAGE_SUBCOMMANDS = new Set(['commit', 'merge', 'notes', 'stash', 'tag']);
@@ -205,6 +206,7 @@ type SecretCandidate = {
   readonly isRedirectionWriteTarget?: true;
   readonly isCreatedPath?: true;
   readonly isCertificateInput?: true;
+  readonly certificateOutputMayFeedReader?: true;
   readonly literalRole?: 'data' | 'write';
   readonly loopVariable?: string;
 };
@@ -341,14 +343,20 @@ export function findSensitiveTargetInSemanticFacts(
     skipMetadataOnlySegments: true,
     inlineLiteralsPresumedData: true,
   });
+  const loopsReferencing = new Map<string, Set<string | undefined>>();
+  refinedWithLoopWords.forEach((other) =>
+    referencedShellVariables(other.target).forEach((name) =>
+      loopsReferencing.set(name, (loopsReferencing.get(name) ?? new Set()).add(other.loopVariable)),
+    ),
+  );
+  const referencedOutsideLoop = (name: string, loopVariable: string) =>
+    (loopsReferencing.get(name)?.size ?? 0) >
+    (loopsReferencing.get(name)?.has(loopVariable) ? 1 : 0);
   const refinedCandidates = refinedWithLoopWords.filter(
     ({ loopVariable }) =>
       loopVariable === undefined ||
-      refinedWithLoopWords.some(
-        (other) =>
-          other.loopVariable !== loopVariable &&
-          referencesShellVariable(other.target, loopVariable),
-      ),
+      referencedOutsideLoop(loopVariable, loopVariable) ||
+      referencedOutsideLoop('!', loopVariable),
   );
   const pathRoleTargets = new Set(
     refinedCandidates
@@ -516,10 +524,12 @@ function extractCommandPathTargets(
   const map = (text: string) =>
     projectSensitiveShellText(rewritePowerShellHomePrefix(text, powershell), environment);
   const holdsProcessSubstitution = /[<>=]\(/.test(syntax.source);
+  const holdsCoprocess = /\bcoproc\b|\|&/.test(syntax.source);
   const pipedWords: string[] = [];
+  const programs: string[] = [];
   const withPipeAhead = (pipeAhead: boolean) => ({
     ...options,
-    commandHoldsPipe: options.commandHoldsPipe === true || pipeAhead,
+    commandHoldsPipe: options.commandHoldsPipe === true || pipeAhead || holdsCoprocess,
   });
   walkGuardSyntax(syntax, cwd, environment, budget, {
     word: map,
@@ -527,6 +537,11 @@ function extractCommandPathTargets(
       if (tokens.length === 0) return null;
       const scriptOptions = withPipeAhead(pipeAhead);
       if (scriptOptions.commandHoldsPipe) pipedWords.push(...tokens);
+      programs.push(
+        basename(
+          withoutTimeout(stripLeadingWrappersAndEnvAssignments(tokens))[0] ?? '',
+        ).toLowerCase(),
+      );
       targets.push(
         ...extractSegmentPathTargets(
           tokens,
@@ -590,17 +605,32 @@ function extractCommandPathTargets(
     },
   });
 
-  return targets.map(({ loopVariable, ...candidate }) =>
-    loopVariable === undefined ||
+  const pipedNames = new Set(pipedWords.flatMap(referencedShellVariables));
+  const certificateOutputMayReachReader =
     holdsProcessSubstitution ||
-    pipedWords.some((word) => referencesShellVariable(word, loopVariable))
+    /\$\(|`/.test(syntax.source) ||
+    !programs.every((program) => CERTIFICATE_PIPE_PROGRAMS.has(program));
+  return targets.map(({ loopVariable, ...candidate }) => {
+    if (candidate.certificateOutputMayFeedReader === true && certificateOutputMayReachReader) {
+      return { target: candidate.target, cwd: candidate.cwd };
+    }
+    return loopVariable === undefined ||
+      holdsProcessSubstitution ||
+      pipedNames.has(loopVariable) ||
+      pipedNames.has('!')
       ? candidate
-      : { ...candidate, loopVariable },
-  );
+      : { ...candidate, loopVariable };
+  });
 }
 
-function referencesShellVariable(text: string, name: string): boolean {
-  return text === name || new RegExp(`\\$(?:\\{!|\\{?${name}(?![A-Za-z0-9_]))`).test(text);
+function referencedShellVariables(text: string): string[] {
+  return [
+    ...(/^[A-Za-z_][A-Za-z0-9_]*$/.test(text) ? [text] : []),
+    ...Array.from(
+      text.matchAll(/\$(?:\{(!)|\{?([A-Za-z_][A-Za-z0-9_]*))/g),
+      (match) => match[1] ?? match[2] ?? '',
+    ),
+  ];
 }
 
 function walkShellText(
@@ -670,11 +700,12 @@ function extractSegmentPathTargets(
   const executable = stripped[0] ?? '';
   const command = basename(executable).toLowerCase();
   const post = stripped.slice(1);
+  const outputMayFeedReader =
+    options.segmentMayFeedReader === true ||
+    options.commandHoldsPipe === true ||
+    options.displayOperandsAreCapturedOutput === true;
   const metadataOutputMayFeedReader =
-    (options.segmentMayFeedReader === true ||
-      options.commandHoldsPipe === true ||
-      options.displayOperandsAreCapturedOutput === true) &&
-    NAME_LISTING_METADATA_COMMANDS.has(command);
+    outputMayFeedReader && NAME_LISTING_METADATA_COMMANDS.has(command);
   if (
     options.skipMetadataOnlySegments === true &&
     !metadataOutputMayFeedReader &&
@@ -803,22 +834,29 @@ function extractSegmentPathTargets(
     new RegExp(`^--?${option}$`).test(post[index - 1] ?? '');
   const writesTailscaleCertFiles = runsTailscaleCert(stripped);
   const readsOnlyCertificate = command === 'openssl' && post[0] === 'x509';
+  const certificateOutput = outputMayFeedReader
+    ? { certificateOutputMayFeedReader: true as const }
+    : {};
   return [
     ...assignmentValues,
     ...post.flatMap((token, index) =>
       extractOperandPathCandidates(command, token).map((target) =>
         writesTailscaleCertFiles && optionValue('(?:cert|key)-file', index)
-          ? { ...here(target), isCreatedPath: true as const }
+          ? { ...here(target), isCreatedPath: true as const, ...certificateOutput }
           : readsOnlyCertificate && optionValue('in', index)
-            ? { ...here(target), isCertificateInput: true as const }
+            ? { ...here(target), isCertificateInput: true as const, ...certificateOutput }
             : here(target),
       ),
     ),
   ];
 }
 
+function withoutTimeout(argv: readonly string[]): readonly string[] {
+  return basename(argv[0] ?? '').toLowerCase() === 'timeout' ? argv.slice(2) : argv;
+}
+
 function runsTailscaleCert(argv: readonly string[]): boolean {
-  const program = basename(argv[0] ?? '').toLowerCase() === 'timeout' ? argv.slice(2) : argv;
+  const program = withoutTimeout(argv);
   return basename(program[0] ?? '').toLowerCase() === 'tailscale' && program[1] === 'cert';
 }
 
@@ -857,18 +895,15 @@ function extractPipeCarrierPathTargets(
 ): SecretCandidate[] {
   if (xargsReadsPipeInputAsPath(consumer, store, options, environment, cwd, budget)) {
     const stripped = stripLeadingWrappersAndEnvAssignments(producer);
-    const namesListedByProducer = isMetadataOnlyArgv(
+    const namesListedByMetadataProducer = isMetadataOnlyArgv(
       basename(stripped[0] ?? '').toLowerCase(),
       stripped.slice(1),
     )
       ? stripped.slice(1).filter((token) => !token.startsWith('-'))
-      : runsTailscaleCert(stripped)
-        ? stripped.slice(1).flatMap((token) => extractOperandPathCandidates('', token))
-        : [];
-    return [...extractDisplayCommandOperands(producer), ...namesListedByProducer].map((target) => ({
-      target,
-      cwd,
-    }));
+      : [];
+    return [...extractDisplayCommandOperands(producer), ...namesListedByMetadataProducer].map(
+      (target) => ({ target, cwd }),
+    );
   }
 
   return extractStdinScriptPathTargets(
@@ -1478,9 +1513,14 @@ function extractInlineCodePathTargets(
     ...(shellExec
       ? literalsExecCallsReceive.flatMap(
           (literal) =>
-            walkShellText(literal.text, store, options, environment, cwd, budget) ?? [
-              here(literal.text),
-            ],
+            walkShellText(
+              literal.text,
+              store,
+              { ...options, commandHoldsPipe: true },
+              environment,
+              cwd,
+              budget,
+            ) ?? [here(literal.text)],
         )
       : []),
     ...(languageEval

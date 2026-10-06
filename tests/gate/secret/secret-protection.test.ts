@@ -2299,6 +2299,26 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
       {
+        name: 'matching names an interpreter reads from its exec call output',
+        command: `python3 -c "import subprocess; out = subprocess.run('grep -l KEY .env', shell=True, capture_output=True, text=True).stdout; [print(open(n).read()) for n in out.split()]"`,
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names an interpreter block reads, beside a block parameter bar',
+        command: `ruby -e 'IO.popen("grep -l KEY .env").each_line { |f| print File.read(f.chomp) }'`,
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names written to a coprocess that reads them',
+        command: 'coproc xargs cat; grep -l KEY .env >&"${COPROC[1]}"',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names written to a zsh coprocess',
+        command: 'xargs cat |&\ngrep -l KEY .env >&p',
+        expected: env('.env'),
+      },
+      {
         name: 'a line count in a loop over a secret piped to a sort',
         command: 'for f in .env; do wc -l $f; done | sort',
         expected: env('.env'),
@@ -2564,11 +2584,29 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
       {
+        name: 'a loop variable written to a coprocess that reads it',
+        command: 'coproc xargs cat; for f in .env; do echo "$f" >&"${COPROC[1]}"; done',
+        expected: env('.env'),
+      },
+      {
         name: 'a home credential read in a loop',
         command: 'for f in ~/.ssh/id_rsa; do cat "$f"; done',
         expected: ssh('~/.ssh/id_rsa'),
       },
     ]);
+  });
+
+  test('loops over thousands of list words are decided without a per-word rescan', () => {
+    const words = (prefix: string) =>
+      Array.from({ length: 7000 }, (_, index) => `${prefix}${index}`);
+    const loops = `for a in .env ${words('a').join(' ')}; do :; done; for b in ${words('b').join(' ')}; do :; done`;
+    for (const command of [loops, `${loops} | sort`]) {
+      for (const mode of [STANDARD, STRICT]) {
+        const started = performance.now();
+        secretIn(command, mode);
+        expect(performance.now() - started).toBeLessThan(1000);
+      }
+    }
   });
 
   test('command text in a spaced word is not a path in standard mode', () => {
@@ -2808,6 +2846,37 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
       {
         name: 'an attached key name tailscale prints under timeout handed to xargs',
         command: 'timeout 9 tailscale cert --key-file=key.pem host | xargs -I{} cat {}',
+        expected: pem('key.pem'),
+      },
+      {
+        name: 'a key name tailscale prints, filtered and handed to xargs',
+        command: "tailscale cert --key-file key.pem host 2>&1 | awk '{print $NF}' | xargs cat",
+        expected: pem('key.pem'),
+      },
+      {
+        name: 'a key name a grouped tailscale prints handed to xargs',
+        command: '(tailscale cert --key-file key.pem host 2>&1) | xargs cat',
+        expected: pem('key.pem'),
+      },
+      {
+        name: 'a key name tailscale prints read by a loop',
+        command:
+          'tailscale cert --key-file key.pem host 2>&1 | while read a b c d e; do cat $e; done',
+        expected: pem('key.pem'),
+      },
+      {
+        name: 'a key name tailscale prints sent to a process substitution',
+        command: 'tailscale cert --key-file key.pem host 2>&1 > >(xargs cat)',
+        expected: pem('key.pem'),
+      },
+      {
+        name: 'a key name tailscale prints captured as grep operands',
+        command: 'grep -h . $(tailscale cert --key-file key.pem host 2>&1)',
+        expected: pem('key.pem'),
+      },
+      {
+        name: 'an input path x509 reports on stderr handed to xargs',
+        command: 'openssl x509 -in key.pem -noout 2>&1 | xargs cat',
         expected: pem('key.pem'),
       },
       {
