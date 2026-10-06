@@ -276,6 +276,11 @@ describe('shell operands against the built-in secret catalog', () => {
         expected: null,
       },
       {
+        name: 'a template name inside a protected home directory stays protected',
+        command: 'cat ~/.ssh/.env.tpl',
+        expected: ssh('~/.ssh/.env.tpl'),
+      },
+      {
         name: 'a PostgREST sort order passed to a script is query text, not a PGP key',
         command: "bash query.sh 'orders?select=id&order=created_at.asc'",
         expected: null,
@@ -1898,6 +1903,26 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
       {
         name: 'matching names written into an output process substitution',
         command: 'grep -l KEY .env > >(xargs cat)',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from a subshell piped to a reader',
+        command: '(grep -l KEY .env) | xargs cat',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from a brace group piped to a reader',
+        command: '{ grep -l KEY .env; } | xargs cat',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from an if body piped to a reader',
+        command: 'if true; then grep -l KEY .env; fi | xargs cat',
+        expected: env('.env'),
+      },
+      {
+        name: 'a names-only flag after the pattern is a file to a non-permuting grep',
+        command: 'grep KEY -l .env',
         expected: env('.env'),
       },
       {

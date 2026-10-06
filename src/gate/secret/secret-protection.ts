@@ -237,6 +237,7 @@ type PathExtractionOptions = {
   readonly inlineLiteralsPresumedData?: boolean;
   readonly displayOperandsAreCapturedOutput?: boolean;
   readonly segmentMayFeedReader?: boolean;
+  readonly commandHoldsPipe?: boolean;
 };
 
 function findSensitivePolicyPathTarget(
@@ -396,9 +397,9 @@ function isMetadataOnlyArgv(command: string, args: readonly string[]): boolean {
 }
 
 function isNamesOrCountsOnlySearch(command: string, args: readonly string[]): boolean {
-  const optionArgs = args.includes('--') ? args.slice(0, args.indexOf('--')) : args;
+  const beforeDoubleDash = args.includes('--') ? args.slice(0, args.indexOf('--')) : args;
   if (
-    optionArgs.some(
+    beforeDoubleDash.some(
       (arg) => /^--(?:(?:file|pre)(?:=|$)|json|format)/.test(arg) || /^-[^-]*f/.test(arg),
     )
   ) {
@@ -407,12 +408,22 @@ function isNamesOrCountsOnlySearch(command: string, args: readonly string[]): bo
   const valueFlag = command === 'rg' ? /[ABCEMTdegjmrt]/ : /[ABCDdefm]/;
   const namesOnlyFlag = command === 'rg' ? /[clq]/ : /[Lclq]/;
   const isShortCluster = (arg: string) => /^-[^-]/.test(arg);
-  return optionArgs.some((arg, index) => {
-    const previous = optionArgs[index - 1] ?? '';
-    const consumedAsValue =
+  const consumedAsValue = (index: number) => {
+    const previous = beforeDoubleDash[index - 1] ?? '';
+    return (
       (/^--[^=]+$/.test(previous) && !SEARCH_VALUELESS_LONG.has(previous.slice(2))) ||
-      (isShortCluster(previous) && previous.slice(1).search(valueFlag) === previous.length - 2);
-    if (consumedAsValue) return false;
+      (isShortCluster(previous) && previous.slice(1).search(valueFlag) === previous.length - 2)
+    );
+  };
+  const firstOperand = beforeDoubleDash.findIndex(
+    (arg, index) => !arg.startsWith('-') && !consumedAsValue(index),
+  );
+  const optionArgs =
+    command === 'grep' && firstOperand >= 0
+      ? beforeDoubleDash.slice(0, firstOperand)
+      : beforeDoubleDash;
+  return optionArgs.some((arg, index) => {
+    if (consumedAsValue(index)) return false;
     if (arg.startsWith('--')) return SEARCH_NAMES_ONLY_LONG.has(arg.slice(2));
     return isShortCluster(arg) && namesOnlyFlag.test(arg.slice(1).split(valueFlag)[0] ?? '');
   });
@@ -479,6 +490,7 @@ function extractCommandPathTargets(
   const map = (text: string) =>
     projectSensitiveShellText(rewritePowerShellHomePrefix(text, powershell), environment);
   const holdsProcessSubstitution = /[<>=]\(/.test(syntax.source);
+  const holdsPipe = /(?:^|[^|])\|(?!\|)/.test(syntax.source);
   walkGuardSyntax(syntax, cwd, environment, budget, {
     word: map,
     segment: (tokens, state, pipeProducer, boundary, shellWords) => {
@@ -488,8 +500,8 @@ function extractCommandPathTargets(
           tokens,
           store,
           holdsProcessSubstitution || boundary === '|' || boundary === '|&'
-            ? { ...options, segmentMayFeedReader: true }
-            : options,
+            ? { ...options, segmentMayFeedReader: true, commandHoldsPipe: holdsPipe }
+            : { ...options, commandHoldsPipe: holdsPipe },
           environment,
           state.cwd,
           budget,
@@ -594,7 +606,9 @@ function extractSegmentPathTargets(
   const firstNonReservedWordIndex = stripped.findIndex((token) => !SHELL_RESERVED_WORDS.has(token));
   const metadataCommand = basename(stripped[firstNonReservedWordIndex] ?? '').toLowerCase();
   const metadataOutputMayFeedReader =
-    (options.segmentMayFeedReader === true || options.displayOperandsAreCapturedOutput === true) &&
+    (options.segmentMayFeedReader === true ||
+      options.commandHoldsPipe === true ||
+      options.displayOperandsAreCapturedOutput === true) &&
     NAME_LISTING_METADATA_COMMANDS.has(metadataCommand);
   if (
     options.skipMetadataOnlySegments === true &&
@@ -1987,13 +2001,6 @@ function isSensitivePath(
   const isFilenameShapedName = () =>
     isFilenameShaped(comparableName) || candidateExistsOnDisk(target, cwd, environment, budget);
 
-  if (
-    ENV_EXEMPTION_BASENAMES.has(comparableName) ||
-    ENV_EXEMPTION_PREFIXES.some((prefix) => comparableName.startsWith(prefix))
-  ) {
-    return null;
-  }
-
   const comparableUnresolvedPath = comparable(
     normalizeUnresolvedHomePath(target, cwd, environment, budget),
   );
@@ -2007,6 +2014,14 @@ function isSensitivePath(
       return rule.id;
     }
   }
+
+  if (
+    ENV_EXEMPTION_BASENAMES.has(comparableName) ||
+    ENV_EXEMPTION_PREFIXES.some((prefix) => comparableName.startsWith(prefix))
+  ) {
+    return null;
+  }
+
   const codingCliRuleId = matchesCodingCliPath(normalized, cwd, config, environment, budget);
   if (codingCliRuleId) return codingCliRuleId;
 
