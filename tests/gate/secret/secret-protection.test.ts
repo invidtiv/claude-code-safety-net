@@ -1936,6 +1936,11 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
       {
+        name: 'matching names from a script piped into sh and on to a reader',
+        command: "printf 'grep -l KEY .env' | sh | xargs cat",
+        expected: env('.env'),
+      },
+      {
         name: 'matching names from a piped python heredoc running a shell command',
         command: "python3 <<'EOF' | xargs cat\nimport os; os.system('grep -l KEY .env')\nEOF",
         expected: env('.env'),

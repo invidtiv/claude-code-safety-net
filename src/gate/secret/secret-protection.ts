@@ -515,7 +515,7 @@ function extractCommandPathTargets(
             pipeProducer,
             tokens,
             store,
-            options,
+            scriptOptions,
             environment,
             state.cwd,
             budget,
