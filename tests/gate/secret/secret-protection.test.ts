@@ -1255,6 +1255,13 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         relaxedInStandard: true,
       },
       {
+        name: 'set members beside a subprocess call that lists files',
+        command:
+          "python3 - <<'EOF'\nimport pathlib, subprocess\npaths = subprocess.check_output(['git', 'ls-files']).decode().splitlines()\nprint([p for p in paths if any(part in {'.env', 'dist'} for part in pathlib.Path(p).parts)])\nEOF",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
         name: 'a set member a loop opens is data too, the accepted trade-off',
         command: 'python3 -c "for f in {\'.env\'}: print(open(f).read())"',
         expected: env('.env'),
@@ -1319,6 +1326,73 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         command:
           "python3 - <<'EOF'\nimport tempfile\nfrom pathlib import Path\ntmp = tempfile.mkdtemp()\nPath(tmp, 'private.key').write_text('dummy')\nEOF",
         expected: { target: 'private.key', ruleId: 'secret.ext-pattern.key' },
+      },
+    ]);
+  });
+
+  test('code holding a command-execution name, a bracketed comment, unpacking, or a keyword-named method keeps every literal a candidate', () => {
+    checkCarriers([
+      {
+        name: 'an argument list run through an aliased subprocess module',
+        command: "python3 -c \"import subprocess as sp; sp.run(['cat', '.env'])\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'an argument list a from-imported check_output receives',
+        command:
+          "python3 -c \"from subprocess import check_output; print(check_output(['grep', 'KEY', '.env']))\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'an argument vector posix_spawnp receives beside a read',
+        command:
+          "python3 -c \"import os; open('log.txt'); os.posix_spawnp('cat', ['cat', '.env'], os.environ)\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'an argument array a renamed execFileSync receives',
+        command:
+          "node -e \"const { execFileSync: run } = require('child_process'); console.log(run('cat', ['.env']).toString())\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'a python call argument after a comment holding a parenthesis',
+        command:
+          "python3 - <<'EOF'\nimport shutil\nshutil.copy(  # fallback: (\n    '.env', 'backup.txt')\nEOF",
+        expected: env('.env'),
+      },
+      {
+        name: 'a JS call argument after a line comment holding a parenthesis',
+        command: "node -e \"require('fs').copyFileSync( // fallback: (\n  '.env', 'backup.txt')\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'a JS call argument after a block comment holding a parenthesis',
+        command: "node -e \"require('fs').copyFileSync(/* restore: ( */ 'backup.txt', '.env')\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'a star-unpacked tuple of path parts',
+        command: "python3 -c \"import os; print(open(os.path.join(*('.', '.env'))).read())\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'a spread array of read arguments',
+        command: "node -e \"console.log(require('fs').readFileSync(...['.env', 'utf8']))\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'an argument of a method named like a keyword',
+        command:
+          "node -e \"const r = {of: p => require('fs').readFileSync(p, 'utf8')}; console.log(r.of('.env', 0))\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'a word in a bracketed python comment stays relaxed',
+        command:
+          "python3 - <<'EOF'\nhtml = open('index.html').read()\n# drop the .env group (nav)\nopen('index.html', 'w').write(html)\nEOF",
+        expected: env('.env'),
+        relaxedInStandard: true,
       },
     ]);
   });

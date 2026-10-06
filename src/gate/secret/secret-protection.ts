@@ -1284,14 +1284,19 @@ function extractInlineCodePathTargets(
             execCalls.some((call) => literal.start >= call.start && literal.start < call.end),
         );
   const literalsWalkedAsShell = new Set(shellExec ? literalsExecCallsReceive : []);
-  const openers = codeRolesReadable && literals.length > 0 ? innermostOpeners(masked.masked) : [];
+  const literalRolesReadable =
+    codeRolesReadable &&
+    literals.length > 0 &&
+    !holdsUnreadableLiteralRoles(masked.masked, family === 'python' ? '#' : '//');
+  const openers = literalRolesReadable ? innermostOpeners(masked.masked) : [];
+  const sequencesMayHoldArguments = literalRolesReadable && namesCommandExecution(masked.masked);
   return [
     ...literals
       .filter((literal) => literal.text !== '')
       .map((literal) =>
-        codeRolesReadable &&
+        literalRolesReadable &&
         !literalsWalkedAsShell.has(literal) &&
-        inDataPosition(masked.masked, literal, openers)
+        inDataPosition(masked.masked, literal, openers, sequencesMayHoldArguments)
           ? { ...here(literal.text), isDataRoleLiteral: true as const }
           : here(literal.text),
       ),
@@ -1329,7 +1334,28 @@ function extractInlineCodePathTargets(
 }
 
 const BRACKET_CLOSERS: Readonly<Record<string, string>> = { '(': ')', '[': ']', '{': '}' };
-const GROUPING_KEYWORD = /(?:^|[^\w$])(?:and|elif|else|if|in|is|not|of|or|return|while|yield)$/;
+const GROUPING_KEYWORDS = 'and|elif|else|if|in|is|not|of|or|return|while|yield';
+const GROUPING_KEYWORD = new RegExp(`(?:^|[^\\w$])(?:${GROUPING_KEYWORDS})$`);
+const UNREADABLE_LITERAL_ROLE_SHAPE = new RegExp(
+  `(?:\\*|\\.\\.\\.)\\s*[([{]|\\.\\s*(?:${GROUPING_KEYWORDS})\\s*\\(|/\\*`,
+);
+const COMMAND_EXECUTION_IDENTIFIER_PART = /^(?:exec|spawn)|^(?:popen|system|subprocess)$/;
+
+function holdsUnreadableLiteralRoles(masked: string, commentOpener: string): boolean {
+  return (
+    UNREADABLE_LITERAL_ROLE_SHAPE.test(masked) ||
+    masked.split('\n').some((line) => {
+      const comment = line.indexOf(commentOpener);
+      return comment >= 0 && /[()[\]{}]/.test(line.slice(comment));
+    })
+  );
+}
+
+function namesCommandExecution(masked: string): boolean {
+  return Array.from(masked.matchAll(/[A-Za-z_$][\w$]*/g), (match) =>
+    identifierParts(match[0]),
+  ).some((parts) => parts.some((part) => COMMAND_EXECUTION_IDENTIFIER_PART.test(part)));
+}
 
 function innermostOpeners(masked: string): number[] {
   const open: number[] = [];
@@ -1341,7 +1367,15 @@ function innermostOpeners(masked: string): number[] {
   });
 }
 
-function inDataPosition(masked: string, literal: CodeLiteral, openers: readonly number[]): boolean {
+function inDataPosition(
+  masked: string,
+  literal: CodeLiteral,
+  openers: readonly number[],
+  sequencesMayHoldArguments: boolean,
+): boolean {
+  const opener = openers[literal.tokenStart] ?? -1;
+  const bracket = masked[opener] ?? '';
+  if (sequencesMayHoldArguments && (bracket === '[' || bracket === '(')) return false;
   const before = previousNonWhitespaceIndex(masked, literal.tokenStart);
   const after = nextNonWhitespaceIndex(masked, literal.tokenEnd);
   if (/(?:^|[^\w$])in$|[=!]=$/.test(masked.slice(Math.max(0, before - 3), before + 1))) {
@@ -1350,8 +1384,6 @@ function inDataPosition(masked: string, literal: CodeLiteral, openers: readonly 
   if (/^(?:(?:not\s+)?in(?![\w$])|[=!]=)/.test(masked.slice(after, after + 8))) return true;
   const previous = masked[before];
   const next = masked[after];
-  const opener = openers[literal.tokenStart] ?? -1;
-  const bracket = masked[opener] ?? '';
   if (bracket === '{' && previous === ':') return startsObjectEntry(masked, before);
   const element =
     (previous === bracket || previous === ',') &&
@@ -1510,16 +1542,20 @@ function containsRecognizableInlineAccess(code: string): boolean {
     const identifier = match[0];
     const start = match.index;
     if (INLINE_ACCESS_NAMESPACES.has(identifier.toLowerCase())) return true;
-    const parts = identifier
-      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-      .split(/[_$\s]+/)
-      .map((part) => part.toLowerCase());
+    const parts = identifierParts(identifier);
     if (!parts.some((part) => INLINE_ACCESS_IDENTIFIER_PARTS.has(part))) continue;
     if (parts.length > 1) return true;
     if (code[previousNonWhitespaceIndex(code, start)] === '.') return true;
     if (code[nextNonWhitespaceIndex(code, start + identifier.length)] === '(') return true;
   }
   return false;
+}
+
+function identifierParts(identifier: string): string[] {
+  return identifier
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[_$\s]+/)
+    .map((part) => part.toLowerCase());
 }
 
 function previousNonWhitespaceIndex(value: string, start: number): number {
