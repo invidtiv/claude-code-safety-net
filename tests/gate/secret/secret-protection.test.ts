@@ -1097,14 +1097,16 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
       {
-        name: 'a python literal held in a list the loop reads',
+        name: 'a generic name held in a list the loop reads is data in standard mode',
         command: 'python3 -c "files = [\'.env\']\nfor f in files: open(f)"',
         expected: env('.env'),
+        relaxedInStandard: true,
       },
       {
-        name: 'a JS literal held in an object property the read uses',
+        name: 'a generic name held in an object property the read uses is data in standard mode',
         command: "node -e \"const cfg = { path: '.env' }; require('fs').readFileSync(cfg.path)\"",
         expected: env('.env'),
+        relaxedInStandard: true,
       },
       {
         name: 'a python literal appended to a name that is then opened',
@@ -1135,7 +1137,7 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         relaxedInStandard: true,
       },
       {
-        name: 'a read anywhere in the code keeps every literal in the code',
+        name: 'an assigned literal beside a read of another file stays a candidate',
         command:
           'node -e \'const path = ".env"; console.log(path); require("fs").readFileSync("README.md")\'',
         expected: env('.env'),
@@ -1149,7 +1151,7 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
     ]);
   });
 
-  test('an exec or eval marker anywhere in the code keeps every literal in it', () => {
+  test('an exec or eval marker keeps the literals it can receive', () => {
     checkCarriers([
       {
         name: 'python subprocess.check_call on a shell string',
@@ -1198,6 +1200,125 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         command:
           'python3 -c \'import subprocess\ncmd, check = "cat .env", True\nsubprocess.run(cmd, shell=True, check=check)\'',
         expected: env('.env'),
+      },
+    ]);
+  });
+
+  test('beside an access marker, a generic name in a data position is relaxed only in standard mode', () => {
+    checkCarriers([
+      {
+        name: 'set members a loop over a read file is compared against',
+        command:
+          "python3 - <<'EOF'\nimport json\nfrom pathlib import Path\nfor part in json.loads(Path('parts.json').read_text()):\n    if part in {'.env', '.env.local', 'dist'}:\n        continue\n    print(part)\nEOF",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'the left operand of in, beside a subscript key',
+        command:
+          "python3 - <<'EOF'\nimport json\nrows = json.load(open('log.json'))\nprint(sum(1 for r in rows if '.env' in r['command']))\nEOF",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'an in operand inside a parenthesized condition',
+        command:
+          "python3 -c \"import json; print([k for k, v in json.load(open('cfg.json')).items() if ('.env' in k and v)])\"",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'tuple members a not in compares against',
+        command:
+          "python3 -c \"import json; print([p for p in json.load(open('dirs.json')) if p not in ('.env', '.git')])\"",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a JS inequality operand',
+        command:
+          'node -e \'const fs=require("fs"); for (const f of fs.readdirSync(".")) if (f !== ".env") console.log(f)\'',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a subscript key of a loaded document',
+        command: "python3 -c \"import json; print(json.load(open('map.json'))['.env'])\"",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'dict keys and values of labels written to a file',
+        command:
+          "python3 - <<'EOF'\nimport json\nlabels = {'.env': 'dotenv file', 'tls': 'server.pem'}\njson.dump(labels, open('labels.json', 'w'))\nEOF",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a set member a loop opens is data too, the accepted trade-off',
+        command: 'python3 -c "for f in {\'.env\'}: print(open(f).read())"',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+    ]);
+  });
+
+  test('beside an access marker, a literal used as a path or naming a home or CLI credential still denies', () => {
+    checkCarriers([
+      {
+        name: 'a call argument of a path join that is opened',
+        command: "python3 -c \"import os; print(open(os.path.join('.', '.env')).read())\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'a JS property assignment the read uses',
+        command:
+          'node -e \'const fs=require("fs"); const cfg={}; cfg.path=".env"; fs.readFileSync(cfg.path)\'',
+        expected: env('.env'),
+      },
+      {
+        name: 'a JS ternary branch inside a block that is read',
+        command:
+          'node -e \'const fs=require("fs"); if (fs) { const p = process.argv[2] ? "a.txt" : ".env"; console.log(fs.readFileSync(p, "utf8")) }\'',
+        expected: env('.env'),
+      },
+      {
+        name: 'a parenthesized literal that is not a tuple',
+        command: 'python3 -c "p = (\'.env\'); print(open(p).read())"',
+        expected: env('.env'),
+      },
+      {
+        name: 'a coding-CLI credential held in a list the loop opens',
+        command:
+          'python3 -c "import os\nfor f in [\'~/.copilot/config.json\']: open(os.path.expanduser(f))"',
+        expected: { target: '~/.copilot/config.json', ruleId: 'secret.cli.copilot-cli' },
+      },
+      {
+        name: 'a relocated Codex credential store opened by a loader',
+        command: `python3 -c "import json; print(json.load(open('${shellPath(codexHome, 'auth.json')}')))"`,
+        expected: { target: shellPath(codexHome, 'auth.json'), ruleId: 'secret.cli.codex' },
+      },
+      {
+        name: 'a home SSH key held as a dict value beside a read',
+        command: `python3 -c "import json; keys = {'ssh': '${shellPath(userHome, '.ssh', 'id_rsa')}'}; print(json.load(open('k.json')))"`,
+        expected: ssh(shellPath(userHome, '.ssh', 'id_rsa')),
+      },
+      {
+        name: 'a list element subprocess.check_output receives',
+        command:
+          "python3 -c \"import subprocess; print(subprocess.check_output(['grep', 'KEY', '.env']))\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'an argument list element execFileSync receives',
+        command: "node -e \"require('child_process').execFileSync('cat', ['.env'])\"",
+        expected: env('.env'),
+      },
+      {
+        name: 'a call argument naming a key file that is only written, a known false positive',
+        command:
+          "python3 - <<'EOF'\nimport tempfile\nfrom pathlib import Path\ntmp = tempfile.mkdtemp()\nPath(tmp, 'private.key').write_text('dummy')\nEOF",
+        expected: { target: 'private.key', ruleId: 'secret.ext-pattern.key' },
       },
     ]);
   });

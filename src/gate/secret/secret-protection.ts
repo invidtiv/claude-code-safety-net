@@ -189,6 +189,7 @@ type SecretCandidate = {
   readonly target: string;
   readonly cwd: string;
   readonly isRedirectionWriteTarget?: true;
+  readonly isDataRoleLiteral?: true;
 };
 
 type SecretProtectionPolicy = {
@@ -203,7 +204,12 @@ type SecretInspectionOptions = {
 
 type LiteralFamily = 'python' | 'javascript' | 'simple' | 'opaque';
 
-type CodeLiteral = { readonly start: number; readonly text: string };
+type CodeLiteral = {
+  readonly start: number;
+  readonly text: string;
+  readonly tokenStart: number;
+  readonly tokenEnd: number;
+};
 
 type LiteralScan = { readonly masked: string[]; readonly literals: CodeLiteral[] };
 
@@ -223,7 +229,7 @@ function findSensitivePolicyPathTarget(
   configCwd: string,
   environment: EnvironmentContext,
   budget: Budget,
-  activeDefaultTargets?: ReadonlySet<string>,
+  activeDefaultTargets?: ReadonlyMap<string, 'path' | 'data'>,
 ): SecretTarget | null {
   for (const candidate of candidates) {
     const target = candidate.target;
@@ -252,6 +258,9 @@ function findSensitivePolicyPathTarget(
           candidateAbsolutePath(target, candidate.cwd, environment, budget),
         );
       if (matchedDirectory) continue;
+      const dataRoleLiteral =
+        standardModeFileNameRule && activeDefaultTargets?.get(target) === 'data';
+      if (dataRoleLiteral) continue;
       const writeCreatesNewFile =
         standardModeFileNameRule &&
         candidate.isRedirectionWriteTarget === true &&
@@ -302,17 +311,26 @@ export function findSensitiveTargetInSemanticFacts(
   if (target === null || target.ruleId === 'secret.deny-path' || options.strict !== false) {
     return target;
   }
+  const refinedCandidates = extractToolPathTargets(facts, environment, budget, {
+    skipMetadataOnlySegments: true,
+    inlineLiteralsPresumedData: true,
+  });
+  const pathRoleTargets = new Set(
+    refinedCandidates
+      .filter((candidate) => candidate.isDataRoleLiteral !== true)
+      .map((candidate) => candidate.target),
+  );
   const refinedTarget = findSensitivePolicyPathTarget(
     candidates,
     config,
     facts.invocation.context.configCwd,
     environment,
     budget,
-    new Set(
-      extractToolPathTargets(facts, environment, budget, {
-        skipMetadataOnlySegments: true,
-        inlineLiteralsPresumedData: true,
-      }).map((candidate) => candidate.target),
+    new Map(
+      refinedCandidates.map((candidate) => [
+        candidate.target,
+        pathRoleTargets.has(candidate.target) ? 'path' : 'data',
+      ]),
     ),
   );
   return refinedTarget?.ruleId !== 'secret.deny-path' && isMetadataOnlyCommand(facts, environment)
@@ -1243,6 +1261,8 @@ function extractInlineCodePathTargets(
     );
   const literalsPresumedData =
     options.inlineLiteralsPresumedData === true && !SHELL_STDIN_INTERPRETERS.has(command);
+  const codeRolesReadable =
+    literalsPresumedData && (family === 'python' || family === 'javascript');
   const literals =
     literalsPresumedData &&
     !(containsRecognizableInlineAccess(masked.masked) || shellExec || languageEval)
@@ -1263,11 +1283,18 @@ function extractInlineCodePathTargets(
             SHELL_EXEC_PREFIX.test(masked.masked.slice(0, literal.start)) ||
             execCalls.some((call) => literal.start >= call.start && literal.start < call.end),
         );
+  const literalsWalkedAsShell = new Set(shellExec ? literalsExecCallsReceive : []);
+  const openers = codeRolesReadable && literals.length > 0 ? innermostOpeners(masked.masked) : [];
   return [
     ...literals
-      .map((literal) => literal.text)
-      .filter((text) => text !== '')
-      .map(here),
+      .filter((literal) => literal.text !== '')
+      .map((literal) =>
+        codeRolesReadable &&
+        !literalsWalkedAsShell.has(literal) &&
+        inDataPosition(masked.masked, literal, openers)
+          ? { ...here(literal.text), isDataRoleLiteral: true as const }
+          : here(literal.text),
+      ),
     ...literals.flatMap((literal) => decodeBase64PathCandidate(literal.text)).map(here),
     ...(literalsPresumedData
       ? []
@@ -1297,10 +1324,53 @@ function extractInlineCodePathTargets(
           ),
         )
       : []),
-    ...(literalsPresumedData && (family === 'python' || family === 'javascript')
-      ? []
-      : (masked.masked.match(BARE_PATH_PATTERN) ?? []).map(here)),
+    ...(codeRolesReadable ? [] : (masked.masked.match(BARE_PATH_PATTERN) ?? []).map(here)),
   ];
+}
+
+const BRACKET_CLOSERS: Readonly<Record<string, string>> = { '(': ')', '[': ']', '{': '}' };
+const GROUPING_KEYWORD = /(?:^|[^\w$])(?:and|elif|else|if|in|is|not|of|or|return|while|yield)$/;
+
+function innermostOpeners(masked: string): number[] {
+  const open: number[] = [];
+  return Array.from(masked, (char, index) => {
+    const innermost = open.at(-1) ?? -1;
+    if (char in BRACKET_CLOSERS) open.push(index);
+    if (char === ')' || char === ']' || char === '}') open.pop();
+    return innermost;
+  });
+}
+
+function inDataPosition(masked: string, literal: CodeLiteral, openers: readonly number[]): boolean {
+  const before = previousNonWhitespaceIndex(masked, literal.tokenStart);
+  const after = nextNonWhitespaceIndex(masked, literal.tokenEnd);
+  if (/(?:^|[^\w$])in$|[=!]=$/.test(masked.slice(Math.max(0, before - 3), before + 1))) {
+    return true;
+  }
+  if (/^(?:(?:not\s+)?in(?![\w$])|[=!]=)/.test(masked.slice(after, after + 8))) return true;
+  const previous = masked[before];
+  const next = masked[after];
+  const opener = openers[literal.tokenStart] ?? -1;
+  const bracket = masked[opener] ?? '';
+  if (bracket === '{' && previous === ':') return startsObjectEntry(masked, before);
+  const element =
+    (previous === bracket || previous === ',') &&
+    (next === ',' || next === BRACKET_CLOSERS[bracket] || (bracket === '{' && next === ':'));
+  if (bracket !== '(') return element && bracket !== '';
+  return element && (previous === ',' || next === ',') && isGroupingParenthesis(masked, opener);
+}
+
+function startsObjectEntry(masked: string, colon: number): boolean {
+  const keyEnd = previousNonWhitespaceIndex(masked, colon);
+  const key = /[\w$]*$/.exec(masked.slice(Math.max(0, keyEnd - 63), keyEnd + 1))?.[0] ?? '';
+  const entryStart = masked[previousNonWhitespaceIndex(masked, keyEnd + 1 - key.length)];
+  return entryStart === '{' || entryStart === ',';
+}
+
+function isGroupingParenthesis(masked: string, opener: number): boolean {
+  const before = previousNonWhitespaceIndex(masked, opener);
+  const preceding = masked.slice(Math.max(0, before - 7), before + 1);
+  return !/[\w$)\]]$/.test(preceding) || GROUPING_KEYWORD.test(preceding);
 }
 
 function literalFamily(command: string): LiteralFamily {
@@ -1352,14 +1422,15 @@ function maskCode(
       family === 'python' && code.startsWith(quote.repeat(3), index) ? quote.repeat(3) : quote;
     const start = index + delimiter.length;
     const interpolated = quote === '`' || /[fF]/.test(prefix);
+    const tokenStart = index - prefix.length;
     const end = interpolated
-      ? maskInterpolatedLiteral(code, start, delimiter, family, scan)
+      ? maskInterpolatedLiteral(code, tokenStart, start, delimiter, family, scan)
       : findLiteralEnd(code, start, delimiter);
     if (end === null) return null;
     if (!interpolated) {
       const text = code.slice(start, end);
       if (family === 'simple' && quote === '"' && SIMPLE_INTERPOLATION.test(text)) return null;
-      scan.literals.push({ start, text });
+      scan.literals.push({ start, text, tokenStart, tokenEnd: end + delimiter.length });
       scan.masked.fill(' ', start, end);
     }
     scan.masked.fill(' ', index, start);
@@ -1371,6 +1442,7 @@ function maskCode(
 
 function maskInterpolatedLiteral(
   code: string,
+  tokenStart: number,
   start: number,
   delimiter: string,
   family: LiteralFamily,
@@ -1382,7 +1454,7 @@ function maskInterpolatedLiteral(
   for (let cursor = start; cursor < code.length; cursor++) {
     const char = code[cursor] ?? '';
     if (code.startsWith(delimiter, cursor)) {
-      scan.literals.push({ start, text });
+      scan.literals.push({ start, text, tokenStart, tokenEnd: cursor + delimiter.length });
       return cursor;
     }
     if (!multiline && (char === '\n' || char === '\r')) return null;
@@ -1444,24 +1516,24 @@ function containsRecognizableInlineAccess(code: string): boolean {
       .map((part) => part.toLowerCase());
     if (!parts.some((part) => INLINE_ACCESS_IDENTIFIER_PARTS.has(part))) continue;
     if (parts.length > 1) return true;
-    if (previousNonWhitespaceCharacter(code, start) === '.') return true;
-    if (nextNonWhitespaceCharacter(code, start + identifier.length) === '(') return true;
+    if (code[previousNonWhitespaceIndex(code, start)] === '.') return true;
+    if (code[nextNonWhitespaceIndex(code, start + identifier.length)] === '(') return true;
   }
   return false;
 }
 
-function previousNonWhitespaceCharacter(value: string, start: number): string | undefined {
+function previousNonWhitespaceIndex(value: string, start: number): number {
   for (let index = start - 1; index >= 0; index--) {
-    if (!/\s/.test(value[index] ?? '')) return value[index];
+    if (!/\s/.test(value[index] ?? '')) return index;
   }
-  return undefined;
+  return -1;
 }
 
-function nextNonWhitespaceCharacter(value: string, start: number): string | undefined {
+function nextNonWhitespaceIndex(value: string, start: number): number {
   for (let index = start; index < value.length; index++) {
-    if (!/\s/.test(value[index] ?? '')) return value[index];
+    if (!/\s/.test(value[index] ?? '')) return index;
   }
-  return undefined;
+  return value.length;
 }
 
 function extractCommandSubstitutionPathTargets(
