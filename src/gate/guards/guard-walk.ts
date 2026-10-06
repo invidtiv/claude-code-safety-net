@@ -877,6 +877,7 @@ function stripConsumerWrappers(words: readonly string[]): string[] {
   const word = words[0];
   if (word === undefined) return [];
   if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(word)) return stripConsumerWrappers(words.slice(1));
+  if (word === 'uv' && words[1] === 'run') return stripConsumerWrappers(words.slice(2));
   if (!HEREDOC_CONSUMER_WRAPPERS.has(word)) return [...words];
   return stripConsumerWrappers(skipWrapperOptions(word, words.slice(1)));
 }

@@ -727,6 +727,38 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         relaxedInStandard: true,
       },
       {
+        name: 'uv run before the interpreter hands the body over as code',
+        command: "uv run python - <<'PY'\nimport subprocess\nsubprocess.run(['cat', '.env'])\nPY",
+        expected: env('.env'),
+      },
+      {
+        name: 'a uv run python body is judged by its literal, not by comma-joined shell words',
+        command:
+          "uv run python - <<'PY'\nimport tempfile\nfrom pathlib import Path\nwith tempfile.TemporaryDirectory() as cwd:\n Path(cwd,'private.key').write_text('dummy')\nPY",
+        expected: { target: 'private.key', ruleId: 'secret.ext-pattern.key' },
+      },
+      {
+        name: 'a uv run python heredoc whose literal is inert command text in standard mode',
+        command: "uv run python - <<'PY'\nx = 'cat .env'\nPY",
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a uv run python heredoc that opens the literal',
+        command: "uv run python - <<'PY'\nprint(open('.env').read())\nPY",
+        expected: env('.env'),
+      },
+      {
+        name: 'a uv run shell heredoc stays a shell script',
+        command: "uv run bash - <<'EOF'\ncat .env\nEOF",
+        expected: env('.env'),
+      },
+      {
+        name: 'uv run with options before the interpreter keeps the body as shell words',
+        command: "uv run --with x python - <<'PY'\ncat .env\nPY",
+        expected: env('.env'),
+      },
+      {
         name: 'a python heredoc that opens the literal',
         command: "python3 - <<'EOF'\nopen('.env')\nEOF",
         expected: env('.env'),
