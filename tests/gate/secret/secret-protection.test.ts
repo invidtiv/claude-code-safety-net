@@ -1854,6 +1854,53 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
       {
+        name: 'rg JSON output after a count prints the matched lines',
+        command: 'rg -c --json KEY .env',
+        expected: env('.env'),
+      },
+      {
+        name: 'a grep output format after -l prints the matched lines',
+        command: "grep -l --format='%O%~' KEY .env",
+        expected: env('.env'),
+      },
+      {
+        name: 'a valueless long switch before the names-only flag',
+        command: 'rg --ignore-case -l KEY .env',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a status-only grep guarding a fallback',
+        command: 'grep -q KEY .env || echo missing',
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'matching names piped into a read loop',
+        command: 'grep -l KEY .env | while read f; do cat "$f"; done',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names passed through a stage to xargs',
+        command: 'grep -l KEY .env | head -1 | xargs cat',
+        expected: env('.env'),
+      },
+      {
+        name: 'a line count whose name column is piped to a reader',
+        command: "wc -l .env | awk '{print $2}' | xargs cat",
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names captured by command substitution',
+        command: 'cat "$(grep -l KEY .env)"',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names written into an output process substitution',
+        command: 'grep -l KEY .env > >(xargs cat)',
+        expected: env('.env'),
+      },
+      {
         name: 'a sed redaction cannot be verified',
         command: "sed 's/=.*/=<set>/' .env",
         expected: env('.env'),
@@ -2057,6 +2104,26 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
       {
         name: 'a long touch reference as a separate word',
         command: 'touch --reference .env stamp.txt',
+        expected: env('.env'),
+      },
+      {
+        name: 'an abbreviated long touch reference',
+        command: 'touch --ref .env stamp.txt',
+        expected: env('.env'),
+      },
+      {
+        name: 'a read inside a process substitution handed to touch',
+        command: 'touch <(cat .env)',
+        expected: env('.env'),
+      },
+      {
+        name: 'a read inside a process substitution handed to mkdir in a nested shell',
+        command: "sh -c 'mkdir -p <(cat .env)'",
+        expected: env('.env'),
+      },
+      {
+        name: 'a clobbering redirect target beside touch',
+        command: 'touch stamp.txt >| .env',
         expected: env('.env'),
       },
     ]);

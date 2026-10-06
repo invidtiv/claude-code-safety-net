@@ -146,6 +146,13 @@ const SEARCH_NAMES_ONLY_LONG = new Set([
   'count',
   'quiet',
 ]);
+const SEARCH_VALUELESS_LONG = new Set([
+  ...SEARCH_NAMES_ONLY_LONG,
+  'ignore-case',
+  'fixed-strings',
+  'hidden',
+]);
+const NAME_LISTING_METADATA_COMMANDS = new Set(['wc', ...PATTERN_FIRST_COMMANDS]);
 const WC_COUNT_OPTION = /^(?:-[lwcm]+|--(?:lines|words|bytes|chars))$/;
 const GH_TEXT_FLAGS = new Set(['--search', '-S', '--title', '-t', '--body', '-b', '--jq', '-q']);
 const GIT_MESSAGE_SUBCOMMANDS = new Set(['commit', 'merge', 'notes', 'stash', 'tag']);
@@ -229,6 +236,7 @@ type PathExtractionOptions = {
   readonly skipMetadataOnlySegments?: boolean;
   readonly inlineLiteralsPresumedData?: boolean;
   readonly displayOperandsAreCapturedOutput?: boolean;
+  readonly segmentMayFeedReader?: boolean;
 };
 
 function findSensitivePolicyPathTarget(
@@ -389,7 +397,11 @@ function isMetadataOnlyArgv(command: string, args: readonly string[]): boolean {
 
 function isNamesOrCountsOnlySearch(command: string, args: readonly string[]): boolean {
   const optionArgs = args.includes('--') ? args.slice(0, args.indexOf('--')) : args;
-  if (optionArgs.some((arg) => /^--(?:file|pre)(?:=|$)/.test(arg) || /^-[^-]*f/.test(arg))) {
+  if (
+    optionArgs.some(
+      (arg) => /^--(?:(?:file|pre)(?:=|$)|json|format)/.test(arg) || /^-[^-]*f/.test(arg),
+    )
+  ) {
     return false;
   }
   const valueFlag = command === 'rg' ? /[ABCEMTdegjmrt]/ : /[ABCDdefm]/;
@@ -398,7 +410,7 @@ function isNamesOrCountsOnlySearch(command: string, args: readonly string[]): bo
   return optionArgs.some((arg, index) => {
     const previous = optionArgs[index - 1] ?? '';
     const consumedAsValue =
-      (/^--[^=]+$/.test(previous) && !SEARCH_NAMES_ONLY_LONG.has(previous.slice(2))) ||
+      (/^--[^=]+$/.test(previous) && !SEARCH_VALUELESS_LONG.has(previous.slice(2))) ||
       (isShortCluster(previous) && previous.slice(1).search(valueFlag) === previous.length - 2);
     if (consumedAsValue) return false;
     if (arg.startsWith('--')) return SEARCH_NAMES_ONLY_LONG.has(arg.slice(2));
@@ -466,15 +478,18 @@ function extractCommandPathTargets(
 
   const map = (text: string) =>
     projectSensitiveShellText(rewritePowerShellHomePrefix(text, powershell), environment);
+  const holdsProcessSubstitution = /[<>=]\(/.test(syntax.source);
   walkGuardSyntax(syntax, cwd, environment, budget, {
     word: map,
-    segment: (tokens, state, pipeProducer, _boundary, shellWords) => {
+    segment: (tokens, state, pipeProducer, boundary, shellWords) => {
       if (tokens.length === 0) return null;
       targets.push(
         ...extractSegmentPathTargets(
           tokens,
           store,
-          options,
+          holdsProcessSubstitution || boundary === '|' || boundary === '|&'
+            ? { ...options, segmentMayFeedReader: true }
+            : options,
           environment,
           state.cwd,
           budget,
@@ -577,13 +592,15 @@ function extractSegmentPathTargets(
   const command = basename(executable).toLowerCase();
   const post = stripped.slice(1);
   const firstNonReservedWordIndex = stripped.findIndex((token) => !SHELL_RESERVED_WORDS.has(token));
+  const metadataCommand = basename(stripped[firstNonReservedWordIndex] ?? '').toLowerCase();
+  const metadataOutputMayFeedReader =
+    (options.segmentMayFeedReader === true || options.displayOperandsAreCapturedOutput === true) &&
+    NAME_LISTING_METADATA_COMMANDS.has(metadataCommand);
   if (
     options.skipMetadataOnlySegments === true &&
     firstNonReservedWordIndex !== -1 &&
-    isMetadataOnlyArgv(
-      basename(stripped[firstNonReservedWordIndex] ?? '').toLowerCase(),
-      stripped.slice(firstNonReservedWordIndex + 1),
-    )
+    !metadataOutputMayFeedReader &&
+    isMetadataOnlyArgv(metadataCommand, stripped.slice(firstNonReservedWordIndex + 1))
   ) {
     return assignmentValues;
   }
@@ -641,14 +658,17 @@ function extractSegmentPathTargets(
     ];
   }
   if (command === 'mkdir' || command === 'touch') {
+    const redirectionTargets = new Set(tokens.filter((_, index) => shellWords?.has(index)));
+    const createsOperands =
+      options.segmentMayFeedReader !== true &&
+      !(command === 'touch' && post.some((token) => /^(?:--r|-[^-]*r)/.test(token)));
     return [
       ...assignmentValues,
-      ...post.flatMap((token, index) =>
+      ...post.flatMap((token) =>
         extractOperandPathCandidates(command, token).map((target) =>
-          token.startsWith('-') ||
-          (command === 'touch' && /^(?:--reference$|-[^-]*r)/.test(post[index - 1] ?? ''))
-            ? here(target)
-            : { ...here(target), isCreatedPath: true as const },
+          createsOperands && !token.startsWith('-') && !redirectionTargets.has(token)
+            ? { ...here(target), isCreatedPath: true as const }
+            : here(target),
         ),
       ),
     ];
