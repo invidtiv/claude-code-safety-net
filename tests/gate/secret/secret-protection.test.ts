@@ -1921,6 +1921,26 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         expected: env('.env'),
       },
       {
+        name: 'matching names from a nested sh -c in a piped subshell',
+        command: "(sh -c 'grep -l KEY .env') | xargs cat",
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from an eval in a piped brace group',
+        command: "{ eval 'grep -l KEY .env'; } | xargs cat",
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from python os.system in a piped subshell',
+        command: '(python3 -c "import os; os.system(\'grep -l KEY .env\')") | xargs cat',
+        expected: env('.env'),
+      },
+      {
+        name: 'matching names from a piped python heredoc running a shell command',
+        command: "python3 <<'EOF' | xargs cat\nimport os; os.system('grep -l KEY .env')\nEOF",
+        expected: env('.env'),
+      },
+      {
         name: 'a names-only flag after the pattern is a file to a non-permuting grep',
         command: 'grep KEY -l .env',
         expected: env('.env'),

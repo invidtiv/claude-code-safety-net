@@ -490,7 +490,8 @@ function extractCommandPathTargets(
   const map = (text: string) =>
     projectSensitiveShellText(rewritePowerShellHomePrefix(text, powershell), environment);
   const holdsProcessSubstitution = /[<>=]\(/.test(syntax.source);
-  const holdsPipe = /(?:^|[^|])\|(?!\|)/.test(syntax.source);
+  const holdsPipe = options.commandHoldsPipe === true || /(?:^|[^|])\|(?!\|)/.test(syntax.source);
+  const scriptOptions = { ...options, commandHoldsPipe: holdsPipe };
   walkGuardSyntax(syntax, cwd, environment, budget, {
     word: map,
     segment: (tokens, state, pipeProducer, boundary, shellWords) => {
@@ -530,7 +531,7 @@ function extractCommandPathTargets(
             redirection.consumer,
             [redirection.body],
             store,
-            options,
+            scriptOptions,
             environment,
             state.cwd,
             budget,
@@ -539,7 +540,7 @@ function extractCommandPathTargets(
                 redirection.consumer ?? [],
                 body,
                 store,
-                options,
+                scriptOptions,
                 environment,
                 state.cwd,
                 budget,
