@@ -1312,6 +1312,10 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
         "subprocess.run(['nice', cmd] + extra)",
         "subprocess.run(['env', *argv, cmd])",
         "subprocess.run(['nice', [cmd]])",
+        "subprocess.run(['cmd', '/c', cmd])",
+        "subprocess.run(['CMD.EXE', '/c', cmd])",
+        "subprocess.run(['powershell', '-Command', cmd])",
+        "subprocess.run(['pwsh.exe', '-NoProfile', cmd])",
       ].map((call) => ({
         name: `a command literal reaching ${call}`,
         command: python('import subprocess', cmd, call),

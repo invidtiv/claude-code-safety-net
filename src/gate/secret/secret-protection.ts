@@ -1567,6 +1567,8 @@ function namesCommandExecution(masked: string): boolean {
   ).some((parts) => parts.some((part) => COMMAND_EXECUTION_IDENTIFIER_PART.test(part)));
 }
 
+const WINDOWS_SHELLS = new Set(['cmd', 'powershell', 'pwsh']);
+
 function runsArgvWithoutCodeFlag(
   masked: Extract<MaskedCode, { kind: 'masked' }>,
   start: number,
@@ -1585,7 +1587,12 @@ function runsArgvWithoutCodeFlag(
         literal.tokenStart > opener &&
         literal.tokenStart < end &&
         (CODE_EVAL_FLAGS.has(literal.text) ||
-          isCodeInterpreter(basename(literal.text).toLowerCase())),
+          isCodeInterpreter(basename(literal.text).toLowerCase()) ||
+          WINDOWS_SHELLS.has(
+            basename(literal.text)
+              .toLowerCase()
+              .replace(/\.exe$/, ''),
+          )),
     )
   );
 }
