@@ -14,7 +14,8 @@ const PARAMETER_NAME = /^(?:--?|[/\u2013\u2014\u2015])(\w+)$/;
 const ENCODED_COMMAND = 'encodedcommand';
 const DELETE_VERB = /(?<![\w-])(?:remove-item|ri|rm|rmdir|rd|del|erase)(?![\w-])/i;
 const RECURSIVE_FLAG =
-  /(?<![\w-])(?:[-\u2013\u2014\u2015]{1,2}r\w*|-[dfipvwx]+r[dfipvwx]*(?!\w))|\/s(?!\w)/i;
+  /(?<![\w-])(?:[-\u2013\u2014\u2015]{1,2}r(?:e(?:c(?:u(?:r(?:s(?:e|ive?)?)?)?)?)?)?(?!\w)|-[dfipvwx]*r[dfipvwx]*(?!\w))|\/s(?!\w)/i;
+const OUTER_EXPANSION = /[$`]/;
 const STOP_PARSING = '--%';
 
 export function analyzePowerShellWrapperMatch(
@@ -24,7 +25,7 @@ export function analyzePowerShellWrapperMatch(
   const texts = words.map(analysisWordText);
   const commandIndex = texts.every(
     (text, index) =>
-      index === 0 || (text !== STOP_PARSING && isLiteralExecutionSourceWord(words[index], text)),
+      index === 0 || (text !== STOP_PARSING && isLiteralScriptWord(words[index], text)),
   )
     ? readCommandIndex(texts, 1)
     : undefined;
@@ -47,6 +48,12 @@ function readCommandIndex(texts: readonly string[], index: number): number | und
   if (READ_COMMAND.test(text)) return index;
   if (READ_SWITCH.test(text)) return readCommandIndex(texts, index + 1);
   return READ_EXECUTION_POLICY.test(text) ? readCommandIndex(texts, index + 2) : undefined;
+}
+
+function isLiteralScriptWord(word: CommandWord | undefined, text: string): boolean {
+  return word?.provenance === 'unknown'
+    ? !OUTER_EXPANSION.test(text)
+    : isLiteralExecutionSourceWord(word, text);
 }
 
 function isEncodedCommandParameter(text: string): boolean {

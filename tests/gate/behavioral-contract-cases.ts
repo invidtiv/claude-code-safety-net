@@ -468,6 +468,23 @@ export function behavioralContractCases(paths: {
       expected: { kind: 'allow' } as const,
     },
     {
+      name: 'blocks a destructive git command behind a pwsh switch the reader does not read',
+      powershell: 'pwsh -NoExit -c git reset --hard',
+      posix: 'pwsh -NoExit -c git reset --hard',
+      expected: {
+        kind: 'block',
+        ruleId: 'git.reset-hard',
+        intent: 'use_alternative',
+        reasonIncludes: 'destroys all uncommitted changes',
+      },
+    },
+    {
+      name: 'allows a nested PowerShell script file whose arguments start with r',
+      powershell: 'pwsh -File report.ps1 -Action rm -Region east',
+      posix: 'pwsh -File report.ps1 -Action rm -Region east',
+      expected: { kind: 'allow' } as const,
+    },
+    {
       name: 'allows a nested PowerShell script file',
       powershell: String.raw`pwsh -File .\scripts\build.ps1`,
       posix: String.raw`pwsh -File '.\scripts\build.ps1'`,
@@ -1528,6 +1545,12 @@ export function behavioralContractCases(paths: {
     },
     ...cmdWrapperCases,
     ...powerShellWrapperCases,
+    {
+      name: 'allows a nested PowerShell workspace cleanup behind a transparent wrapper',
+      command: String.raw`timeout 30 pwsh -NoProfile -c 'Remove-Item -Recurse -Force .\build\*'`,
+      options: options({ cwd: paths.cwd }),
+      expected: { kind: 'allow' },
+    },
     {
       name: 'blocks a nested PowerShell recursive delete behind the outer stop-parsing token',
       command: 'pwsh -c --% Remove-Item -Recurse -Force C:\\',

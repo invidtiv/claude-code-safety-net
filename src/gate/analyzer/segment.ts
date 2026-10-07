@@ -628,7 +628,8 @@ export function analyzeSegment(
     );
   }
 
-  const matchedKnown = commandAnalyzer !== undefined;
+  const matchedKnown =
+    commandAnalyzer !== undefined && !HEADS_STILL_SCANNED_FOR_EMBEDDED.has(normalizedHead);
 
   const scansForEmbedded = !child && !matchedKnown && !DISPLAY_COMMANDS.has(normalizedHead);
   const tokensScanned: string[] | undefined = trace && scansForEmbedded ? [] : undefined;
@@ -967,6 +968,7 @@ function filterBuiltInCommandMatch(
 
 const CWD_CHANGE_REGEX =
   /^\s*(?:\$\(\s*)?[({]*\s*(?:command\s+|builtin\s+)?(?:cd|pushd|popd)(?:\s|$)/;
+const HEADS_STILL_SCANNED_FOR_EMBEDDED = new Set(['powershell', 'pwsh']);
 const POWERSHELL_LOCATION_COMMANDS = new Set([
   'cd',
   'chdir',
