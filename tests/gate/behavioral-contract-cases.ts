@@ -1400,6 +1400,12 @@ export function behavioralContractCases(paths: {
       expected: cmdEscapedQuoteBlock,
     },
     {
+      name: 'blocks a cmd recursive delete whose quoted target holds a connector from PowerShell',
+      command: String.raw`cmd /c 'rmdir /s /q "build & output\..\..\outside"'`,
+      options: options({ cwd: paths.cwd, shell: 'powershell' }),
+      expected: unverifiableShellSourceBlock,
+    },
+    {
       name: 'blocks a cmd recursive delete whose command name is quoted from PowerShell',
       command: String.raw`cmd /c '"rmdir" /s /q C:\'`,
       options: options({ cwd: paths.cwd, shell: 'powershell' }),

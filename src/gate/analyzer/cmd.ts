@@ -111,7 +111,9 @@ export function analyzeCmdMatch(
   }
   if (
     mentionsRecursiveDelete &&
-    (CMD_ESCAPE_OR_EXPANSION.test(body) || CMD_DIRECTORY_WORD.test(body))
+    (CMD_ESCAPE_OR_EXPANSION.test(body) ||
+      CMD_DIRECTORY_WORD.test(body) ||
+      (body.includes('"') && CMD_CONNECTORS.test(body)))
   ) {
     return dynamicShellSourceMatch();
   }
