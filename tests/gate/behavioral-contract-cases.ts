@@ -394,6 +394,18 @@ export function behavioralContractCases(paths: {
       expected: nestedUnreadRecursiveDeleteBlock,
     },
     {
+      name: 'blocks an unread nested recursive delete whose rm flags are bundled after the dash',
+      powershell: "pwsh -NoExit -c 'rm -fr ~'",
+      posix: "pwsh -NoExit -c 'rm -fr ~'",
+      expected: nestedUnreadRecursiveDeleteBlock,
+    },
+    {
+      name: 'blocks a nested recursive delete of an expanded home whose rm flags are bundled after the dash',
+      powershell: 'pwsh -c "rm -vfR $HOME"',
+      posix: 'pwsh -c "rm -vfR $HOME"',
+      expected: nestedUnreadRecursiveDeleteBlock,
+    },
+    {
       name: 'blocks a nested PowerShell encoded command',
       powershell: 'powershell -NoProfile -EncodedCommand UgBlAG0AbwB2AGUALQBJAHQAZQBtAA==',
       posix: 'powershell -NoProfile -EncodedCommand UgBlAG0AbwB2AGUALQBJAHQAZQBtAA==',
@@ -1504,6 +1516,12 @@ export function behavioralContractCases(paths: {
     },
     ...cmdWrapperCases,
     ...powerShellWrapperCases,
+    {
+      name: 'blocks a nested PowerShell recursive delete behind the outer stop-parsing token',
+      command: 'pwsh -c --% Remove-Item -Recurse -Force C:\\',
+      options: options({ cwd: paths.cwd, shell: 'powershell' }),
+      expected: nestedUnreadRecursiveDeleteBlock,
+    },
     {
       name: 'blocks a POSIX recursive delete of root inside a cmd body',
       command: 'cmd /c "rm -rf /"',

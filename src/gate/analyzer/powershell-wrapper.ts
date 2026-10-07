@@ -13,7 +13,9 @@ const READ_COMMAND = /^-(?:command|c)$/i;
 const PARAMETER_NAME = /^(?:--?|[/\u2013\u2014\u2015])(\w+)$/;
 const ENCODED_COMMAND = 'encodedcommand';
 const DELETE_VERB = /(?<![\w-])(?:remove-item|ri|rm|rmdir|rd|del|erase)(?![\w-])/i;
-const RECURSIVE_FLAG = /(?<![\w-])(?:[-\u2013\u2014\u2015]{1,2}r\w*|\/s(?!\w))/i;
+const RECURSIVE_FLAG =
+  /(?<![\w-])(?:[-\u2013\u2014\u2015]{1,2}r\w*|-[dfipvwx]+r[dfipvwx]*(?!\w)|\/s(?!\w))/i;
+const STOP_PARSING = '--%';
 
 export function analyzePowerShellWrapperMatch(
   words: readonly CommandWord[],
@@ -21,7 +23,8 @@ export function analyzePowerShellWrapperMatch(
 ): DestructiveCommandRuleMatch | null {
   const texts = words.map(analysisWordText);
   const commandIndex = texts.every(
-    (text, index) => index === 0 || isLiteralExecutionSourceWord(words[index], text),
+    (text, index) =>
+      index === 0 || (text !== STOP_PARSING && isLiteralExecutionSourceWord(words[index], text)),
   )
     ? readCommandIndex(texts, 1)
     : undefined;
