@@ -116,6 +116,111 @@ export function behavioralContractCases(paths: {
     'cat package.json',
     'sed -n "1,40p" src/index.ts',
   ];
+  const cmdRootRemovalBlock: BehavioralContractCase['expected'] = {
+    kind: 'block',
+    ruleId: 'cmd.recursive-delete-root-or-home',
+    intent: 'hard_stop',
+    reasonIncludes: 'targeting root or home',
+  };
+  const cmdOutsideRemovalBlock: BehavioralContractCase['expected'] = {
+    kind: 'block',
+    ruleId: 'cmd.recursive-delete-outside-cwd',
+    intent: 'scope_down',
+    reasonIncludes: 'outside cwd is blocked',
+  };
+  const unverifiableShellSourceBlock: BehavioralContractCase['expected'] = {
+    kind: 'block',
+    ruleId: 'analysis.dynamic-shell-source',
+    intent: 'stop_and_explain',
+    reasonIncludes: 'shell execution source cannot be verified',
+  };
+  const cmdWrapperCases = [
+    {
+      name: 'blocks the field incident whose escaped quotes turned a worktree cleanup into a drive wipe',
+      powershell: String.raw`cmd /c "rmdir /s /q \"\\?\C:\Users\cookm\Desktop\CLAUDE CODE\heloc-calculator\.claude\worktrees\agent-a27e08c1bfbd7f8c9\""`,
+      posix: String.raw`cmd /c "rmdir /s /q \"\\?\C:\Users\cookm\Desktop\CLAUDE CODE\heloc-calculator\.claude\worktrees\agent-a27e08c1bfbd7f8c9\""`,
+      expected: unverifiableShellSourceBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete of the drive root',
+      powershell: 'cmd /c rmdir /s /q \\',
+      posix: String.raw`cmd /c rmdir /s /q '\'`,
+      expected: cmdRootRemovalBlock,
+    },
+    {
+      name: 'blocks a quoted cmd recursive delete of a drive',
+      powershell: String.raw`cmd /c "rmdir /s /q C:\"`,
+      posix: String.raw`cmd /c "rmdir /s /q C:\\"`,
+      expected: cmdRootRemovalBlock,
+    },
+    {
+      name: 'blocks a cmd.exe rd /s of a drive',
+      powershell: String.raw`cmd.exe /c "rd /s /q C:\"`,
+      posix: String.raw`cmd.exe /c "rd /s /q C:\\"`,
+      expected: cmdRootRemovalBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete with uppercase and joined switches',
+      powershell: String.raw`CMD.EXE /D /S /C "RMDIR /S/Q C:\"`,
+      posix: String.raw`CMD.EXE /D /S /C "RMDIR /S/Q C:\\"`,
+      expected: cmdRootRemovalBlock,
+    },
+    {
+      name: 'blocks a cmd del /s of every file on a drive',
+      powershell: String.raw`cmd /c "del /s /q C:\*"`,
+      posix: String.raw`cmd /c "del /s /q C:\*"`,
+      expected: cmdRootRemovalBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete outside the workspace',
+      powershell: String.raw`cmd /c rmdir /s /q ..\outside`,
+      posix: String.raw`cmd /c rmdir /s /q '..\outside'`,
+      expected: cmdOutsideRemovalBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete of a quoted target inside an outer quoted body',
+      powershell: String.raw`cmd /c '"rmdir /s /q "..\outside dir""'`,
+      posix: String.raw`cmd /c '"rmdir /s /q "..\outside dir""'`,
+      expected: cmdOutsideRemovalBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete of an environment variable target',
+      powershell: 'cmd /c "rmdir /s /q %USERPROFILE%"',
+      posix: 'cmd /c "rmdir /s /q %USERPROFILE%"',
+      expected: unverifiableShellSourceBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete after a directory change inside the body',
+      powershell: String.raw`cmd /c "cd /d C:\Users && rmdir /s /q build"`,
+      posix: String.raw`cmd /c "cd /d C:\\Users && rmdir /s /q build"`,
+      expected: unverifiableShellSourceBlock,
+    },
+    {
+      name: 'allows a cmd recursive delete of a worktree inside the workspace',
+      powershell: String.raw`cmd /c rmdir /s /q ".claude\worktrees\agent-a27e08c1bfbd7f8c9"`,
+      posix: String.raw`cmd /c rmdir /s /q ".claude\worktrees\agent-a27e08c1bfbd7f8c9"`,
+      expected: { kind: 'allow' } as const,
+    },
+    {
+      name: 'allows a cmd directory listing',
+      powershell: 'cmd /c dir',
+      posix: 'cmd /c dir',
+      expected: { kind: 'allow' } as const,
+    },
+    {
+      name: 'allows a quoted cmd echo',
+      powershell: 'cmd /c "echo hi"',
+      posix: 'cmd /c "echo hi"',
+      expected: { kind: 'allow' } as const,
+    },
+  ].flatMap((row): BehavioralContractCase[] =>
+    (['powershell', 'posix'] as const).map((shell) => ({
+      name: `${row.name} (${shell})`,
+      command: row[shell],
+      options: options({ cwd: paths.cwd, shell }),
+      expected: row.expected,
+    })),
+  );
 
   return [
     {
@@ -1167,6 +1272,71 @@ export function behavioralContractCases(paths: {
         intent: 'scope_down',
         reasonIncludes: 'outside cwd is blocked',
       },
+    },
+    ...cmdWrapperCases,
+    {
+      name: 'blocks a POSIX recursive delete of root inside a cmd body',
+      command: 'cmd /c "rm -rf /"',
+      options: options({ cwd: paths.cwd }),
+      expected: homeRemovalBlock,
+    },
+    {
+      name: 'blocks a recursive delete of root inside a cmd body from PowerShell',
+      command: 'cmd /c "rm -rf /"',
+      options: options({ cwd: paths.cwd, shell: 'powershell' }),
+      expected: {
+        kind: 'block',
+        ruleId: 'powershell.remove-item-root-or-home',
+        intent: 'hard_stop',
+        reasonIncludes: 'targeting root or home',
+      },
+    },
+    {
+      name: 'blocks a cmd recursive delete of the PowerShell home variable',
+      command: 'cmd /c rmdir /s /q $env:USERPROFILE',
+      options: options({ cwd: paths.cwd, shell: 'powershell' }),
+      expected: cmdRootRemovalBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete behind the Git Bash //c switch',
+      command: String.raw`cmd //c "rmdir /s /q C:\\"`,
+      options: options({ cwd: paths.cwd }),
+      expected: cmdRootRemovalBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete whose PowerShell string ends at a backslash-escaped quote',
+      command: String.raw`cmd /c "rmdir /s /q \"build output\""`,
+      options: options({ cwd: paths.cwd, shell: 'powershell' }),
+      expected: unverifiableShellSourceBlock,
+    },
+    {
+      name: 'allows the same escaped-quote cmd recursive delete where POSIX quoting decodes it',
+      command: String.raw`cmd /c "rmdir /s /q \"build output\""`,
+      options: options({ cwd: paths.cwd }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'checks every cmd delete target when the rule for an earlier one is off',
+      command: String.raw`cmd /c rmdir /s /q ..\outside .`,
+      options: options({
+        cwd: paths.cwd,
+        shell: 'powershell',
+        policy: {
+          destructiveCommandRuleOverrides: { 'cmd.recursive-delete-outside-cwd': 'off' },
+        },
+      }),
+      expected: {
+        kind: 'block',
+        ruleId: 'cmd.recursive-delete-cwd-self',
+        intent: 'scope_down',
+        reasonIncludes: 'outside cwd is blocked',
+      },
+    },
+    {
+      name: 'blocks a cmd recursive delete whose body still carries backslash-escaped quotes',
+      command: String.raw`cmd /c 'rmdir /s /q \"build output\"'`,
+      options: options({ cwd: paths.cwd }),
+      expected: unverifiableShellSourceBlock,
     },
     {
       name: 'allows an ordinary command while a fallback configuration is enforced',

@@ -36,6 +36,7 @@ import {
   REASON_INTERPRETER_DANGEROUS,
 } from './interpreters';
 import {
+  dynamicShellSourceMatch,
   REASON_DYNAMIC_SHELL_SOURCE,
   REASON_STRICT_UNPARSEABLE,
   REASON_UNSUPPORTED_HEREDOC_SYNTAX,
@@ -906,6 +907,7 @@ function recordCommandAnalyzerTrace(
   const rule = {
     git: 'git:analyzeGitMatch',
     rm: 'analyzer/rm.ts:analyzeRmMatch',
+    cmd: 'analyzer/cmd.ts:analyzeCmdMatch',
     find: 'analyzer/find.ts:analyzeFindMatch',
     xargs: 'analyzer/xargs.ts:analyzeXargs',
     parallel: 'analyzer/parallel.ts:analyzeParallel',
@@ -940,14 +942,6 @@ function blockResultFromMatch(match: DestructiveCommandRuleMatch): AnalyzeBlockR
 function dynamicShellSourceResult(trace: CommandTraceContext | undefined): AnalyzeBlockResult {
   trace?.recordSegment({ type: 'error', message: REASON_DYNAMIC_SHELL_SOURCE });
   return blockResultFromMatch(dynamicShellSourceMatch());
-}
-
-function dynamicShellSourceMatch(): DestructiveCommandRuleMatch {
-  return {
-    id: 'analysis.dynamic-shell-source',
-    reason: REASON_DYNAMIC_SHELL_SOURCE,
-    intent: 'stop_and_explain',
-  };
 }
 
 function isShellWrapperCommand(head: string, normalizedHead: string): boolean {

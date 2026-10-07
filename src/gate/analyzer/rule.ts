@@ -9,6 +9,7 @@ import type {
   DestructiveCommandRuleMatch,
 } from '@/gate/analysis';
 import type { ChildProvenance, NestedCommandAnalyzeContext } from './child-command';
+import { analyzeCmdMatch } from './cmd';
 import { analyzeFindMatch } from './find';
 import { analyzeGitMatch } from './git';
 import { analyzeParallel } from './parallel';
@@ -67,6 +68,24 @@ export const ANALYZER_RULES: readonly AnalyzerRule[] = [
   {
     heads: new Set(['rm', 'rmdir']),
     analyze: (context) => analyzeRmMatch(context.words, recursiveDeleteAnalyzeOptions(context)),
+  },
+  {
+    heads: new Set(['cmd']),
+    analyze: (context) =>
+      analyzeCmdMatch(context.words, {
+        ...recursiveDeleteAnalyzeOptions(context),
+        powerShellRawWords:
+          context.options.commandView?.dialect === 'powershell'
+            ? context.options.commandView.words.map((word) => word.raw)
+            : [],
+        analyzeNested: (command) =>
+          matchFromBlockResult(
+            context.options.analyzeNested(command, {
+              effectiveCwd: context.effectiveCwd,
+              envAssignments: context.envAssignments,
+            }),
+          ),
+      }),
   },
   {
     heads: new Set(['git']),
