@@ -376,6 +376,18 @@ export function behavioralContractCases(paths: {
       expected: nestedUnreadRecursiveDeleteBlock,
     },
     {
+      name: 'blocks an unread nested cmd recursive delete with glued switches',
+      powershell: String.raw`pwsh /c "cmd /c rd/s/q C:\"`,
+      posix: String.raw`pwsh /c 'cmd /c rd/s/q C:\'`,
+      expected: nestedUnreadRecursiveDeleteBlock,
+    },
+    {
+      name: 'blocks an unread nested cmd recursive delete with bundled switches',
+      powershell: String.raw`pwsh /c "cmd /c del /f/s/q C:\*"`,
+      posix: String.raw`pwsh /c 'cmd /c del /f/s/q C:\*'`,
+      expected: nestedUnreadRecursiveDeleteBlock,
+    },
+    {
       name: 'blocks a nested PowerShell recursive delete passed as the positional script',
       powershell: String.raw`powershell -NoProfile "Remove-Item -Recurse -Force C:\"`,
       posix: String.raw`powershell -NoProfile 'Remove-Item -Recurse -Force C:\'`,

@@ -14,7 +14,7 @@ const PARAMETER_NAME = /^(?:--?|[/\u2013\u2014\u2015])(\w+)$/;
 const ENCODED_COMMAND = 'encodedcommand';
 const DELETE_VERB = /(?<![\w-])(?:remove-item|ri|rm|rmdir|rd|del|erase)(?![\w-])/i;
 const RECURSIVE_FLAG =
-  /(?<![\w-])(?:[-\u2013\u2014\u2015]{1,2}r\w*|-[dfipvwx]+r[dfipvwx]*(?!\w)|\/s(?!\w))/i;
+  /(?<![\w-])(?:[-\u2013\u2014\u2015]{1,2}r\w*|-[dfipvwx]+r[dfipvwx]*(?!\w))|\/s(?!\w)/i;
 const STOP_PARSING = '--%';
 
 export function analyzePowerShellWrapperMatch(
