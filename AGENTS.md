@@ -13,6 +13,32 @@
   When `gh stack rebase` stops, resolve and `git add` the source files, never hand-merge `dist/`:
   run `bun run build && git add -A dist`, then `gh stack rebase --continue`.
 
+## Windows verification
+
+Windows behavior is verified on the `full-check-windows` CI job, from a disposable branch. Never push
+a probe to a PR branch or `main`.
+
+- Branch `tmp/<topic>-windows-probe` from `origin/main` in a `git worktree` under the scratchpad, then
+  `git branch --unset-upstream` (a branch cut from `origin/main` tracks it).
+- Red first: commit a `test.skipIf(process.platform !== 'win32')` test, push, run CI, and read the
+  failure in the job's "Check source" step. Then commit the fix, push, and run CI again for green.
+  Ignore the later "Reject stale generated artifacts" step; the pre-commit hook rebuilds `dist/`.
+- `ci.yml` triggers on pushes to `main` and on PRs only, so a pushed probe branch runs nothing by
+  itself. Start it with `gh workflow run ci.yml --ref <branch>`, then find the run with
+  `gh run list --workflow ci.yml --branch <branch>`.
+- Wait for the job with a background `until` loop on `gh run view <id> --json jobs`; foreground
+  `sleep` is blocked.
+- Do not bypass hooks. The pre-push hook runs the full `bun run check` (about 45s). Push from the
+  main checkout, not the worktree.
+- GitHub sometimes answers ref creation and workflow dispatch with HTTP 500. Retry in a background
+  loop (it succeeded on the fifth attempt once). Only when the hook already passed on that exact
+  commit may the retries use `LEFTHOOK=0`.
+- After creating or removing a worktree or pushing from one, check `git config core.bare` in the
+  main checkout. It was once found flipped to `true` (every git command then fails with "must be run
+  in a work tree"); restore it with `git config core.bare false`.
+- Clean up when done: `git worktree remove <path>` and `git branch -D <branch>`. The safety net
+  blocks `git push origin --delete`, so ask the user to delete the remote branch.
+
 ## README
 
 - `README.md` is the GitHub and npm landing page. It holds only what a newcomer needs before
