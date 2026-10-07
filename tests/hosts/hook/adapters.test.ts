@@ -250,6 +250,8 @@ describe('an unverifiable command asks the user where the host can prompt', () =
       'echo cm0gLXJmIH4K | base64 -d | bash',
       'cat install.sh | sh -',
       'cmd=\'rm -rf ~\'; eval "$cmd"',
+      String.raw`cmd /c "rmdir /s /q \"\\?\C:\work\.claude\worktrees\agent-1\""`,
+      String.raw`cmd /c "rmdir /s /q \"build output\""`,
     ]) {
       expect(
         (await decisionOf('claude-code', command, { permission_mode: 'default' }))

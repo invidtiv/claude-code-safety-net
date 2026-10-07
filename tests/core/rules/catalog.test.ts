@@ -7,7 +7,7 @@ describe('rule catalogs', () => {
   const secret = nextSecret.SECRET_PROTECTION_RULE_METADATA;
 
   test('every destructive record is uniquely identified and fully described', () => {
-    expect(destructive).toHaveLength(66);
+    expect(destructive).toHaveLength(67);
     const ids = destructive.map((rule) => rule.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(nextDestructive.DESTRUCTIVE_COMMAND_RULE_ID_SET).toEqual(new Set(ids));
@@ -29,6 +29,7 @@ describe('rule catalogs', () => {
       'powershell.remove-item-recursive-force-root-or-home',
       'powershell.remove-item-git-metadata',
       'cmd.recursive-delete-root-or-home',
+      'cmd.recursive-delete-escaped-quote',
       'cmd.recursive-delete-git-metadata',
       'find.delete-git-metadata',
     ]);

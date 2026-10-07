@@ -134,12 +134,18 @@ export function behavioralContractCases(paths: {
     intent: 'stop_and_explain',
     reasonIncludes: 'shell execution source cannot be verified',
   };
+  const cmdEscapedQuoteBlock: BehavioralContractCase['expected'] = {
+    kind: 'block',
+    ruleId: 'cmd.recursive-delete-escaped-quote',
+    intent: 'hard_stop',
+    reasonIncludes: 'root of the drive',
+  };
   const cmdWrapperCases = [
     {
       name: 'blocks the field incident whose escaped quotes turned a worktree cleanup into a drive wipe',
       powershell: String.raw`cmd /c "rmdir /s /q \"\\?\C:\Users\cookm\Desktop\CLAUDE CODE\heloc-calculator\.claude\worktrees\agent-a27e08c1bfbd7f8c9\""`,
       posix: String.raw`cmd /c "rmdir /s /q \"\\?\C:\Users\cookm\Desktop\CLAUDE CODE\heloc-calculator\.claude\worktrees\agent-a27e08c1bfbd7f8c9\""`,
-      expected: unverifiableShellSourceBlock,
+      expected: cmdEscapedQuoteBlock,
     },
     {
       name: 'blocks a cmd recursive delete of the drive root',
@@ -1331,19 +1337,19 @@ export function behavioralContractCases(paths: {
       name: 'blocks a cmd recursive delete whose PowerShell string ends at a backslash-escaped quote',
       command: String.raw`cmd /c "rmdir /s /q \"build output\""`,
       options: options({ cwd: paths.cwd, shell: 'powershell' }),
-      expected: unverifiableShellSourceBlock,
+      expected: cmdEscapedQuoteBlock,
     },
     {
       name: 'blocks a cmd recursive delete whose quotes Git Bash re-escapes for cmd',
       command: String.raw`cmd /c "rmdir /s /q \"build output\""`,
       options: options({ cwd: paths.cwd }),
-      expected: unverifiableShellSourceBlock,
+      expected: cmdEscapedQuoteBlock,
     },
     {
       name: 'blocks a single-quoted cmd recursive delete whose inner quotes Git Bash re-escapes for cmd',
       command: `cmd /c 'rmdir /s /q "dir with space"'`,
       options: options({ cwd: paths.cwd }),
-      expected: unverifiableShellSourceBlock,
+      expected: cmdEscapedQuoteBlock,
     },
     {
       name: 'blocks a cmd recursive delete of a quoted target inside an outer quoted body from PowerShell',
@@ -1355,7 +1361,7 @@ export function behavioralContractCases(paths: {
       name: 'blocks a cmd recursive delete of a quoted target inside an outer quoted body from Git Bash',
       command: String.raw`cmd /c '"rmdir /s /q "..\outside dir""'`,
       options: options({ cwd: paths.cwd }),
-      expected: unverifiableShellSourceBlock,
+      expected: cmdEscapedQuoteBlock,
     },
     {
       name: 'checks every cmd delete target when the rule for an earlier one is off',
@@ -1378,7 +1384,7 @@ export function behavioralContractCases(paths: {
       name: 'blocks a cmd recursive delete whose body still carries backslash-escaped quotes',
       command: String.raw`cmd /c 'rmdir /s /q \"build output\"'`,
       options: options({ cwd: paths.cwd }),
-      expected: unverifiableShellSourceBlock,
+      expected: cmdEscapedQuoteBlock,
     },
     {
       name: 'allows an ordinary command while a fallback configuration is enforced',

@@ -1,4 +1,5 @@
 import { filterDestructiveCommandMatch } from '@/core/policy/effective-rules';
+import { destructiveCommandMatch } from '@/core/rules/destructive';
 import type { DestructiveCommandRuleMatch } from '@/core/rules/types';
 import type { CommandWord } from '@/core/shell/model';
 import { REASON_GIT_METADATA_PROTECTION } from '@/gate/guards/git-metadata-protection';
@@ -22,6 +23,8 @@ const REASON_CMD_DELETE_DYNAMIC_TARGET =
   'cmd rmdir /s or del /s target contains wildcards or variables that cannot be verified safely. Use literal paths within cwd.';
 const REASON_CMD_DELETE_ROOT_HOME =
   'cmd rmdir /s or del /s targeting root or home directory is extremely dangerous and always blocked.';
+const REASON_CMD_DELETE_ESCAPED_QUOTE =
+  'cmd rmdir /s or del /s with \\" quoting or a \\\\?\\ path is blocked: cmd does not treat \\" as an escape, so the target can split down to the root of the drive. Pass each path as its own quoted argument, or use Remove-Item -LiteralPath.';
 const REASON_CMD_DELETE_HOME_CWD =
   'cmd rmdir /s or del /s in home directory is dangerous. Change to a project directory first.';
 
@@ -93,12 +96,20 @@ export function analyzeCmdMatch(
     (body.includes('\\"') ||
       (options.gitBashEscapesBodyQuotes && body.includes('"')) ||
       options.powerShellRawWords.some((raw) => ESCAPED_QUOTE_INSIDE_WORD.test(raw)) ||
-      CMD_ESCAPE_OR_EXPANSION.test(body) ||
-      commands.some((command) =>
-        CMD_DIRECTORY_COMMANDS.has(command.tokens[0]?.toLowerCase() ?? ''),
-      ) ||
       recursiveDeletes.some((command) =>
         command.tokens.some((token) => WINDOWS_NAMESPACE_PREFIX.test(token)),
+      ))
+  ) {
+    return destructiveCommandMatch(
+      'cmd.recursive-delete-escaped-quote',
+      REASON_CMD_DELETE_ESCAPED_QUOTE,
+    );
+  }
+  if (
+    recursiveDeletes.length > 0 &&
+    (CMD_ESCAPE_OR_EXPANSION.test(body) ||
+      commands.some((command) =>
+        CMD_DIRECTORY_COMMANDS.has(command.tokens[0]?.toLowerCase() ?? ''),
       ))
   ) {
     return dynamicShellSourceMatch();

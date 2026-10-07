@@ -369,6 +369,16 @@ const DESTRUCTIVE_COMMAND_RULE_DEFINITIONS = [
     catastrophic: true,
   },
   {
+    id: 'cmd.recursive-delete-escaped-quote',
+    category: 'Command Prompt',
+    label: 'cmd recursive delete with escaped quotes',
+    description:
+      'Blocks cmd rmdir /s or del /s whose quoting can reach cmd as \\" and split the target down to the drive root.',
+    example: 'cmd /c "rmdir /s /q \\"build output\\""',
+    intent: 'hard_stop',
+    catastrophic: true,
+  },
+  {
     id: 'cmd.recursive-delete-git-metadata',
     category: 'Command Prompt',
     label: 'cmd recursive delete Git metadata',
