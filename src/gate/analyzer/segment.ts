@@ -1,4 +1,5 @@
 import { AnalysisLimit, LIMITS } from '@/core/budget';
+import { normalizeMsysDrivePath } from '@/core/paths/canonicalization';
 import { resolveChdirTarget } from '@/core/paths/chdir';
 import { isTmpdirOverriddenToNonTemp } from '@/core/paths/tmpdir';
 import {
@@ -1035,7 +1036,9 @@ export function resolveCwdAfterCommandView(
   if (targets.length > 1) return null;
   const rawTarget = targets[0];
   const home = shellAssignments.get('HOME') || environment.home;
-  if (rawTarget === undefined) return resolveKnownCwdTarget(home, cwd, environment.paths);
+  if (rawTarget === undefined) {
+    return resolveKnownCwdTarget(normalizeMsysDrivePath(home), cwd, environment.paths);
+  }
   const targetWord = commandView.words.find(
     (word) => word.provenance === 'variable' && word.text === rawTarget,
   );
@@ -1054,7 +1057,7 @@ export function resolveCwdAfterCommandView(
   ) {
     return null;
   }
-  return resolveKnownCwdTarget(target, cwd, environment.paths);
+  return resolveKnownCwdTarget(normalizeMsysDrivePath(target), cwd, environment.paths);
 }
 
 function resolveKnownCwdTarget(
