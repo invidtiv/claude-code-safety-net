@@ -109,15 +109,6 @@ export function analyzeCmdMatch(
       REASON_CMD_DELETE_ESCAPED_QUOTE,
     );
   }
-  if (
-    mentionsRecursiveDelete &&
-    (CMD_ESCAPE_OR_EXPANSION.test(body) ||
-      CMD_DIRECTORY_WORD.test(body) ||
-      (body.includes('"') && CMD_CONNECTORS.test(body)))
-  ) {
-    return dynamicShellSourceMatch();
-  }
-
   const ctx = createRecursiveDeleteTargetContext({
     ...options,
     allowPaths: options.policy?.destructiveCommandAllowPaths,
@@ -130,8 +121,13 @@ export function analyzeCmdMatch(
         : options.analyzeNested(command.piece)),
     null,
   );
-  const unreadRecursiveDelete = recursiveDeletes.length === 0 && mentionsRecursiveDelete;
-  return pieceMatch ?? (unreadRecursiveDelete ? dynamicShellSourceMatch() : null);
+  const unverifiableRecursiveDelete =
+    mentionsRecursiveDelete &&
+    (recursiveDeletes.length === 0 ||
+      CMD_ESCAPE_OR_EXPANSION.test(body) ||
+      CMD_DIRECTORY_WORD.test(body) ||
+      (body.includes('"') && CMD_CONNECTORS.test(body)));
+  return pieceMatch ?? (unverifiableRecursiveDelete ? dynamicShellSourceMatch() : null);
 }
 
 function recursiveDeleteTargetMatch(

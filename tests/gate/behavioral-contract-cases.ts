@@ -238,6 +238,12 @@ export function behavioralContractCases(paths: {
       expected: unverifiableShellSourceBlock,
     },
     {
+      name: 'keeps the root denial for a cmd recursive delete next to an expansion',
+      powershell: String.raw`cmd /c "rmdir /s /q C:\ & echo %DATE%"`,
+      posix: String.raw`cmd /c 'rmdir /s /q C:\ & echo %DATE%'`,
+      expected: cmdRootRemovalBlock,
+    },
+    {
       name: 'allows a non-recursive cmd delete inside the workspace',
       powershell: 'cmd /c "del /q build.log"',
       posix: 'cmd /c "del /q build.log"',
@@ -1404,6 +1410,12 @@ export function behavioralContractCases(paths: {
       command: String.raw`cmd /c 'rmdir /s /q "build & output\..\..\outside"'`,
       options: options({ cwd: paths.cwd, shell: 'powershell' }),
       expected: unverifiableShellSourceBlock,
+    },
+    {
+      name: 'keeps the root denial for a quoted drive wildcard next to a connector from PowerShell',
+      command: String.raw`cmd /c 'del /s /q "C:\*" & echo done'`,
+      options: options({ cwd: paths.cwd, shell: 'powershell' }),
+      expected: cmdRootRemovalBlock,
     },
     {
       name: 'blocks a cmd recursive delete whose command name is quoted from PowerShell',
