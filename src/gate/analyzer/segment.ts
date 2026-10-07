@@ -561,6 +561,7 @@ export function analyzeSegment(
     trace === normalizedOptions.trace ? normalizedOptions : { ...normalizedOptions, trace };
   const commandContext: AnalyzerRuleContext = {
     words,
+    parsedWords: prelude.words,
     head: normalizedHead,
     cwd: cwdForRm,
     originalCwd: originalCwdForRm,
@@ -908,6 +909,8 @@ function recordCommandAnalyzerTrace(
     git: 'git:analyzeGitMatch',
     rm: 'analyzer/rm.ts:analyzeRmMatch',
     cmd: 'analyzer/cmd.ts:analyzeCmdMatch',
+    powershell: 'analyzer/powershell-wrapper.ts:analyzePowerShellWrapperMatch',
+    pwsh: 'analyzer/powershell-wrapper.ts:analyzePowerShellWrapperMatch',
     find: 'analyzer/find.ts:analyzeFindMatch',
     xargs: 'analyzer/xargs.ts:analyzeXargs',
     parallel: 'analyzer/parallel.ts:analyzeParallel',

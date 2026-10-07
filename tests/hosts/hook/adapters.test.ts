@@ -252,6 +252,8 @@ describe('an unverifiable command asks the user where the host can prompt', () =
       'cmd=\'rm -rf ~\'; eval "$cmd"',
       String.raw`cmd /c "rmdir /s /q \"\\?\C:\work\.claude\worktrees\agent-1\""`,
       String.raw`cmd /c "rmdir /s /q \"build output\""`,
+      String.raw`powershell -NoProfile -Command 'Remove-Item -Recurse -Force C:\'`,
+      String.raw`pwsh -WorkingDirectory 'C:\' -c 'Remove-Item -Recurse -Force *'`,
     ]) {
       expect(
         (await decisionOf('claude-code', command, { permission_mode: 'default' }))

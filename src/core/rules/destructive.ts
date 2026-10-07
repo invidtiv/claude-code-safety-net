@@ -360,6 +360,16 @@ const DESTRUCTIVE_COMMAND_RULE_DEFINITIONS = [
     activationCapability: 'fail_closed',
   },
   {
+    id: 'powershell.nested-recursive-delete-unread',
+    category: 'PowerShell',
+    label: 'Nested PowerShell recursive delete not read',
+    description:
+      'Blocks a recursive delete handed to powershell or pwsh in any form other than literal -Command script words.',
+    example: "pwsh -WorkingDirectory C:\\ -c 'Remove-Item -Recurse -Force *'",
+    intent: 'hard_stop',
+    catastrophic: true,
+  },
+  {
     id: 'cmd.recursive-delete-root-or-home',
     category: 'Command Prompt',
     label: 'cmd recursive delete root or home',

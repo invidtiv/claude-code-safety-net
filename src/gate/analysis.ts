@@ -59,6 +59,7 @@ export interface AnalyzeNestedOverrides {
   effectiveCwd?: string | null;
   envAssignments?: ReadonlyMap<string, string>;
   worktreeMode?: boolean;
+  shell?: ShellKind;
 
   functionDefinitions?: ReadonlyMap<string, CommandProgram>;
 }

@@ -13,6 +13,7 @@ import { analyzeCmdMatch } from './cmd';
 import { analyzeFindMatch } from './find';
 import { analyzeGitMatch } from './git';
 import { analyzeParallel } from './parallel';
+import { analyzePowerShellWrapperMatch } from './powershell-wrapper';
 import { analyzeRmMatch } from './rm';
 import { analyzeXargs } from './xargs';
 
@@ -37,6 +38,7 @@ export type InternalOptions = AnalyzeInput & {
 
 export type AnalyzerRuleContext = {
   readonly words: readonly CommandWord[];
+  readonly parsedWords: readonly CommandWord[];
   readonly head: string;
   readonly cwd: string | undefined;
   readonly originalCwd: string | undefined;
@@ -87,6 +89,19 @@ export const ANALYZER_RULES: readonly AnalyzerRule[] = [
             }),
           ),
       }),
+  },
+  {
+    heads: new Set(['powershell', 'pwsh']),
+    analyze: (context) =>
+      analyzePowerShellWrapperMatch(context.parsedWords, (script) =>
+        matchFromBlockResult(
+          context.options.analyzeNested(script, {
+            effectiveCwd: context.effectiveCwd,
+            envAssignments: context.envAssignments,
+            shell: 'powershell',
+          }),
+        ),
+      ),
   },
   {
     heads: new Set(['git']),
