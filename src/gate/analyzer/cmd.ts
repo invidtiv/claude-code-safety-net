@@ -109,7 +109,9 @@ export function analyzeCmdMatch(
     recursiveDeletes.length > 0 &&
     (CMD_ESCAPE_OR_EXPANSION.test(body) ||
       commands.some((command) =>
-        CMD_DIRECTORY_COMMANDS.has(command.tokens[0]?.toLowerCase() ?? ''),
+        command.tokens.some((token) =>
+          CMD_DIRECTORY_COMMANDS.has(token.replace(/^@/, '').toLowerCase()),
+        ),
       ))
   ) {
     return dynamicShellSourceMatch();

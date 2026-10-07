@@ -202,6 +202,18 @@ export function behavioralContractCases(paths: {
       expected: cmdOutsideRemovalBlock,
     },
     {
+      name: 'blocks a cmd recursive delete after an echo-suppressed directory change',
+      powershell: String.raw`cmd /c '@cd /d C:\outside & rd /s /q build'`,
+      posix: String.raw`cmd /c '@cd /d C:\outside & rd /s /q build'`,
+      expected: unverifiableShellSourceBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete after a guarded directory change',
+      powershell: String.raw`cmd /c 'if exist C:\outside cd /d C:\outside & rd /s /q build'`,
+      posix: String.raw`cmd /c 'if exist C:\outside cd /d C:\outside & rd /s /q build'`,
+      expected: unverifiableShellSourceBlock,
+    },
+    {
       name: 'blocks a cmd recursive delete of an environment variable target',
       powershell: 'cmd /c "rmdir /s /q %USERPROFILE%"',
       posix: 'cmd /c "rmdir /s /q %USERPROFILE%"',
