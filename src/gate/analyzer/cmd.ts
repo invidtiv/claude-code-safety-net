@@ -58,7 +58,9 @@ const ESCAPED_QUOTE_INSIDE_WORD = /\\"./s;
 const CMD_MATCH_ALL_FINAL_SEGMENT = /(^|\/)[*.]*\*[*.]*$/;
 const WINDOWS_NAMESPACE_PREFIX = /^"?[\\/]+[?.][\\/]/;
 const CMD_DELETE_COMMANDS = new Set(['rmdir', 'rd', 'del', 'erase']);
-const CMD_DIRECTORY_COMMANDS = new Set(['cd', 'chdir', 'pushd', 'popd']);
+const CMD_DELETE_WORD = /(?<![\w-])(?:rmdir|rd|del|erase)(?!\w)/i;
+const CMD_RECURSIVE_SWITCH = /\/s(?!\w)/i;
+const CMD_DIRECTORY_WORD = /(?<![\w-])(?:cd|chdir|pushd|popd)(?!\w)/i;
 
 interface AnalyzeCmdOptions extends AnalyzeRmOptions {
   powerShellRawWords: readonly string[];
@@ -91,8 +93,10 @@ export function analyzeCmdMatch(
     };
   });
   const recursiveDeletes = commands.filter((command) => command.recursiveDelete);
+  const mentionsRecursiveDelete =
+    recursiveDeletes.length > 0 || (CMD_DELETE_WORD.test(body) && CMD_RECURSIVE_SWITCH.test(body));
   if (
-    recursiveDeletes.length > 0 &&
+    mentionsRecursiveDelete &&
     (body.includes('\\"') ||
       (options.gitBashEscapesBodyQuotes && body.includes('"')) ||
       options.powerShellRawWords.some((raw) => ESCAPED_QUOTE_INSIDE_WORD.test(raw)) ||
@@ -106,13 +110,8 @@ export function analyzeCmdMatch(
     );
   }
   if (
-    recursiveDeletes.length > 0 &&
-    (CMD_ESCAPE_OR_EXPANSION.test(body) ||
-      commands.some((command) =>
-        command.tokens.some((token) =>
-          CMD_DIRECTORY_COMMANDS.has(token.replace(/^@/, '').toLowerCase()),
-        ),
-      ))
+    mentionsRecursiveDelete &&
+    (CMD_ESCAPE_OR_EXPANSION.test(body) || CMD_DIRECTORY_WORD.test(body))
   ) {
     return dynamicShellSourceMatch();
   }
@@ -121,7 +120,7 @@ export function analyzeCmdMatch(
     ...options,
     allowPaths: options.policy?.destructiveCommandAllowPaths,
   });
-  return commands.reduce<DestructiveCommandRuleMatch | null>(
+  const pieceMatch = commands.reduce<DestructiveCommandRuleMatch | null>(
     (match, command) =>
       match ??
       (command.recursiveDelete
@@ -129,6 +128,8 @@ export function analyzeCmdMatch(
         : options.analyzeNested(command.piece)),
     null,
   );
+  const unreadRecursiveDelete = recursiveDeletes.length === 0 && mentionsRecursiveDelete;
+  return pieceMatch ?? (unreadRecursiveDelete ? dynamicShellSourceMatch() : null);
 }
 
 function recursiveDeleteTargetMatch(

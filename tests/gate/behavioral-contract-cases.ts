@@ -214,6 +214,36 @@ export function behavioralContractCases(paths: {
       expected: unverifiableShellSourceBlock,
     },
     {
+      name: 'blocks a cmd recursive delete after a glued parent directory change',
+      powershell: String.raw`cmd /c "cd.. & rmdir /s /q build"`,
+      posix: String.raw`cmd /c 'cd.. & rmdir /s /q build'`,
+      expected: unverifiableShellSourceBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete after a glued root directory change',
+      powershell: String.raw`cmd /c "cd\ & rmdir /s /q Users"`,
+      posix: String.raw`cmd /c 'cd\ & rmdir /s /q Users'`,
+      expected: unverifiableShellSourceBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete whose switches are glued to the command',
+      powershell: String.raw`cmd /c "rd/s/q C:\"`,
+      posix: String.raw`cmd /c 'rd/s/q C:\'`,
+      expected: unverifiableShellSourceBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete inside a parenthesized group',
+      powershell: String.raw`cmd /c "(rmdir /s /q C:\)"`,
+      posix: String.raw`cmd /c '(rmdir /s /q C:\)'`,
+      expected: unverifiableShellSourceBlock,
+    },
+    {
+      name: 'allows a non-recursive cmd delete inside the workspace',
+      powershell: 'cmd /c "del /q build.log"',
+      posix: 'cmd /c "del /q build.log"',
+      expected: { kind: 'allow' } as const,
+    },
+    {
       name: 'blocks a cmd recursive delete of an environment variable target',
       powershell: 'cmd /c "rmdir /s /q %USERPROFILE%"',
       posix: 'cmd /c "rmdir /s /q %USERPROFILE%"',
@@ -1362,6 +1392,23 @@ export function behavioralContractCases(paths: {
       command: `cmd /c 'rmdir /s /q "dir with space"'`,
       options: options({ cwd: paths.cwd }),
       expected: cmdEscapedQuoteBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete whose quoted command name Git Bash re-escapes for cmd',
+      command: String.raw`cmd /c '"rmdir" /s /q C:\'`,
+      options: options({ cwd: paths.cwd }),
+      expected: cmdEscapedQuoteBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete whose command name is quoted from PowerShell',
+      command: String.raw`cmd /c '"rmdir" /s /q C:\'`,
+      options: options({ cwd: paths.cwd, shell: 'powershell' }),
+      expected: {
+        kind: 'block',
+        ruleId: 'powershell.remove-item-root-or-home',
+        intent: 'hard_stop',
+        reasonIncludes: 'targeting root or home',
+      },
     },
     {
       name: 'blocks a cmd recursive delete of a quoted target inside an outer quoted body from PowerShell',
