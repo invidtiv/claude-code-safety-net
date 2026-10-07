@@ -232,7 +232,7 @@ describe('supported path variable expansion', () => {
     },
     {
       name: 'fails closed on more unclosed unsupported braces than the expansion limit',
-      target: '${x'.repeat(65),
+      target: '\\${x'.repeat(65),
       environment,
     },
   ];
