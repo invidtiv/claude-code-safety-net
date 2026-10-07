@@ -95,6 +95,12 @@ describe('supported path variable expansion', () => {
       expected: '$$',
     },
     {
+      name: 'expands a supported variable that follows an unclosed unsupported brace',
+      target: '${build/../..${HOME}dir',
+      environment,
+      expected: `\${build/../..${home}dir`,
+    },
+    {
       name: 'takes the value for `:-` when it is set and non-empty',
       target: '${TMPDIR:-/fallback}',
       environment,
