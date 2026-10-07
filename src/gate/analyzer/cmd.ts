@@ -59,6 +59,7 @@ const CMD_DIRECTORY_COMMANDS = new Set(['cd', 'chdir', 'pushd', 'popd']);
 
 interface AnalyzeCmdOptions extends AnalyzeRmOptions {
   powerShellRawWords: readonly string[];
+  gitBashEscapesBodyQuotes: boolean;
   analyzeNested: (command: string) => DestructiveCommandRuleMatch | null;
 }
 
@@ -90,6 +91,7 @@ export function analyzeCmdMatch(
   if (
     recursiveDeletes.length > 0 &&
     (body.includes('\\"') ||
+      (options.gitBashEscapesBodyQuotes && body.includes('"')) ||
       options.powerShellRawWords.some((raw) => ESCAPED_QUOTE_INSIDE_WORD.test(raw)) ||
       CMD_ESCAPE_OR_EXPANSION.test(body) ||
       commands.some((command) =>

@@ -78,6 +78,7 @@ export const ANALYZER_RULES: readonly AnalyzerRule[] = [
           context.options.commandView?.dialect === 'powershell'
             ? context.options.commandView.words.map((word) => word.raw)
             : [],
+        gitBashEscapesBodyQuotes: context.options.commandView?.dialect !== 'powershell',
         analyzeNested: (command) =>
           matchFromBlockResult(
             context.options.analyzeNested(command, {

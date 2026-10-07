@@ -196,12 +196,6 @@ export function behavioralContractCases(paths: {
       expected: cmdOutsideRemovalBlock,
     },
     {
-      name: 'blocks a cmd recursive delete of a quoted target inside an outer quoted body',
-      powershell: String.raw`cmd /c '"rmdir /s /q "..\outside dir""'`,
-      posix: String.raw`cmd /c '"rmdir /s /q "..\outside dir""'`,
-      expected: cmdOutsideRemovalBlock,
-    },
-    {
       name: 'blocks a cmd recursive delete of an environment variable target',
       powershell: 'cmd /c "rmdir /s /q %USERPROFILE%"',
       posix: 'cmd /c "rmdir /s /q %USERPROFILE%"',
@@ -1340,10 +1334,28 @@ export function behavioralContractCases(paths: {
       expected: unverifiableShellSourceBlock,
     },
     {
-      name: 'allows the same escaped-quote cmd recursive delete where POSIX quoting decodes it',
+      name: 'blocks a cmd recursive delete whose quotes Git Bash re-escapes for cmd',
       command: String.raw`cmd /c "rmdir /s /q \"build output\""`,
       options: options({ cwd: paths.cwd }),
-      expected: { kind: 'allow' },
+      expected: unverifiableShellSourceBlock,
+    },
+    {
+      name: 'blocks a single-quoted cmd recursive delete whose inner quotes Git Bash re-escapes for cmd',
+      command: `cmd /c 'rmdir /s /q "dir with space"'`,
+      options: options({ cwd: paths.cwd }),
+      expected: unverifiableShellSourceBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete of a quoted target inside an outer quoted body from PowerShell',
+      command: String.raw`cmd /c '"rmdir /s /q "..\outside dir""'`,
+      options: options({ cwd: paths.cwd, shell: 'powershell' }),
+      expected: cmdOutsideRemovalBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete of a quoted target inside an outer quoted body from Git Bash',
+      command: String.raw`cmd /c '"rmdir /s /q "..\outside dir""'`,
+      options: options({ cwd: paths.cwd }),
+      expected: unverifiableShellSourceBlock,
     },
     {
       name: 'checks every cmd delete target when the rule for an earlier one is off',
