@@ -290,12 +290,12 @@ describe.skipIf(!POSIX_TEMP_ROOTS)('tmpdir trust invariants over generated value
 
   const decided = (() => {
     const random = seededRandom(0x7e3d_1201);
-    const words = [...FRAGMENTS, ...corpusWords()];
+    const corpus = corpusWords();
     return Array.from({ length: 300 }, () =>
       decide(
-        Array.from({ length: 1 + Math.floor(random() * 6) }, () => pickWord(random, words)).join(
-          '',
-        ),
+        Array.from({ length: 1 + Math.floor(random() * 6) }, () =>
+          pickWord(random, random() < 0.5 ? FRAGMENTS : corpus),
+        ).join(''),
         pickWord(random, SPLITTING_IFS),
       ),
     );

@@ -52,6 +52,7 @@ const CMD_CONNECTORS = /[&|]+/;
 const CMD_TOKEN = /(?:"[^"]*"|[^\s"])+/g;
 const CMD_ESCAPE_OR_EXPANSION = /[\^%!]/;
 const ESCAPED_QUOTE_INSIDE_WORD = /\\"./s;
+const CMD_MATCH_ALL_FINAL_SEGMENT = /(^|\/)[*.]*\*[*.]*$/;
 const WINDOWS_NAMESPACE_PREFIX = /^"?[\\/]+[?.][\\/]/;
 const CMD_DELETE_COMMANDS = new Set(['rmdir', 'rd', 'del', 'erase']);
 const CMD_DIRECTORY_COMMANDS = new Set(['cd', 'chdir', 'pushd', 'popd']);
@@ -72,14 +73,17 @@ export function analyzeCmdMatch(
   const body = /^".*"$/s.test(joined) ? joined.slice(1, -1) : joined;
   const commands = body.split(CMD_CONNECTORS).map((piece) => {
     const tokens = piece.match(CMD_TOKEN) ?? [];
+    const deleteIndex = tokens.findIndex((token) =>
+      CMD_DELETE_COMMANDS.has(token.replace(/^@/, '').toLowerCase()),
+    );
+    const deleteTokens = deleteIndex === -1 ? [] : tokens.slice(deleteIndex);
     return {
       piece,
       tokens,
-      recursiveDelete:
-        CMD_DELETE_COMMANDS.has(tokens[0]?.toLowerCase() ?? '') &&
-        tokens
-          .slice(1)
-          .some((token) => token.startsWith('/') && token.toLowerCase().split('/').includes('s')),
+      deleteTokens,
+      recursiveDelete: deleteTokens
+        .slice(1)
+        .some((token) => token.startsWith('/') && token.toLowerCase().split('/').includes('s')),
     };
   });
   const recursiveDeletes = commands.filter((command) => command.recursiveDelete);
@@ -106,7 +110,7 @@ export function analyzeCmdMatch(
     (match, command) =>
       match ??
       (command.recursiveDelete
-        ? recursiveDeleteTargetMatch(command.tokens, ctx, options.policy)
+        ? recursiveDeleteTargetMatch(command.deleteTokens, ctx, options.policy)
         : options.analyzeNested(command.piece)),
     null,
   );
@@ -126,7 +130,10 @@ function recursiveDeleteTargetMatch(
         filterDestructiveCommandMatch(
           matchRecursiveDeleteClassification(
             classifyRecursiveDeleteTarget(
-              powerShellTargetForPolicy(token.replaceAll('"', '')),
+              powerShellTargetForPolicy(token.replaceAll('"', '')).replace(
+                CMD_MATCH_ALL_FINAL_SEGMENT,
+                '$1*',
+              ),
               ctx,
             ),
             ctx,

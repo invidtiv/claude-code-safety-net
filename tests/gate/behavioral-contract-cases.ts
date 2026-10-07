@@ -172,6 +172,24 @@ export function behavioralContractCases(paths: {
       expected: cmdRootRemovalBlock,
     },
     {
+      name: 'blocks a cmd del /s of every file on a drive through the star-dot-star wildcard',
+      powershell: String.raw`cmd /c "del /s /q C:\*.*"`,
+      posix: String.raw`cmd /c "del /s /q C:\*.*"`,
+      expected: cmdRootRemovalBlock,
+    },
+    {
+      name: 'blocks a cmd recursive delete of a drive behind an if exist guard',
+      powershell: String.raw`cmd /c "if exist C:\ rmdir /s /q C:\"`,
+      posix: String.raw`cmd /c "if exist C:\\ rmdir /s /q C:\\"`,
+      expected: cmdRootRemovalBlock,
+    },
+    {
+      name: 'blocks an echo-suppressed cmd recursive delete outside the workspace',
+      powershell: String.raw`cmd /c '@rd /s /q ..\outside'`,
+      posix: String.raw`cmd /c '@rd /s /q ..\outside'`,
+      expected: cmdOutsideRemovalBlock,
+    },
+    {
       name: 'blocks a cmd recursive delete outside the workspace',
       powershell: String.raw`cmd /c rmdir /s /q ..\outside`,
       posix: String.raw`cmd /c rmdir /s /q '..\outside'`,
@@ -199,6 +217,18 @@ export function behavioralContractCases(paths: {
       name: 'allows a cmd recursive delete of a worktree inside the workspace',
       powershell: String.raw`cmd /c rmdir /s /q ".claude\worktrees\agent-a27e08c1bfbd7f8c9"`,
       posix: String.raw`cmd /c rmdir /s /q ".claude\worktrees\agent-a27e08c1bfbd7f8c9"`,
+      expected: { kind: 'allow' } as const,
+    },
+    {
+      name: 'allows a guarded cmd recursive delete of a dependency directory inside the workspace',
+      powershell: 'cmd /c "if exist node_modules rmdir /s /q node_modules"',
+      posix: 'cmd /c "if exist node_modules rmdir /s /q node_modules"',
+      expected: { kind: 'allow' } as const,
+    },
+    {
+      name: 'allows a cmd del /s of every file in a directory inside the workspace',
+      powershell: String.raw`cmd /c "del /s /q build\*.*"`,
+      posix: String.raw`cmd /c "del /s /q build\*.*"`,
       expected: { kind: 'allow' } as const,
     },
     {
