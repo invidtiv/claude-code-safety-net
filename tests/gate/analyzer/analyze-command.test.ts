@@ -982,6 +982,26 @@ describe('analyzeCommand', () => {
     }
   });
 
+  test.skipIf(process.platform !== 'win32')(
+    'a Git Bash drive path is tracked as the directory it names',
+    () => {
+      const msys = (path: string) => path.replace(/^([A-Za-z]):/, '/$1').replaceAll('\\', '/');
+      for (const command of [
+        `cd ${msys(project)} && rm -rf build`,
+        `cd ${msys(project)}; rm -rf build`,
+        `cd ${msys(project)}/. && rm -rf build`,
+      ]) {
+        expect(decision(command, standard), command).toBeNull();
+      }
+      for (const command of [
+        `cd ${msys(plain)} && rm -rf build`,
+        `cd ${msys(project)}/.. && rm -rf build`,
+      ]) {
+        expect(decision(command, standard)?.ruleId, command).toBe('rm.recursive-force-outside-cwd');
+      }
+    },
+  );
+
   test('a bare cd operand is not tracked while CDPATH can redirect it', () => {
     expect(decisionAt(plain, 'cd helpers && rm -rf keep', standard)).toBeNull();
     expect(decisionAt(plain, 'cd ./helpers && rm -rf keep', standard)).toBeNull();

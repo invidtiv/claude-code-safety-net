@@ -9,9 +9,11 @@ import type {
   DestructiveCommandRuleMatch,
 } from '@/gate/analysis';
 import type { ChildProvenance, NestedCommandAnalyzeContext } from './child-command';
+import { analyzeCmdMatch } from './cmd';
 import { analyzeFindMatch } from './find';
 import { analyzeGitMatch } from './git';
 import { analyzeParallel } from './parallel';
+import { analyzePowerShellWrapperMatch } from './powershell-wrapper';
 import { analyzeRmMatch } from './rm';
 import { analyzeXargs } from './xargs';
 
@@ -36,6 +38,7 @@ export type InternalOptions = AnalyzeInput & {
 
 export type AnalyzerRuleContext = {
   readonly words: readonly CommandWord[];
+  readonly parsedWords: readonly CommandWord[];
   readonly head: string;
   readonly cwd: string | undefined;
   readonly originalCwd: string | undefined;
@@ -67,6 +70,38 @@ export const ANALYZER_RULES: readonly AnalyzerRule[] = [
   {
     heads: new Set(['rm', 'rmdir']),
     analyze: (context) => analyzeRmMatch(context.words, recursiveDeleteAnalyzeOptions(context)),
+  },
+  {
+    heads: new Set(['cmd']),
+    analyze: (context) =>
+      analyzeCmdMatch(context.words, {
+        ...recursiveDeleteAnalyzeOptions(context),
+        powerShellRawWords:
+          context.options.commandView?.dialect === 'powershell'
+            ? context.options.commandView.words.map((word) => word.raw)
+            : [],
+        gitBashEscapesBodyQuotes: context.options.commandView?.dialect !== 'powershell',
+        analyzeNested: (command) =>
+          matchFromBlockResult(
+            context.options.analyzeNested(command, {
+              effectiveCwd: context.effectiveCwd,
+              envAssignments: context.envAssignments,
+            }),
+          ),
+      }),
+  },
+  {
+    heads: new Set(['powershell', 'pwsh']),
+    analyze: (context) =>
+      analyzePowerShellWrapperMatch(context.parsedWords, (script) =>
+        matchFromBlockResult(
+          context.options.analyzeNested(script, {
+            effectiveCwd: context.effectiveCwd,
+            envAssignments: context.envAssignments,
+            shell: 'powershell',
+          }),
+        ),
+      ),
   },
   {
     heads: new Set(['git']),

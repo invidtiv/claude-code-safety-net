@@ -879,7 +879,7 @@
 {"literal":"Path canonicalization work limit exceeded.","work/standard":"allow","work/strict":"allow","repo/standard":"allow","repo/strict":"allow"}
 {"literal":"Pop-Location","work/standard":"allow","work/strict":"allow","repo/standard":"allow","repo/strict":"allow"}
 {"literal":"PowerShell","work/standard":"allow","work/strict":"allow","work/paranoid_rm":"allow","work/paranoid_interpreters":"allow","repo/standard":"allow","repo/strict":"allow","repo/paranoid_rm":"allow","repo/paranoid_interpreters":"allow"}
-{"literal":"PowerShell Remove-Item -Recurse -Force","work/standard":"allow","work/strict":"allow","repo/standard":"allow","repo/strict":"allow"}
+{"literal":"PowerShell Remove-Item -Recurse -Force","work/standard":"deny powershell.nested-recursive-delete-unread @command-analysis","work/strict":"deny powershell.nested-recursive-delete-unread @command-analysis","repo/standard":"deny powershell.nested-recursive-delete-unread @command-analysis","repo/strict":"deny powershell.nested-recursive-delete-unread @command-analysis"}
 {"literal":"PowerShell Remove-Item support","work/standard":"allow","work/strict":"allow","repo/standard":"allow","repo/strict":"allow"}
 {"literal":"PowerShell command parser boundary","work/standard":"allow","work/strict":"allow","repo/standard":"allow","repo/strict":"allow"}
 {"literal":"PowerShell dynamic target","work/standard":"allow","work/strict":"allow","repo/standard":"allow","repo/strict":"allow"}

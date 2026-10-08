@@ -140,6 +140,21 @@ const INTERPRETERS_BY_CLUSTERED_CODE_EVAL_FLAG = new Map([
 ]);
 
 const PATTERN_FIRST_COMMANDS = new Set(['grep', 'rg']);
+const SEARCH_NAMES_ONLY_LONG = new Set([
+  'files-with-matches',
+  'files-without-match',
+  'count',
+  'quiet',
+]);
+const SEARCH_VALUELESS_LONG = new Set([
+  ...SEARCH_NAMES_ONLY_LONG,
+  'ignore-case',
+  'fixed-strings',
+  'hidden',
+]);
+const NAME_LISTING_METADATA_COMMANDS = new Set(['wc', ...PATTERN_FIRST_COMMANDS]);
+const CERTIFICATE_PIPE_PROGRAMS = new Set(['cd', 'grep', 'head', 'openssl', 'tail', 'tailscale']);
+const WC_COUNT_OPTION = /^(?:-[lwcm]+|--(?:lines|words|bytes|chars))$/;
 const GH_TEXT_FLAGS = new Set(['--search', '-S', '--title', '-t', '--body', '-b', '--jq', '-q']);
 const GIT_MESSAGE_SUBCOMMANDS = new Set(['commit', 'merge', 'notes', 'stash', 'tag']);
 const GIT_MESSAGE_FLAGS = new Set(['-m', '--message']);
@@ -189,6 +204,11 @@ type SecretCandidate = {
   readonly target: string;
   readonly cwd: string;
   readonly isRedirectionWriteTarget?: true;
+  readonly isCreatedPath?: true;
+  readonly isCertificateInput?: true;
+  readonly certificateOutputMayFeedReader?: true;
+  readonly literalRole?: 'data' | 'write';
+  readonly loopVariable?: string;
 };
 
 type SecretProtectionPolicy = {
@@ -203,7 +223,14 @@ type SecretInspectionOptions = {
 
 type LiteralFamily = 'python' | 'javascript' | 'simple' | 'opaque';
 
-type CodeLiteral = { readonly start: number; readonly text: string };
+type CodeLiteral = {
+  readonly start: number;
+  readonly text: string;
+  readonly tokenStart: number;
+  readonly tokenEnd: number;
+};
+
+type LiteralScan = { readonly masked: string[]; readonly literals: CodeLiteral[] };
 
 type MaskedCode =
   | { readonly kind: 'masked'; readonly masked: string; readonly literals: readonly CodeLiteral[] }
@@ -213,6 +240,8 @@ type PathExtractionOptions = {
   readonly skipMetadataOnlySegments?: boolean;
   readonly inlineLiteralsPresumedData?: boolean;
   readonly displayOperandsAreCapturedOutput?: boolean;
+  readonly segmentMayFeedReader?: boolean;
+  readonly commandHoldsPipe?: boolean;
 };
 
 function findSensitivePolicyPathTarget(
@@ -221,7 +250,7 @@ function findSensitivePolicyPathTarget(
   configCwd: string,
   environment: EnvironmentContext,
   budget: Budget,
-  activeDefaultTargets?: ReadonlySet<string>,
+  activeDefaultTargets?: ReadonlyMap<string, 'path' | 'data' | 'write'>,
 ): SecretTarget | null {
   for (const candidate of candidates) {
     const target = candidate.target;
@@ -250,12 +279,22 @@ function findSensitivePolicyPathTarget(
           candidateAbsolutePath(target, candidate.cwd, environment, budget),
         );
       if (matchedDirectory) continue;
+      const dataRoleLiteral =
+        standardModeFileNameRule && activeDefaultTargets?.get(target) === 'data';
+      if (dataRoleLiteral) continue;
       const writeCreatesNewFile =
         standardModeFileNameRule &&
-        candidate.isRedirectionWriteTarget === true &&
+        (candidate.isRedirectionWriteTarget === true ||
+          activeDefaultTargets?.get(target) === 'write') &&
         !target.includes('$') &&
         !candidateExistsOnDisk(target, candidate.cwd, environment, budget);
       if (writeCreatesNewFile) continue;
+      if (
+        standardModeFileNameRule &&
+        (candidate.isCreatedPath === true || candidate.isCertificateInput === true)
+      ) {
+        continue;
+      }
       const spacedNonPathWord =
         standardModeFileNameRule &&
         /\s/.test(target) &&
@@ -300,17 +339,50 @@ export function findSensitiveTargetInSemanticFacts(
   if (target === null || target.ruleId === 'secret.deny-path' || options.strict !== false) {
     return target;
   }
+  const refinedWithLoopWords = extractToolPathTargets(facts, environment, budget, {
+    skipMetadataOnlySegments: true,
+    inlineLiteralsPresumedData: true,
+  });
+  const loopsReferencing = new Map<string, Set<string | undefined>>();
+  refinedWithLoopWords.forEach((other) =>
+    referencedShellVariables(other.target).forEach((name) =>
+      loopsReferencing.set(name, (loopsReferencing.get(name) ?? new Set()).add(other.loopVariable)),
+    ),
+  );
+  const referencedOutsideLoop = (name: string, loopVariable: string) =>
+    (loopsReferencing.get(name)?.size ?? 0) >
+    (loopsReferencing.get(name)?.has(loopVariable) ? 1 : 0);
+  const refinedCandidates = refinedWithLoopWords.filter(
+    ({ loopVariable }) =>
+      loopVariable === undefined ||
+      referencedOutsideLoop(loopVariable, loopVariable) ||
+      referencedOutsideLoop('!', loopVariable),
+  );
+  const pathRoleTargets = new Set(
+    refinedCandidates
+      .filter((candidate) => candidate.literalRole === undefined)
+      .map((candidate) => candidate.target),
+  );
+  const writeRoleTargets = new Set(
+    refinedCandidates
+      .filter((candidate) => candidate.literalRole === 'write')
+      .map((candidate) => candidate.target),
+  );
   const refinedTarget = findSensitivePolicyPathTarget(
     candidates,
     config,
     facts.invocation.context.configCwd,
     environment,
     budget,
-    new Set(
-      extractToolPathTargets(facts, environment, budget, {
-        skipMetadataOnlySegments: true,
-        inlineLiteralsPresumedData: true,
-      }).map((candidate) => candidate.target),
+    new Map(
+      refinedCandidates.map((candidate) => [
+        candidate.target,
+        pathRoleTargets.has(candidate.target)
+          ? 'path'
+          : writeRoleTargets.has(candidate.target)
+            ? 'write'
+            : 'data',
+      ]),
     ),
   );
   return refinedTarget?.ruleId !== 'secret.deny-path' && isMetadataOnlyCommand(facts, environment)
@@ -351,8 +423,44 @@ function isMetadataOnlyArgv(command: string, args: readonly string[]): boolean {
     return args.length === 3 && (args[0] === '-e' || args[0] === '-f') && args[2] === ']';
   }
   if (command === 'git') return args[0] === 'check-ignore';
+  if (command === 'wc')
+    return args.every((arg) => !arg.startsWith('-') || WC_COUNT_OPTION.test(arg));
+  if (PATTERN_FIRST_COMMANDS.has(command)) return isNamesOrCountsOnlySearch(command, args);
   if (command !== 'find') return false;
   return !args.some((arg) => FIND_NON_METADATA_ARGS.has(arg));
+}
+
+function isNamesOrCountsOnlySearch(command: string, args: readonly string[]): boolean {
+  const beforeDoubleDash = args.includes('--') ? args.slice(0, args.indexOf('--')) : args;
+  if (
+    beforeDoubleDash.some(
+      (arg) => /^--(?:(?:file|pre)(?:=|$)|json|format)/.test(arg) || /^-[^-]*f/.test(arg),
+    )
+  ) {
+    return false;
+  }
+  const valueFlag = command === 'rg' ? /[ABCEMTdegjmrt]/ : /[ABCDdefm]/;
+  const namesOnlyFlag = command === 'rg' ? /[clq]/ : /[Lclq]/;
+  const isShortCluster = (arg: string) => /^-[^-]/.test(arg);
+  const consumedAsValue = (index: number) => {
+    const previous = beforeDoubleDash[index - 1] ?? '';
+    return (
+      (/^--[^=]+$/.test(previous) && !SEARCH_VALUELESS_LONG.has(previous.slice(2))) ||
+      (isShortCluster(previous) && previous.slice(1).search(valueFlag) === previous.length - 2)
+    );
+  };
+  const firstOperand = beforeDoubleDash.findIndex(
+    (arg, index) => !arg.startsWith('-') && !consumedAsValue(index),
+  );
+  const optionArgs =
+    command === 'grep' && firstOperand >= 0
+      ? beforeDoubleDash.slice(0, firstOperand)
+      : beforeDoubleDash;
+  return optionArgs.some((arg, index) => {
+    if (consumedAsValue(index)) return false;
+    if (arg.startsWith('--')) return SEARCH_NAMES_ONLY_LONG.has(arg.slice(2));
+    return isShortCluster(arg) && namesOnlyFlag.test(arg.slice(1).split(valueFlag)[0] ?? '');
+  });
 }
 
 function extractToolPathTargets(
@@ -401,7 +509,7 @@ function extractCommandPathTargets(
   if (syntax.status === 'unclosed-quote') return [];
   if (syntax.status === 'invalid') throw new Error('Unable to parse command for secret protection');
 
-  const targets = [
+  const targets: SecretCandidate[] = [
     ...syntax.assignmentFallbacks.map((target) => ({ target, cwd })),
     ...extractCommandSubstitutionPathTargets(
       projectSensitiveShellText(syntax.source, environment),
@@ -415,15 +523,32 @@ function extractCommandPathTargets(
 
   const map = (text: string) =>
     projectSensitiveShellText(rewritePowerShellHomePrefix(text, powershell), environment);
+  const holdsProcessSubstitution = /[<>=]\(/.test(syntax.source);
+  const holdsCoprocess = /\bcoproc\b|\|&/.test(syntax.source);
+  const pipedWords: string[] = [];
+  const programs: string[] = [];
+  const withPipeAhead = (pipeAhead: boolean) => ({
+    ...options,
+    commandHoldsPipe: options.commandHoldsPipe === true || pipeAhead || holdsCoprocess,
+  });
   walkGuardSyntax(syntax, cwd, environment, budget, {
     word: map,
-    segment: (tokens, state, pipeProducer, _boundary, shellWords) => {
+    segment: (tokens, state, pipeProducer, boundary, shellWords, pipeAhead) => {
       if (tokens.length === 0) return null;
+      const scriptOptions = withPipeAhead(pipeAhead);
+      if (scriptOptions.commandHoldsPipe) pipedWords.push(...tokens);
+      programs.push(
+        basename(
+          withoutTimeout(stripLeadingWrappersAndEnvAssignments(tokens))[0] ?? '',
+        ).toLowerCase(),
+      );
       targets.push(
         ...extractSegmentPathTargets(
           tokens,
           store,
-          options,
+          holdsProcessSubstitution || boundary === '|' || boundary === '|&'
+            ? { ...scriptOptions, segmentMayFeedReader: true }
+            : scriptOptions,
           environment,
           state.cwd,
           budget,
@@ -436,7 +561,7 @@ function extractCommandPathTargets(
             pipeProducer,
             tokens,
             store,
-            options,
+            scriptOptions,
             environment,
             state.cwd,
             budget,
@@ -445,14 +570,15 @@ function extractCommandPathTargets(
       }
       return null;
     },
-    redirection: (redirection, state) => {
+    redirection: (redirection, state, pipeAhead) => {
       if (redirection.body !== undefined && redirection.consumer !== undefined) {
+        const scriptOptions = withPipeAhead(pipeAhead);
         targets.push(
           ...extractStdinScriptPathTargets(
             redirection.consumer,
             [redirection.body],
             store,
-            options,
+            scriptOptions,
             environment,
             state.cwd,
             budget,
@@ -461,7 +587,7 @@ function extractCommandPathTargets(
                 redirection.consumer ?? [],
                 body,
                 store,
-                options,
+                scriptOptions,
                 environment,
                 state.cwd,
                 budget,
@@ -479,7 +605,32 @@ function extractCommandPathTargets(
     },
   });
 
-  return targets;
+  const pipedNames = new Set(pipedWords.flatMap(referencedShellVariables));
+  const certificateOutputMayReachReader =
+    holdsProcessSubstitution ||
+    /\$\(|`/.test(syntax.source) ||
+    !programs.every((program) => CERTIFICATE_PIPE_PROGRAMS.has(program));
+  return targets.map(({ loopVariable, ...candidate }) => {
+    if (candidate.certificateOutputMayFeedReader === true && certificateOutputMayReachReader) {
+      return { target: candidate.target, cwd: candidate.cwd };
+    }
+    return loopVariable === undefined ||
+      holdsProcessSubstitution ||
+      pipedNames.has(loopVariable) ||
+      pipedNames.has('!')
+      ? candidate
+      : { ...candidate, loopVariable };
+  });
+}
+
+function referencedShellVariables(text: string): string[] {
+  return [
+    ...(/^[A-Za-z_][A-Za-z0-9_]*$/.test(text) ? [text] : []),
+    ...Array.from(
+      text.matchAll(/\$(?:\{(!)|\{?([A-Za-z_][A-Za-z0-9_]*))/g),
+      (match) => match[1] ?? match[2] ?? '',
+    ),
+  ];
 }
 
 function walkShellText(
@@ -507,6 +658,30 @@ function extractSegmentPathTargets(
   shellWords?: ReadonlySet<number>,
 ): SecretCandidate[] {
   const here = (target: string) => ({ target, cwd });
+  const reservedPrefix = tokens.findIndex((token) => !SHELL_RESERVED_WORDS.has(token));
+  if (options.skipMetadataOnlySegments === true && reservedPrefix > 0) {
+    return extractSegmentPathTargets(
+      tokens.slice(reservedPrefix),
+      store,
+      options,
+      environment,
+      cwd,
+      budget,
+      new Set([...(shellWords ?? [])].map((index) => index - reservedPrefix)),
+    );
+  }
+  const loopVariable = tokens[1] ?? '';
+  if (
+    options.skipMetadataOnlySegments === true &&
+    tokens[0] === 'for' &&
+    tokens[2] === 'in' &&
+    /^[A-Za-z_][A-Za-z0-9_]*$/.test(loopVariable)
+  ) {
+    return tokens
+      .slice(3)
+      .flatMap((token) => extractOperandPathCandidates('for', token))
+      .map((target) => ({ ...here(target), loopVariable }));
+  }
   if (shellWords?.size) {
     const argv = tokens.filter((_, index) => !shellWords.has(index));
     if (
@@ -525,14 +700,16 @@ function extractSegmentPathTargets(
   const executable = stripped[0] ?? '';
   const command = basename(executable).toLowerCase();
   const post = stripped.slice(1);
-  const firstNonReservedWordIndex = stripped.findIndex((token) => !SHELL_RESERVED_WORDS.has(token));
+  const outputMayFeedReader =
+    options.segmentMayFeedReader === true ||
+    options.commandHoldsPipe === true ||
+    options.displayOperandsAreCapturedOutput === true;
+  const metadataOutputMayFeedReader =
+    outputMayFeedReader && NAME_LISTING_METADATA_COMMANDS.has(command);
   if (
     options.skipMetadataOnlySegments === true &&
-    firstNonReservedWordIndex !== -1 &&
-    isMetadataOnlyArgv(
-      basename(stripped[firstNonReservedWordIndex] ?? '').toLowerCase(),
-      stripped.slice(firstNonReservedWordIndex + 1),
-    )
+    !metadataOutputMayFeedReader &&
+    isMetadataOnlyArgv(command, post)
   ) {
     return assignmentValues;
   }
@@ -589,6 +766,22 @@ function extractSegmentPathTargets(
       ...extractFindCommandTargets(post, store, options, environment, cwd, budget).map(here),
     ];
   }
+  if (command === 'mkdir' || command === 'touch') {
+    const redirectionTargets = new Set(tokens.filter((_, index) => shellWords?.has(index)));
+    const createsOperands =
+      options.segmentMayFeedReader !== true &&
+      !(command === 'touch' && post.some((token) => /^(?:--r|-[^-]*r)/.test(token)));
+    return [
+      ...assignmentValues,
+      ...post.flatMap((token) =>
+        extractOperandPathCandidates(command, token).map((target) =>
+          createsOperands && !token.startsWith('-') && !redirectionTargets.has(token)
+            ? { ...here(target), isCreatedPath: true as const }
+            : here(target),
+        ),
+      ),
+    ];
+  }
   if (AWK_INTERPRETERS.has(command)) {
     return [
       ...assignmentValues,
@@ -636,10 +829,35 @@ function extractSegmentPathTargets(
       ...extractInterpreterPathTargets(command, post, store, options, environment, cwd, budget),
     ];
   }
+  const optionValue = (option: string, index: number) =>
+    new RegExp(`^--?${option}=`).test(post[index] ?? '') ||
+    new RegExp(`^--?${option}$`).test(post[index - 1] ?? '');
+  const writesTailscaleCertFiles = runsTailscaleCert(stripped);
+  const readsOnlyCertificate = command === 'openssl' && post[0] === 'x509';
+  const certificateOutput = outputMayFeedReader
+    ? { certificateOutputMayFeedReader: true as const }
+    : {};
   return [
     ...assignmentValues,
-    ...post.flatMap((token) => extractOperandPathCandidates(command, token)).map(here),
+    ...post.flatMap((token, index) =>
+      extractOperandPathCandidates(command, token).map((target) =>
+        writesTailscaleCertFiles && optionValue('(?:cert|key)-file', index)
+          ? { ...here(target), isCreatedPath: true as const, ...certificateOutput }
+          : readsOnlyCertificate && optionValue('in', index)
+            ? { ...here(target), isCertificateInput: true as const, ...certificateOutput }
+            : here(target),
+      ),
+    ),
   ];
+}
+
+function withoutTimeout(argv: readonly string[]): readonly string[] {
+  return basename(argv[0] ?? '').toLowerCase() === 'timeout' ? argv.slice(2) : argv;
+}
+
+function runsTailscaleCert(argv: readonly string[]): boolean {
+  const program = withoutTimeout(argv);
+  return basename(program[0] ?? '').toLowerCase() === 'tailscale' && program[1] === 'cert';
 }
 
 function extractSafetyNetExplainPathTargets(
@@ -1225,7 +1443,8 @@ function extractInlineCodePathTargets(
   budget: Budget,
 ): SecretCandidate[] {
   const here = (target: string) => ({ target, cwd });
-  const masked = maskStringLiterals(code, literalFamily(command));
+  const family = literalFamily(command);
+  const masked = maskStringLiterals(code, family);
   if (masked.kind === 'unmaskable') return extractAllPathCandidatesUnmasked(code).map(here);
 
   const shellExec =
@@ -1240,6 +1459,8 @@ function extractInlineCodePathTargets(
     );
   const literalsPresumedData =
     options.inlineLiteralsPresumedData === true && !SHELL_STDIN_INTERPRETERS.has(command);
+  const codeRolesReadable =
+    literalsPresumedData && (family === 'python' || family === 'javascript');
   const literals =
     literalsPresumedData &&
     !(containsRecognizableInlineAccess(masked.masked) || shellExec || languageEval)
@@ -1253,18 +1474,36 @@ function extractInlineCodePathTargets(
     : [];
   const literalsExecCallsReceive =
     !literalsPresumedData ||
-    execCalls.some((call) => firstArgumentHasName(masked.masked, call.start))
+    execCalls.some(
+      (call) =>
+        firstArgumentHasName(masked.masked, call.start) &&
+        !runsArgvWithoutCodeFlag(masked, call.start),
+    )
       ? masked.literals
       : masked.literals.filter(
           (literal) =>
             SHELL_EXEC_PREFIX.test(masked.masked.slice(0, literal.start)) ||
             execCalls.some((call) => literal.start >= call.start && literal.start < call.end),
         );
+  const literalsWalkedAsShell = new Set(shellExec ? literalsExecCallsReceive : []);
+  const literalRolesReadable =
+    codeRolesReadable &&
+    literals.length > 0 &&
+    !holdsUnreadableLiteralRoles(masked.masked, family === 'python' ? '#' : '//');
+  const openers = literalRolesReadable ? innermostOpeners(masked.masked) : [];
+  const sequencesMayHoldArguments = literalRolesReadable && namesCommandExecution(masked.masked);
   return [
     ...literals
-      .map((literal) => literal.text)
-      .filter((text) => text !== '')
-      .map(here),
+      .filter((literal) => literal.text !== '')
+      .map((literal) => {
+        if (!literalRolesReadable || literalsWalkedAsShell.has(literal)) return here(literal.text);
+        if (inDataPosition(masked.masked, literal, openers, sequencesMayHoldArguments)) {
+          return { ...here(literal.text), literalRole: 'data' as const };
+        }
+        return feedsOnlyWrite(masked, literal, openers)
+          ? { ...here(literal.text), literalRole: 'write' as const }
+          : here(literal.text);
+      }),
     ...literals.flatMap((literal) => decodeBase64PathCandidate(literal.text)).map(here),
     ...(literalsPresumedData
       ? []
@@ -1274,9 +1513,14 @@ function extractInlineCodePathTargets(
     ...(shellExec
       ? literalsExecCallsReceive.flatMap(
           (literal) =>
-            walkShellText(literal.text, store, options, environment, cwd, budget) ?? [
-              here(literal.text),
-            ],
+            walkShellText(
+              literal.text,
+              store,
+              { ...options, commandHoldsPipe: true },
+              environment,
+              cwd,
+              budget,
+            ) ?? [here(literal.text)],
         )
       : []),
     ...(languageEval
@@ -1294,8 +1538,152 @@ function extractInlineCodePathTargets(
           ),
         )
       : []),
-    ...(masked.masked.match(BARE_PATH_PATTERN) ?? []).map(here),
+    ...(codeRolesReadable ? [] : (masked.masked.match(BARE_PATH_PATTERN) ?? []).map(here)),
+    ...(literalsPresumedData ? (code.match(/\$\{[^}]*\}|\$[A-Za-z_]\w*/g) ?? []).map(here) : []),
   ];
+}
+
+const BRACKET_CLOSERS: Readonly<Record<string, string>> = { '(': ')', '[': ']', '{': '}' };
+const GROUPING_KEYWORDS = 'and|elif|else|if|in|is|not|of|or|return|while|yield';
+const GROUPING_KEYWORD = new RegExp(`(?:^|[^\\w$])(?:${GROUPING_KEYWORDS})$`);
+const UNREADABLE_LITERAL_ROLE_SHAPE = new RegExp(
+  `(?:\\*|\\.\\.\\.)\\s*[([{]|\\.\\s*(?:${GROUPING_KEYWORDS})\\s*\\(|/\\*`,
+);
+const COMMAND_EXECUTION_IDENTIFIER_PART = /^(?:exec|spawn)|^(?:popen|system|subprocess)$/;
+
+function holdsUnreadableLiteralRoles(masked: string, commentOpener: string): boolean {
+  return (
+    UNREADABLE_LITERAL_ROLE_SHAPE.test(masked) ||
+    masked.split('\n').some((line) => {
+      const comment = line.indexOf(commentOpener);
+      return comment >= 0 && /[()[\]{}]/.test(line.slice(comment));
+    })
+  );
+}
+
+function namesCommandExecution(masked: string): boolean {
+  return Array.from(masked.matchAll(/[A-Za-z_$][\w$]*/g), (match) =>
+    identifierParts(match[0]),
+  ).some((parts) => parts.some((part) => COMMAND_EXECUTION_IDENTIFIER_PART.test(part)));
+}
+
+const WINDOWS_SHELLS = new Set(['cmd', 'powershell', 'pwsh']);
+
+function runsArgvWithoutCodeFlag(
+  masked: Extract<MaskedCode, { kind: 'masked' }>,
+  start: number,
+): boolean {
+  const opener = nextNonWhitespaceIndex(masked.masked, start);
+  const closer = BRACKET_CLOSERS[masked.masked[opener] ?? ''];
+  if (closer === undefined || closer === '}') return false;
+  const end = masked.masked.indexOf(closer, opener + 1);
+  const elements = masked.masked.slice(opener + 1, end);
+  return (
+    end !== -1 &&
+    /^\s*,[\w\s,]*$/.test(elements) &&
+    /^[,)]/.test(masked.masked.slice(nextNonWhitespaceIndex(masked.masked, end + 1))) &&
+    !masked.literals.some(
+      (literal) =>
+        literal.tokenStart > opener &&
+        literal.tokenStart < end &&
+        (CODE_EVAL_FLAGS.has(literal.text) ||
+          isCodeInterpreter(basename(literal.text).toLowerCase()) ||
+          WINDOWS_SHELLS.has(
+            basename(literal.text)
+              .toLowerCase()
+              .replace(/\.exe$/, ''),
+          )),
+    )
+  );
+}
+
+function innermostOpeners(masked: string): number[] {
+  const open: number[] = [];
+  return masked.split('').map((char, index) => {
+    const innermost = open.at(-1) ?? -1;
+    if (char in BRACKET_CLOSERS) open.push(index);
+    if (char === ')' || char === ']' || char === '}') open.pop();
+    return innermost;
+  });
+}
+
+function inDataPosition(
+  masked: string,
+  literal: CodeLiteral,
+  openers: readonly number[],
+  sequencesMayHoldArguments: boolean,
+): boolean {
+  const opener = openers[literal.tokenStart] ?? -1;
+  const bracket = masked[opener] ?? '';
+  const before = previousNonWhitespaceIndex(masked, literal.tokenStart);
+  const after = nextNonWhitespaceIndex(masked, literal.tokenEnd);
+  if (/(?:^|[^\w$])in$|[=!]=$/.test(masked.slice(Math.max(0, before - 3), before + 1))) {
+    return true;
+  }
+  if (/^(?:(?:not\s+)?in(?![\w$])|[=!]=)/.test(masked.slice(after, after + 8))) return true;
+  if (sequencesMayHoldArguments && (bracket === '[' || bracket === '(')) return false;
+  const previous = masked[before];
+  const next = masked[after];
+  if (bracket === '{' && previous === ':') return startsObjectEntry(masked, before);
+  const element =
+    (previous === bracket || previous === ',') &&
+    (next === ',' || next === BRACKET_CLOSERS[bracket] || (bracket === '{' && next === ':'));
+  if (bracket !== '(') return element && bracket !== '';
+  return element && (previous === ',' || next === ',') && isGroupingParenthesis(masked, opener);
+}
+
+const PATH_CONSTRUCTOR_CALL = /(?:^|[^\w$.])(?:pathlib\s*\.\s*)?Path\s*$/;
+const PATH_WRITE_METHOD = /^\s*\.\s*write_(?:text|bytes)\s*\(/;
+const BARE_OPEN_CALL = /(?:^|[^\w$.])open\s*$/;
+const WRITE_ONLY_OPEN_MODE = /^[bt]*[awx][abtwx]*$/;
+const WRITE_FIRST_ARGUMENT_CALL =
+  /(?:^|[^\w$])(?:writeFile|writeFileSync|appendFile|appendFileSync|Bun\s*\.\s*write)\s*$/;
+
+function feedsOnlyWrite(
+  masked: Extract<MaskedCode, { kind: 'masked' }>,
+  literal: CodeLiteral,
+  openers: readonly number[],
+): boolean {
+  const opener = openers[literal.tokenStart] ?? -1;
+  if (masked.masked[opener] !== '(') return false;
+  const previous = previousNonWhitespaceIndex(masked.masked, literal.tokenStart);
+  const after = nextNonWhitespaceIndex(masked.masked, literal.tokenEnd);
+  const next = masked.masked[after];
+  const callee = masked.masked.slice(Math.max(0, opener - 40), opener);
+  if (PATH_CONSTRUCTOR_CALL.test(callee)) {
+    return (
+      (previous === opener || masked.masked[previous] === ',') &&
+      (next === ',' || next === ')') &&
+      !masked.literals.some(
+        (other) => other.tokenStart > opener && other.tokenStart < literal.tokenStart,
+      ) &&
+      PATH_WRITE_METHOD.test(masked.masked.slice(closingParenthesis(masked.masked, opener + 1) + 1))
+    );
+  }
+  if (previous !== opener || next !== ',') return false;
+  if (WRITE_FIRST_ARGUMENT_CALL.test(callee)) return true;
+  if (!BARE_OPEN_CALL.test(callee)) return false;
+  const mode = masked.literals.find((candidate) =>
+    /^,\s*(?:mode\s*=\s*)?$/.test(masked.masked.slice(after, candidate.tokenStart)),
+  );
+  return (
+    mode !== undefined &&
+    WRITE_ONLY_OPEN_MODE.test(mode.text) &&
+    /^[,)]/.test(masked.masked.slice(nextNonWhitespaceIndex(masked.masked, mode.tokenEnd)))
+  );
+}
+
+function startsObjectEntry(masked: string, colon: number): boolean {
+  const keyEnd = previousNonWhitespaceIndex(masked, colon);
+  const key = /[\w$]*$/.exec(masked.slice(Math.max(0, keyEnd - 63), keyEnd + 1))?.[0] ?? '';
+  const entryStart = masked[previousNonWhitespaceIndex(masked, keyEnd + 1 - key.length)];
+  return entryStart === '{' || entryStart === ',';
+}
+
+function isGroupingParenthesis(masked: string, opener: number): boolean {
+  const before = previousNonWhitespaceIndex(masked, opener);
+  const preceding = masked.slice(Math.max(0, before - 7), before + 1);
+  return !/[\w$)\]]$/.test(preceding) || GROUPING_KEYWORD.test(preceding);
 }
 
 function literalFamily(command: string): LiteralFamily {
@@ -1307,37 +1695,100 @@ function literalFamily(command: string): LiteralFamily {
     : 'simple';
 }
 
+const HOLE_UNREADABLE_CHARACTER: Partial<Record<LiteralFamily, string>> = {
+  python: '#',
+  javascript: '/',
+};
+
 function maskStringLiterals(code: string, family: LiteralFamily): MaskedCode {
   if (family === 'opaque') return { kind: 'unmaskable' };
-  const masked = code.split('');
-  const literals: CodeLiteral[] = [];
-  for (let index = 0; index < code.length; index++) {
+  const scan: LiteralScan = { masked: code.split(''), literals: [] };
+  return maskCode(code, 0, family, scan, false) === null
+    ? { kind: 'unmaskable' }
+    : { kind: 'masked', masked: scan.masked.join(''), literals: scan.literals };
+}
+
+function maskCode(
+  code: string,
+  from: number,
+  family: LiteralFamily,
+  scan: LiteralScan,
+  insideHole: boolean,
+): number | null {
+  let openBraces = 0;
+  for (let index = from; index < code.length; index++) {
     const char = code[index] ?? '';
+    if (insideHole && char === '}' && openBraces === 0) return index;
+    if (insideHole && char === HOLE_UNREADABLE_CHARACTER[family]) return null;
+    if (char === '{') openBraces++;
+    if (char === '}') openBraces--;
     if (family === 'simple' && (char === '`' || char === '%' || char === '<')) {
-      if (UNMASKABLE_SIMPLE_CODE.test(code.slice(index))) return { kind: 'unmaskable' };
+      if (UNMASKABLE_SIMPLE_CODE.test(code.slice(index))) return null;
     }
     const quote =
       char === "'" || char === '"' || (family === 'javascript' && char === '`') ? char : null;
     if (quote === null) continue;
-    if (quote === '`' && isTaggedTemplate(code, index)) return { kind: 'unmaskable' };
+    if (quote === '`' && isTaggedTemplate(code, index)) return null;
 
     const prefix = family === 'python' ? pythonStringPrefix(code, index) : '';
     const delimiter =
       family === 'python' && code.startsWith(quote.repeat(3), index) ? quote.repeat(3) : quote;
     const start = index + delimiter.length;
-    const end = findLiteralEnd(code, start, delimiter);
-    if (end === null) return { kind: 'unmaskable' };
-
-    const text = code.slice(start, end);
-    if (/[fF]/.test(prefix) && text.includes('{')) return { kind: 'unmaskable' };
-    if (family === 'simple' && quote === '"' && SIMPLE_INTERPOLATION.test(text)) {
-      return { kind: 'unmaskable' };
+    const interpolated = quote === '`' || /[fF]/.test(prefix);
+    const tokenStart = index - prefix.length;
+    const end = interpolated
+      ? maskInterpolatedLiteral(code, tokenStart, start, delimiter, family, scan)
+      : findLiteralEnd(code, start, delimiter);
+    if (end === null) return null;
+    if (!interpolated) {
+      const text = code.slice(start, end);
+      if (family === 'simple' && quote === '"' && SIMPLE_INTERPOLATION.test(text)) return null;
+      scan.literals.push({ start, text, tokenStart, tokenEnd: end + delimiter.length });
+      scan.masked.fill(' ', start, end);
     }
-    literals.push({ start, text });
-    for (let cursor = index; cursor < end + delimiter.length; cursor++) masked[cursor] = ' ';
+    scan.masked.fill(' ', index, start);
+    scan.masked.fill(' ', end, end + delimiter.length);
     index = end + delimiter.length - 1;
   }
-  return { kind: 'masked', masked: masked.join(''), literals };
+  return insideHole ? null : code.length;
+}
+
+function maskInterpolatedLiteral(
+  code: string,
+  tokenStart: number,
+  start: number,
+  delimiter: string,
+  family: LiteralFamily,
+  scan: LiteralScan,
+): number | null {
+  const holeOpener = family === 'python' ? '{' : '${';
+  const multiline = delimiter === '`' || delimiter.length === 3;
+  let text = '';
+  for (let cursor = start; cursor < code.length; cursor++) {
+    const char = code[cursor] ?? '';
+    if (code.startsWith(delimiter, cursor)) {
+      scan.literals.push({ start, text, tokenStart, tokenEnd: cursor + delimiter.length });
+      return cursor;
+    }
+    if (!multiline && (char === '\n' || char === '\r')) return null;
+    const pythonDoubledBrace =
+      family === 'python' && (char === '{' || char === '}') && code[cursor + 1] === char;
+    if (!pythonDoubledBrace && code.startsWith(holeOpener, cursor)) {
+      const holeEnd = maskCode(code, cursor + holeOpener.length, family, scan, true);
+      if (holeEnd === null) return null;
+      text += `${holeOpener}}`;
+      scan.masked.fill(' ', cursor, cursor + holeOpener.length);
+      scan.masked[holeEnd] = ' ';
+      cursor = holeEnd;
+      continue;
+    }
+    const escapesNext = char === '\\' && !(family === 'python' && code[cursor + 1] === '{');
+    const width = escapesNext || pythonDoubledBrace ? 2 : 1;
+    text += code.slice(cursor, cursor + width);
+    scan.masked.fill(' ', cursor, cursor + width);
+    cursor += width - 1;
+  }
+  return null;
 }
 
 function pythonStringPrefix(code: string, index: number): string {
@@ -1345,15 +1796,13 @@ function pythonStringPrefix(code: string, index: number): string {
 }
 
 function findLiteralEnd(code: string, start: number, delimiter: string): number | null {
-  const interpolated = delimiter === '`';
-  const multiline = interpolated || delimiter.length === 3;
+  const multiline = delimiter.length === 3;
   for (let cursor = start; cursor < code.length; cursor++) {
     const char = code[cursor];
     if (char === '\\') {
       cursor++;
       continue;
     }
-    if (interpolated && char === '$' && code[cursor + 1] === '{') return null;
     if (!multiline && (char === '\n' || char === '\r')) return null;
     if (code.startsWith(delimiter, cursor)) return cursor;
   }
@@ -1374,30 +1823,34 @@ function containsRecognizableInlineAccess(code: string): boolean {
     const identifier = match[0];
     const start = match.index;
     if (INLINE_ACCESS_NAMESPACES.has(identifier.toLowerCase())) return true;
-    const parts = identifier
-      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-      .split(/[_$\s]+/)
-      .map((part) => part.toLowerCase());
+    const parts = identifierParts(identifier);
     if (!parts.some((part) => INLINE_ACCESS_IDENTIFIER_PARTS.has(part))) continue;
     if (parts.length > 1) return true;
-    if (previousNonWhitespaceCharacter(code, start) === '.') return true;
-    if (nextNonWhitespaceCharacter(code, start + identifier.length) === '(') return true;
+    if (code[previousNonWhitespaceIndex(code, start)] === '.') return true;
+    if (code[nextNonWhitespaceIndex(code, start + identifier.length)] === '(') return true;
   }
   return false;
 }
 
-function previousNonWhitespaceCharacter(value: string, start: number): string | undefined {
-  for (let index = start - 1; index >= 0; index--) {
-    if (!/\s/.test(value[index] ?? '')) return value[index];
-  }
-  return undefined;
+function identifierParts(identifier: string): string[] {
+  return identifier
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[_$\s]+/)
+    .map((part) => part.toLowerCase());
 }
 
-function nextNonWhitespaceCharacter(value: string, start: number): string | undefined {
-  for (let index = start; index < value.length; index++) {
-    if (!/\s/.test(value[index] ?? '')) return value[index];
+function previousNonWhitespaceIndex(value: string, start: number): number {
+  for (let index = start - 1; index >= 0; index--) {
+    if (!/\s/.test(value[index] ?? '')) return index;
   }
-  return undefined;
+  return -1;
+}
+
+function nextNonWhitespaceIndex(value: string, start: number): number {
+  for (let index = start; index < value.length; index++) {
+    if (!/\s/.test(value[index] ?? '')) return index;
+  }
+  return value.length;
 }
 
 function extractCommandSubstitutionPathTargets(
@@ -1676,6 +2129,7 @@ const ENV_EXEMPTION_BASENAMES = new Set([
   '.env.example',
   '.env.sample',
   '.env.template',
+  '.env.tpl',
   '.env.defaults',
 ]);
 
@@ -1750,13 +2204,6 @@ function isSensitivePath(
   const isFilenameShapedName = () =>
     isFilenameShaped(comparableName) || candidateExistsOnDisk(target, cwd, environment, budget);
 
-  if (
-    ENV_EXEMPTION_BASENAMES.has(comparableName) ||
-    ENV_EXEMPTION_PREFIXES.some((prefix) => comparableName.startsWith(prefix))
-  ) {
-    return null;
-  }
-
   const comparableUnresolvedPath = comparable(
     normalizeUnresolvedHomePath(target, cwd, environment, budget),
   );
@@ -1770,6 +2217,14 @@ function isSensitivePath(
       return rule.id;
     }
   }
+
+  if (
+    ENV_EXEMPTION_BASENAMES.has(comparableName) ||
+    ENV_EXEMPTION_PREFIXES.some((prefix) => comparableName.startsWith(prefix))
+  ) {
+    return null;
+  }
+
   const codingCliRuleId = matchesCodingCliPath(normalized, cwd, config, environment, budget);
   if (codingCliRuleId) return codingCliRuleId;
 

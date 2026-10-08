@@ -805,6 +805,7 @@ function analyzeCommandView(
 
         functionDefinitions: overrides?.functionDefinitions,
         worktreeMode: overrides?.worktreeMode ?? options.worktreeMode,
+        shell: overrides?.shell ?? options.shell,
         trace: options.trace
           ? withTraceSegment(options.trace, options.trace.currentSegmentIndex, true)
           : undefined,

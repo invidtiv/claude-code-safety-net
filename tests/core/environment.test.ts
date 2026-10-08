@@ -57,6 +57,11 @@ describe('process environment', () => {
         (!outcome.ok && outcome.error.message.includes('ENOTDIR')),
     );
   });
+
+  test('a name too long for the filesystem is missing, not an error', () => {
+    expect(processPathResolver.entryKind(join(root, 'x'.repeat(300)))).toBe('missing');
+    expect(processPathResolver.entryKind(join(root, 'x/'.repeat(4000)))).toBe('missing');
+  });
 });
 
 describe('test environment', () => {

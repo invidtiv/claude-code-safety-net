@@ -1,4 +1,5 @@
 import { AnalysisLimit, LIMITS } from '@/core/budget';
+import { normalizeMsysDrivePath } from '@/core/paths/canonicalization';
 import { resolveChdirTarget } from '@/core/paths/chdir';
 import { isTmpdirOverriddenToNonTemp } from '@/core/paths/tmpdir';
 import {
@@ -36,6 +37,7 @@ import {
   REASON_INTERPRETER_DANGEROUS,
 } from './interpreters';
 import {
+  dynamicShellSourceMatch,
   REASON_DYNAMIC_SHELL_SOURCE,
   REASON_STRICT_UNPARSEABLE,
   REASON_UNSUPPORTED_HEREDOC_SYNTAX,
@@ -560,6 +562,7 @@ export function analyzeSegment(
     trace === normalizedOptions.trace ? normalizedOptions : { ...normalizedOptions, trace };
   const commandContext: AnalyzerRuleContext = {
     words,
+    parsedWords: prelude.words,
     head: normalizedHead,
     cwd: cwdForRm,
     originalCwd: originalCwdForRm,
@@ -626,7 +629,8 @@ export function analyzeSegment(
     );
   }
 
-  const matchedKnown = commandAnalyzer !== undefined;
+  const matchedKnown =
+    commandAnalyzer !== undefined && !HEADS_STILL_SCANNED_FOR_EMBEDDED.has(normalizedHead);
 
   const scansForEmbedded = !child && !matchedKnown && !DISPLAY_COMMANDS.has(normalizedHead);
   const tokensScanned: string[] | undefined = trace && scansForEmbedded ? [] : undefined;
@@ -906,6 +910,9 @@ function recordCommandAnalyzerTrace(
   const rule = {
     git: 'git:analyzeGitMatch',
     rm: 'analyzer/rm.ts:analyzeRmMatch',
+    cmd: 'analyzer/cmd.ts:analyzeCmdMatch',
+    powershell: 'analyzer/powershell-wrapper.ts:analyzePowerShellWrapperMatch',
+    pwsh: 'analyzer/powershell-wrapper.ts:analyzePowerShellWrapperMatch',
     find: 'analyzer/find.ts:analyzeFindMatch',
     xargs: 'analyzer/xargs.ts:analyzeXargs',
     parallel: 'analyzer/parallel.ts:analyzeParallel',
@@ -942,14 +949,6 @@ function dynamicShellSourceResult(trace: CommandTraceContext | undefined): Analy
   return blockResultFromMatch(dynamicShellSourceMatch());
 }
 
-function dynamicShellSourceMatch(): DestructiveCommandRuleMatch {
-  return {
-    id: 'analysis.dynamic-shell-source',
-    reason: REASON_DYNAMIC_SHELL_SOURCE,
-    intent: 'stop_and_explain',
-  };
-}
-
 function isShellWrapperCommand(head: string, normalizedHead: string): boolean {
   return (
     SHELL_WRAPPERS.has(normalizedHead) ||
@@ -970,6 +969,7 @@ function filterBuiltInCommandMatch(
 
 const CWD_CHANGE_REGEX =
   /^\s*(?:\$\(\s*)?[({]*\s*(?:command\s+|builtin\s+)?(?:cd|pushd|popd)(?:\s|$)/;
+const HEADS_STILL_SCANNED_FOR_EMBEDDED = new Set(['powershell', 'pwsh']);
 const POWERSHELL_LOCATION_COMMANDS = new Set([
   'cd',
   'chdir',
@@ -1036,7 +1036,9 @@ export function resolveCwdAfterCommandView(
   if (targets.length > 1) return null;
   const rawTarget = targets[0];
   const home = shellAssignments.get('HOME') || environment.home;
-  if (rawTarget === undefined) return resolveKnownCwdTarget(home, cwd, environment.paths);
+  if (rawTarget === undefined) {
+    return resolveKnownCwdTarget(normalizeMsysDrivePath(home), cwd, environment.paths);
+  }
   const targetWord = commandView.words.find(
     (word) => word.provenance === 'variable' && word.text === rawTarget,
   );
@@ -1055,7 +1057,7 @@ export function resolveCwdAfterCommandView(
   ) {
     return null;
   }
-  return resolveKnownCwdTarget(target, cwd, environment.paths);
+  return resolveKnownCwdTarget(normalizeMsysDrivePath(target), cwd, environment.paths);
 }
 
 function resolveKnownCwdTarget(

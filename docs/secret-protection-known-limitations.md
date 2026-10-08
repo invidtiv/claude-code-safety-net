@@ -114,11 +114,12 @@ something else is kept as a path candidate and resolved against the cwd, so
 `cat README.md` blocks on `README.md`. What survives is the narrow set whose
 tokens are not kept as path candidates: operand-less commands, `echo` and
 `printf`, and shapes such as a pattern-only `grep` or interpreter inline code
-with no path-like literal. In standard mode an interpreter string literal is
-kept as a candidate only when the code as a whole holds a recognizable
-filesystem, command-execution, or eval marker; code with no such marker anywhere
-contributes no literal. Strict mode keeps every literal and also scans inside
-literal text.
+with no path-like literal. Standard mode's interpreter literal relaxations
+(code with no filesystem, command-execution, or eval marker, and Python or
+JavaScript literals in a data position such as a collection element or a
+comparison operand, or naming only the file a write creates) apply only to the
+built-in rules, so every interpreter string literal is still checked against a
+deny path in every mode. Strict mode also scans inside literal text.
 
 The failure is loud, not silent. Each denial carries `Rule: secret.deny-path`
 in the hook message (`formatBlockedMessage` in `src/integrations/format.ts`), and

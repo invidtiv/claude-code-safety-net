@@ -95,6 +95,12 @@ describe('supported path variable expansion', () => {
       expected: '$$',
     },
     {
+      name: 'expands a supported variable that follows an unclosed unsupported brace',
+      target: '${build/../..${HOME}dir',
+      environment,
+      expected: `\${build/../..${home}dir`,
+    },
+    {
       name: 'takes the value for `:-` when it is set and non-empty',
       target: '${TMPDIR:-/fallback}',
       environment,
@@ -222,6 +228,11 @@ describe('supported path variable expansion', () => {
     {
       name: 'fails closed on an unterminated expansion of a supported name',
       target: '${HOME',
+      environment,
+    },
+    {
+      name: 'fails closed on more unclosed unsupported braces than the expansion limit',
+      target: '\\${x'.repeat(65),
       environment,
     },
   ];
@@ -503,6 +514,14 @@ describe('protected path candidates', () => {
       ).toBe(row.expected);
     });
   }
+
+  test('bounds the work on a long run of unclosed escaped braces', () => {
+    const started = performance.now();
+    settle(() =>
+      normalizeProtectedPathCandidate('\\${x'.repeat(25_000), root, environment, createBudget()),
+    );
+    expect(performance.now() - started).toBeLessThan(250);
+  });
 
   test('fails closed when the candidate carries a form the expander refuses', () => {
     expect(() =>
