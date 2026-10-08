@@ -92,6 +92,7 @@ const feedRowHtml = (entry: FeedEntry, index: number) => {
   ].filter((row): row is string[] => row !== null);
   return `<li class="feed-row">
     <button type="button" class="feed-summary" aria-expanded="false" aria-controls="feed-detail-${index}">
+      <span class="chevron" aria-hidden="true"></span>
       <time datetime="${escapeHtml(entry.ts)}">${escapeHtml(timeLabel(entry.ts))}</time>
       <span class="decision ${entry.failureStage ? 'error' : blocked ? 'deny' : 'allow'}">${decisionLabel(entry)}</span>
       <span class="feed-agent">${escapeHtml(agent)}</span>
@@ -100,11 +101,11 @@ const feedRowHtml = (entry: FeedEntry, index: number) => {
     </button>
     <div class="feed-detail" id="feed-detail-${index}" hidden>
       <code class="block detail-command">${escapeHtml(command || '(no command recorded)')}</code>
-      <dl class="detail-rows">${detailRows.map(([term, value]) => `<div><dt>${term}</dt><dd>${value}</dd></div>`).join('')}</dl>
       <div class="detail-actions">
+        ${blocked ? `<button type="button" class="primary" data-report-fp="${index}">Report false positive</button>` : `<button type="button" class="primary" data-block-future="${index}">Block this in future</button>`}
         <button type="button" data-log-copy="${index}">${icons.copy}<span>Copy log entry</span></button>
-        ${blocked ? `<button type="button" data-report-fp="${index}">Report false positive</button>` : `<button type="button" data-block-future="${index}">Block this in future</button>`}
       </div>
+      <dl class="detail-rows">${detailRows.map(([term, value]) => `<div><dt>${term}</dt><dd>${value}</dd></div>`).join('')}</dl>
     </div>
   </li>`;
 };

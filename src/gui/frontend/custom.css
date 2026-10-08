@@ -1027,7 +1027,7 @@ input[readonly] {
 
 .feed-summary {
   display: grid;
-  grid-template-columns: 68px 76px 112px minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-columns: 16px 68px 76px 112px minmax(0, 3fr) minmax(0, 2fr);
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -1109,6 +1109,10 @@ code.block {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.detail-actions button:not(.primary) {
+  background: var(--surface);
 }
 
 .rule-id {
@@ -2226,7 +2230,7 @@ button.chip:hover:not(:disabled) {
   }
 
   .feed-summary {
-    grid-template-columns: 64px 72px minmax(0, 1fr);
+    grid-template-columns: 16px 64px 72px minmax(0, 1fr);
   }
 
   .feed-summary .feed-agent,

@@ -1334,7 +1334,7 @@ input[readonly] {
 
 .feed-summary {
   display: grid;
-  grid-template-columns: 68px 76px 112px minmax(0, 3fr) minmax(0, 2fr);
+  grid-template-columns: 16px 68px 76px 112px minmax(0, 3fr) minmax(0, 2fr);
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -1416,6 +1416,10 @@ code.block {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.detail-actions button:not(.primary) {
+  background: var(--surface);
 }
 
 .rule-id {
@@ -2533,7 +2537,7 @@ button.chip:hover:not(:disabled) {
   }
 
   .feed-summary {
-    grid-template-columns: 64px 72px minmax(0, 1fr);
+    grid-template-columns: 16px 64px 72px minmax(0, 1fr);
   }
 
   .feed-summary .feed-agent,
@@ -3600,6 +3604,7 @@ var feedRowHtml = (entry, index) => {
   ].filter((row) => row !== null);
   return \`<li class="feed-row">
     <button type="button" class="feed-summary" aria-expanded="false" aria-controls="feed-detail-\${index}">
+      <span class="chevron" aria-hidden="true"></span>
       <time datetime="\${escapeHtml(entry.ts)}">\${escapeHtml(timeLabel(entry.ts))}</time>
       <span class="decision \${entry.failureStage ? "error" : blocked ? "deny" : "allow"}">\${decisionLabel(entry)}</span>
       <span class="feed-agent">\${escapeHtml(agent)}</span>
@@ -3608,11 +3613,11 @@ var feedRowHtml = (entry, index) => {
     </button>
     <div class="feed-detail" id="feed-detail-\${index}" hidden>
       <code class="block detail-command">\${escapeHtml(command || "(no command recorded)")}</code>
-      <dl class="detail-rows">\${detailRows.map(([term, value]) => \`<div><dt>\${term}</dt><dd>\${value}</dd></div>\`).join("")}</dl>
       <div class="detail-actions">
+        \${blocked ? \`<button type="button" class="primary" data-report-fp="\${index}">Report false positive</button>\` : \`<button type="button" class="primary" data-block-future="\${index}">Block this in future</button>\`}
         <button type="button" data-log-copy="\${index}">\${icons.copy}<span>Copy log entry</span></button>
-        \${blocked ? \`<button type="button" data-report-fp="\${index}">Report false positive</button>\` : \`<button type="button" data-block-future="\${index}">Block this in future</button>\`}
       </div>
+      <dl class="detail-rows">\${detailRows.map(([term, value]) => \`<div><dt>\${term}</dt><dd>\${value}</dd></div>\`).join("")}</dl>
     </div>
   </li>\`;
 };
