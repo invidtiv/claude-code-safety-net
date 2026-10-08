@@ -18,7 +18,7 @@ import {
 } from '../ui';
 import { limitActivityDays, loadActivity } from './activity';
 import { loadOverview } from './overview';
-import { loadPolicy } from './policy';
+import { loadPolicy, runExclusive } from './policy';
 
 const themes = ['auto', 'light', 'dark'] as const;
 type Theme = (typeof themes)[number];
@@ -38,11 +38,13 @@ const renderRetention = () => {
 };
 
 const blockedBy = () =>
-  shared.drafting
-    ? 'Apply or leave your project policy draft first.'
-    : shared.dirty
-      ? 'Save or discard your unsaved Protections changes first.'
-      : null;
+  (shared.policy?.errors.length ?? 0) > 0
+    ? 'Repair your policy file in Protections first.'
+    : shared.drafting
+      ? 'Apply or leave your project policy draft first.'
+      : shared.dirty
+        ? 'Save or discard your unsaved Protections changes first.'
+        : null;
 
 const saveRetentionDays = async (days: number) => {
   const saved = shared.policy;
@@ -70,18 +72,23 @@ const saveRetentionDays = async (days: number) => {
     renderRetention();
     return;
   }
-  const policy = clonePolicy(saved.policy);
-  policy.audit.retention_days = days;
-  const result = await requestJson('/api/policy', { method: 'POST', body: JSON.stringify(policy) });
-  if (!isWriteSuccess(result)) {
-    renderRetention();
-    notify('Save failed', 'error', errorText(result));
-    return;
-  }
-  if (!(await loadPolicy())) return;
-  limitActivityDays(days);
-  await Promise.all([loadOverview(), loadActivity()]);
-  notify(`Logs are now kept for ${dayCount(days)}`, 'ok');
+  await runExclusive('Saving…', async () => {
+    const policy = clonePolicy(saved.policy);
+    policy.audit.retention_days = days;
+    const result = await requestJson('/api/policy', {
+      method: 'POST',
+      body: JSON.stringify(policy),
+    });
+    if (!isWriteSuccess(result)) {
+      renderRetention();
+      notify('Save failed', 'error', errorText(result));
+      return;
+    }
+    if (!(await loadPolicy())) return;
+    limitActivityDays(days);
+    await Promise.all([loadOverview(), loadActivity()]);
+    notify(`Logs are now kept for ${dayCount(days)}`, 'ok');
+  });
 };
 
 const resetPolicy = async () => {
@@ -100,13 +107,15 @@ const resetPolicy = async () => {
     }))
   )
     return;
-  const result = await requestJson('/api/reset', { method: 'POST', body: '{}' });
-  if (!isWriteSuccess(result)) {
-    notify('Reset failed', 'error', errorText(result));
-    return;
-  }
-  sessionStorage.removeItem('cc-safety-net-draft');
-  if (await loadPolicy()) notify('Policy reset to the defaults', 'ok', result.data.path);
+  await runExclusive('Resetting…', async () => {
+    const result = await requestJson('/api/reset', { method: 'POST', body: '{}' });
+    if (!isWriteSuccess(result)) {
+      notify('Reset failed', 'error', errorText(result));
+      return;
+    }
+    sessionStorage.removeItem('cc-safety-net-draft');
+    if (await loadPolicy()) notify('Policy reset to the defaults', 'ok', result.data.path);
+  });
 };
 
 export const initSettings = () => {

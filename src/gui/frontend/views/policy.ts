@@ -267,7 +267,7 @@ const updateActions = () => {
   qs<HTMLButtonElement>('save').disabled = busy || !state || hasErrors;
   qs<HTMLButtonElement>('repair').disabled = busy || !hasErrors;
 };
-const runExclusive = async (pendingText: string, fn: () => Promise<void>) => {
+export const runExclusive = async (pendingText: string, fn: () => Promise<void>) => {
   if (busy) return;
   busy = true;
   updateActions();

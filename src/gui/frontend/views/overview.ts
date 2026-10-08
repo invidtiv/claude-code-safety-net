@@ -25,11 +25,13 @@ const renderStatusCard = () => {
   const headline =
     loaded.errors.length > 0
       ? 'Your policy file needs repair'
-      : targets && active.length === 0
-        ? 'Not checking any agent yet'
-        : off.length > 0
-          ? 'Partly protected'
-          : 'Protected';
+      : !targets
+        ? 'Checking your agents…'
+        : active.length === 0
+          ? 'Not checking any agent yet'
+          : off.length > 0
+            ? 'Partly protected'
+            : 'Protected';
   const customized =
     (loaded.preview?.counts.effectiveCustomizations ?? 0) > 0 ||
     Object.entries(policy.safety.overrides).some(

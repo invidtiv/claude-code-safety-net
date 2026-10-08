@@ -24,6 +24,7 @@ import {
   shared,
   showPath,
 } from '../ui';
+import { loadOverview } from './overview';
 
 const filters = initialActivityFilters();
 let activity: ActivityFeed | null = null;
@@ -136,9 +137,9 @@ const renderControls = () => {
   qs('activity-agent').parentElement?.toggleAttribute('hidden', agentNames.length < 2);
   const retained = retentionDays();
   qs('activity-days').innerHTML = [
-    ...[7, 30, 90, 180, 365].filter((days) => days < retained),
-    retained,
+    ...new Set([...[7, 30, 90, 180, 365].filter((days) => days < retained), retained, loaded.days]),
   ]
+    .sort((left, right) => left - right)
     .map((days) => `<option value="${days}">Last ${dayCount(days)}</option>`)
     .join('');
   qs<HTMLSelectElement>('activity-days').value = String(loaded.days);
@@ -218,7 +219,7 @@ const rerender = () => {
 
 export const showActivity = (params: URLSearchParams) => {
   const next = activityFiltersFromParams(params);
-  next.days = Math.min(next.days, retentionDays());
+  if (shared.policy) next.days = Math.min(next.days, retentionDays());
   if (activityHash(next) === activityHash(filters)) return;
   const reload = next.days !== filters.days;
   Object.assign(filters, next);
@@ -301,7 +302,9 @@ export const initActivity = () => {
     void loadActivity();
   });
   qs('activity-refresh').addEventListener('click', (event) => {
-    void runRefresh(event.currentTarget as HTMLButtonElement, loadActivity);
+    void runRefresh(event.currentTarget as HTMLButtonElement, () =>
+      Promise.all([loadOverview(), loadActivity()]),
+    );
   });
   qs<HTMLDialogElement>('report-dialog').addEventListener('close', () => {
     if (qs<HTMLDialogElement>('report-dialog').returnValue === 'report')
@@ -334,6 +337,7 @@ export const initActivity = () => {
       const detail = qs(summary.getAttribute('aria-controls') ?? '');
       const summaryCommand = summary.querySelector('.feed-command') as HTMLElement;
       (detail.querySelector('.detail-command') as HTMLElement).hidden =
+        !summaryCommand.textContent?.includes('\n') &&
         summaryCommand.scrollWidth <= summaryCommand.clientWidth;
       detail.hidden = !expanded;
       return;

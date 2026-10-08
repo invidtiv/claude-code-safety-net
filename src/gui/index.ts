@@ -220,7 +220,13 @@ async function handleRequest(
   }
 
   if (request.method === 'GET' && url.pathname === '/') {
-    sendHtml(response, renderPolicyGuiHtml(token, await options.buildDocument?.()));
+    await Promise.resolve(options.buildDocument?.()).then(
+      (document) => sendHtml(response, renderPolicyGuiHtml(token, document)),
+      (buildError: unknown) =>
+        sendJson(response, 500, {
+          error: buildError instanceof Error ? buildError.message : String(buildError),
+        }),
+    );
     return;
   }
 

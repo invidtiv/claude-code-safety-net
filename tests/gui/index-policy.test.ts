@@ -507,4 +507,24 @@ describe('the gui page with a document builder', () => {
       await server.close();
     }
   });
+
+  test('answers a failed build with a 500 carrying the build error', async () => {
+    const home = join(createTempRoot('gui-dev-build-'), 'home');
+    mkdirSync(home, { recursive: true });
+    const server = await createPolicyGuiServer(() => environmentFor(home, isolationEnv(home)), {
+      buildDocument: () => Promise.reject(new Error('Unexpected token in views/activity.ts')),
+    });
+
+    try {
+      const response = await fetch(`${server.origin}/?token=${encodeURIComponent(server.token)}`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      expect({ status: response.status, body: await response.text() }).toStrictEqual({
+        status: 500,
+        body: '{"error":"Unexpected token in views/activity.ts"}',
+      });
+    } finally {
+      await server.close();
+    }
+  });
 });
