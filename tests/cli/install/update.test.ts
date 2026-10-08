@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { type FlowSpec, openCodeV2Script, runSide } from '../../helpers/command-flow';
 import { fileAt } from '../../helpers/host-differential';
-import { removeTempRoots } from '../../helpers/temp-home';
+import { CLAUDE_CURSOR_PLUGIN_SEED, removeTempRoots } from '../../helpers/temp-home';
 
 const flow = async (spec: FlowSpec) => await runSide(spec);
 
@@ -306,18 +306,9 @@ test('a Claude Code install under CLAUDE_CONFIG_DIR is found and updated', async
 });
 
 test('a Cursor protected only through the Claude Code plugin gets no npx hook on update', async () => {
-  const install = '.claude/plugins/cache/cc-marketplace/cc-safety-net/2.6.1';
   const result = await flow({
     invoke: 'update',
-    seed: {
-      '.claude/plugins/installed_plugins.json': JSON.stringify({
-        plugins: {
-          'cc-safety-net@cc-marketplace': [{ scope: 'user', installPath: `<home>/${install}` }],
-        },
-      }),
-      '.claude/settings.json': '{"enabledPlugins":{"cc-safety-net@cc-marketplace":true}}\n',
-      [`${install}/.cursor-plugin/plugin.json`]: '{}',
-    },
+    seed: CLAUDE_CURSOR_PLUGIN_SEED,
     script: [{ command: 'claude' }],
     options: () => versions(),
   });

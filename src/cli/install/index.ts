@@ -451,7 +451,8 @@ async function detectConfiguredInstallTargets(
     .filter((hook) =>
       action === 'install'
         ? hook.configured
-        : hook.detected || hook.inspectionStatus === 'not-inspected',
+        : (hook.detected && hook.method !== CURSOR_CLAUDE_PLUGIN_METHOD) ||
+          hook.inspectionStatus === 'not-inspected',
     )
     .filter(
       (hook) =>

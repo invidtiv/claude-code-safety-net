@@ -40,12 +40,14 @@ export function detect(context: DetectContext): HookDetection {
   const hookConfig = detectHookConfig(context);
   const claudeManifest = findClaudeCursorPluginManifest(context.environment);
   if (!claudeManifest) return hookConfig;
+  const importCaveat =
+    'Cursor runs the Claude Code plugin only while it imports Claude Code plugins, which doctor cannot check.';
   if (hookConfig.status === 'configured')
     return {
       ...hookConfig,
       errors: [
         ...(hookConfig.errors ?? []),
-        'The Claude Code plugin already runs this check in Cursor, so every tool call is checked twice. Run `cc-safety-net uninstall --cursor` to remove this hook.',
+        `The Claude Code plugin also runs this check in Cursor, so every tool call is checked twice. ${importCaveat} If Cursor runs it, run \`cc-safety-net uninstall --cursor\` to remove this hook.`,
       ],
     };
   return {
@@ -53,7 +55,10 @@ export function detect(context: DetectContext): HookDetection {
     status: 'configured',
     method: CURSOR_CLAUDE_PLUGIN_METHOD,
     configPath: claudeManifest,
-    ...(hookConfig.errors && { errors: hookConfig.errors }),
+    errors: [
+      ...(hookConfig.errors ?? []),
+      `${importCaveat} If it stops, run \`cc-safety-net install --cursor\`.`,
+    ],
   };
 }
 

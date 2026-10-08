@@ -74,8 +74,11 @@ export function findClaudeCursorPluginManifest(environment: Environment): string
     .filter((record) => readRecord(record, 'scope') === 'user')
     .map((record) => readRecord(record, 'installPath'))
     .find((path): path is string => typeof path === 'string');
-  const manifest = installPath && join(installPath, '.cursor-plugin', 'plugin.json');
-  return manifest && existsSync(manifest) ? manifest : undefined;
+  if (!installPath) return undefined;
+  const manifest = join(installPath, '.cursor-plugin', 'plugin.json');
+  const parsed = readStateFile(manifest);
+  const hooks = parsed.kind === 'ok' ? readRecord(parsed.value, 'hooks') : undefined;
+  return typeof hooks === 'string' && existsSync(join(installPath, hooks)) ? manifest : undefined;
 }
 
 export function detect(context: DetectContext): HookDetection {
