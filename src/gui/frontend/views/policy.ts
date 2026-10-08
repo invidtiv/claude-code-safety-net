@@ -266,6 +266,8 @@ const updateActions = () => {
   const hasErrors = (state?.errors.length ?? 0) > 0;
   qs<HTMLButtonElement>('save').disabled = busy || !state || hasErrors;
   qs<HTMLButtonElement>('repair').disabled = busy || !hasErrors;
+  qs<HTMLButtonElement>('reset').disabled = busy;
+  qs<HTMLInputElement>('retention-days').disabled = busy;
 };
 export const runExclusive = async (pendingText: string, fn: () => Promise<void>) => {
   if (busy) return;

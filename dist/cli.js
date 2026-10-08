@@ -4421,6 +4421,8 @@ var updateActions = () => {
   const hasErrors = (state?.errors.length ?? 0) > 0;
   qs("save").disabled = busy2 || !state || hasErrors;
   qs("repair").disabled = busy2 || !hasErrors;
+  qs("reset").disabled = busy2;
+  qs("retention-days").disabled = busy2;
 };
 var runExclusive = async (pendingText, fn) => {
   if (busy2)
