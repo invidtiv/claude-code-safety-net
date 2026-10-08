@@ -472,7 +472,7 @@ const renderSecretPatterns = () => {
             return categoryHtml({
               key: `secret:${group.category}`,
               title,
-              counts: `${plural(all.length, 'rule')}${offCount(all.length - on)}`,
+              counts: `${plural(all.length, 'rule')}${offCount(on === 0 ? 0 : all.length - on)}`,
               bulkSwitch: `<input type="checkbox" class="switch" data-secret-group-active="${escapeHtml(group.category)}" ${on > 0 ? 'checked' : ''} ${disabled ? 'disabled' : ''} aria-label="${escapeHtml(`Turn all ${title} on or off`)}" title="Turn all on or off">`,
               rowsHtml: group.rules.map(rowHtml).join(''),
             });

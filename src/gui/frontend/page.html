@@ -130,9 +130,9 @@
             </div>
             <div class="preset-grid" id="safety-level"></div>
             <p class="notice" id="environment-overrides" hidden></p>
-            <details class="advanced">
-              <summary>Advanced settings</summary>
-              <div class="card rows">
+            <details class="card disclosure">
+              <summary><span class="disclosure-title">Advanced settings</span><span class="disclosure-sub">Preset checks and linked worktrees</span></summary>
+              <div class="disclosure-body">
                 <div id="safety-overrides"></div>
                 <div id="workflow"></div>
               </div>
@@ -209,13 +209,10 @@
             </div>
           </section>
 
-          <details class="json-panel">
-            <summary>Policy JSON</summary>
-            <div class="card pad">
-              <div class="json-head">
-                <p class="section-sub" id="raw-source">Read-only. Mirrors the settings above.</p>
-                <button type="button" class="quiet" id="raw-copy"></button>
-              </div>
+          <details class="card disclosure">
+            <summary><span class="disclosure-title">Policy JSON</span><span class="disclosure-sub" id="raw-source">Read-only. Mirrors the settings above.</span></summary>
+            <div class="disclosure-body json-body">
+              <button type="button" class="quiet" id="raw-copy"></button>
               <textarea id="raw" aria-label="Policy JSON" aria-describedby="raw-source" readonly></textarea>
             </div>
           </details>

@@ -354,6 +354,11 @@ main {
   border-bottom: 1px solid var(--line);
 }
 
+.panel-head > div:first-child {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .panel-list {
   display: grid;
   padding: 4px;
@@ -756,8 +761,12 @@ input[readonly] {
 }
 
 .primary-search input[type='search'] {
-  height: 38px;
+  height: 36px;
   font-size: 14px;
+}
+
+.policy-toolbar .pills button {
+  height: 30px;
 }
 
 .policy-toolbar {
@@ -1314,18 +1323,39 @@ details[open] > summary::before,
   transform: translateY(-1px) rotate(45deg);
 }
 
-.advanced summary {
-  color: var(--muted);
+.disclosure > summary {
+  gap: 10px;
+  width: auto;
+  min-height: 48px;
+  padding: 0 var(--card-x) 0 calc(var(--row-x) + 4px);
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+}
+
+.disclosure > summary:hover {
+  background: var(--hover);
+}
+
+.disclosure > summary::before {
+  color: var(--faint);
+}
+
+.disclosure[open] > summary {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.disclosure-sub {
+  overflow: hidden;
+  color: var(--faint);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.advanced summary:hover {
-  color: var(--ink);
-}
-
-.advanced[open] summary {
-  margin-bottom: 10px;
+.disclosure-body {
+  padding: 0 var(--card-x) 4px 38px;
+  border-top: 1px solid var(--line);
 }
 
 #environment-overrides {
@@ -1601,30 +1631,17 @@ details[open] > summary::before,
   opacity: 0.5;
 }
 
-.json-panel summary {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 500;
+.json-body {
+  position: relative;
+  display: grid;
+  padding: var(--card-x);
 }
 
-.json-panel summary:hover {
-  color: var(--ink);
-}
-
-.json-panel[open] summary {
-  margin-bottom: 10px;
-}
-
-.json-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.json-head button {
-  margin-right: -8px;
+.json-body button {
+  position: absolute;
+  top: calc(var(--card-x) + 6px);
+  right: calc(var(--card-x) + 6px);
+  height: 28px;
   padding: 0 8px;
 }
 
@@ -2219,6 +2236,19 @@ button.chip:hover:not(:disabled) {
 
   .tiles {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panel-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .panel-head .section-actions {
+    justify-content: space-between;
+  }
+
+  .panel-head .section-actions > .quiet {
+    margin-left: -13px;
   }
 
   .toolbar-search {
