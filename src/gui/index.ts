@@ -121,9 +121,11 @@ interface PolicyGuiServerOptions extends Partial<RulesPolicyOptions> {
     target: InstallTarget,
   ) => Promise<{ ok: boolean; output: string }>;
   activityLogsDir?: string;
+  buildDocument?: () => Promise<string>;
 }
 
-interface RunGuiCommandOptions extends Partial<RulesPolicyOptions> {
+interface RunGuiCommandOptions
+  extends Pick<PolicyGuiServerOptions, 'buildDocument'>, Partial<RulesPolicyOptions> {
   openBrowser?: (url: string) => Promise<void> | void;
   keepAlive?: boolean;
   log?: (message: string) => void;
@@ -218,7 +220,7 @@ async function handleRequest(
   }
 
   if (request.method === 'GET' && url.pathname === '/') {
-    sendHtml(response, renderPolicyGuiHtml(token));
+    sendHtml(response, renderPolicyGuiHtml(token, await options.buildDocument?.()));
     return;
   }
 

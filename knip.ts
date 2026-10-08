@@ -14,6 +14,7 @@ const config: KnipConfig = {
     'src/gui/frontend/main.ts!',
     'scripts/build.ts!',
     'scripts/check-comments.ts!',
+    'scripts/gui-dev.ts!',
     'scripts/project-bun.ts!',
     'scripts/prepare-release-files.ts!',
     'scripts/release-assets.ts!',
