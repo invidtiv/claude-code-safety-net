@@ -18,34 +18,37 @@ const buildPageScript = async () => {
   return output.text();
 };
 
-const [pageHtml, faviconSvg, customCss, logoSvg, pageScriptJs] = await Promise.all([
-  readAsset('page.html'),
-  readAsset('favicon.svg'),
-  readAsset('custom.css'),
-  readAsset('logo.svg'),
-  buildPageScript(),
-]);
+export const buildGuiDocument = async () => {
+  const [pageHtml, faviconSvg, customCss, logoSvg, pageScriptJs] = await Promise.all([
+    readAsset('page.html'),
+    readAsset('favicon.svg'),
+    readAsset('custom.css'),
+    readAsset('logo.svg'),
+    buildPageScript(),
+  ]);
 
-export const guiDocument = new HTMLRewriter()
-  .on('link[rel="icon"]', {
-    element(link) {
-      link.setAttribute('href', `data:image/svg+xml,${encodeURIComponent(faviconSvg)}`);
-    },
-  })
-  .on('link[rel="stylesheet"]', {
-    element(link) {
-      link.replace(`<style>\n${customCss}\n  </style>`, { html: true });
-    },
-  })
+  return new HTMLRewriter()
+    .on('link[rel="icon"]', {
+      element(link) {
+        link.setAttribute('href', `data:image/svg+xml,${encodeURIComponent(faviconSvg)}`);
+      },
+    })
+    .on('link[rel="stylesheet"]', {
+      element(link) {
+        link.replace(`<style>\n${customCss}\n  </style>`, { html: true });
+      },
+    })
+    .on('a.brand-home', {
+      element(anchor) {
+        anchor.setInnerContent(logoSvg, { html: true });
+      },
+    })
+    .on('script[src]', {
+      element(script) {
+        script.replace(`<script>\n${pageScriptJs}\n  </script>`, { html: true });
+      },
+    })
+    .transform(pageHtml);
+};
 
-  .on('a.brand-home', {
-    element(anchor) {
-      anchor.setInnerContent(logoSvg, { html: true });
-    },
-  })
-  .on('script[src]', {
-    element(script) {
-      script.replace(`<script>\n${pageScriptJs}\n  </script>`, { html: true });
-    },
-  })
-  .transform(pageHtml);
+export const guiDocument = await buildGuiDocument();

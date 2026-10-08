@@ -476,3 +476,55 @@ describe('the policy GUI server', () => {
     }
   });
 });
+
+describe('the gui page with a document builder', () => {
+  afterEach(removeTempRoots);
+
+  test('rebuilds the page for every authorized load and never for a request without the token', async () => {
+    const home = join(createTempRoot('gui-dev-build-'), 'home');
+    mkdirSync(home, { recursive: true });
+    const builds: number[] = [];
+    const server = await createPolicyGuiServer(() => environmentFor(home, isolationEnv(home)), {
+      buildDocument: async () => {
+        builds.push(builds.length + 1);
+        return `<script id="ccsn-data" type="application/json"></script><p>build ${builds.length}</p>`;
+      },
+    });
+    const load = async (query: string) => {
+      const response = await fetch(`${server.origin}/${query}`);
+      return { status: response.status, body: await response.text() };
+    };
+
+    try {
+      expect(await load('')).toStrictEqual({ status: 403, body: '{"error":"Forbidden"}' });
+      expect(await load('?token=wrong')).toMatchObject({ status: 403 });
+      expect(builds).toEqual([]);
+
+      const authorized = `?token=${encodeURIComponent(server.token)}`;
+      expect((await load(authorized)).body).toContain('<p>build 1</p>');
+      expect((await load(authorized)).body).toContain('<p>build 2</p>');
+    } finally {
+      await server.close();
+    }
+  });
+
+  test('answers a failed build with a 500 carrying the build error', async () => {
+    const home = join(createTempRoot('gui-dev-build-'), 'home');
+    mkdirSync(home, { recursive: true });
+    const server = await createPolicyGuiServer(() => environmentFor(home, isolationEnv(home)), {
+      buildDocument: () => Promise.reject(new Error('Unexpected token in views/activity.ts')),
+    });
+
+    try {
+      const response = await fetch(`${server.origin}/?token=${encodeURIComponent(server.token)}`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      expect({ status: response.status, body: await response.text() }).toStrictEqual({
+        status: 500,
+        body: '{"error":"Unexpected token in views/activity.ts"}',
+      });
+    } finally {
+      await server.close();
+    }
+  });
+});
