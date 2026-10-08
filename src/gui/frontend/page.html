@@ -22,344 +22,349 @@
       <nav class="sidenav" aria-label="Sections">
         <a href="#overview" data-nav="overview" title="Overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"></rect><rect x="14" y="3" width="7" height="5" rx="1.5"></rect><rect x="14" y="12" width="7" height="9" rx="1.5"></rect><rect x="3" y="16" width="7" height="5" rx="1.5"></rect></svg><span class="sr-only-collapse">Overview</span></a>
         <a href="#activity" data-nav="activity" title="Activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"></path></svg><span class="sr-only-collapse">Activity</span></a>
-        <a href="#policy" data-nav="policy" title="Policy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 3 8.4 7 10 4-1.6 7-5.6 7-10V6l-7-3Z"></path></svg><span class="sr-only-collapse">Policy</span></a>
-        <a href="#rules" data-nav="rules" title="Rules"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"></path><path d="M15 3v4h4"></path><path d="M9 12h6M9 16h4"></path></svg><span class="sr-only-collapse">Rules</span></a>
-        <a href="#integrations" data-nav="integrations" title="Integrations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0V8ZM12 17v5"></path></svg><span class="sr-only-collapse">Integrations</span></a>
+        <a href="#policy" data-nav="policy" title="Protections"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.4 3 8.4 7 10 4-1.6 7-5.6 7-10V6l-7-3Z"></path></svg><span class="sr-only-collapse">Protections</span><span class="nav-dirty" id="nav-dirty" hidden>Unsaved</span></a>
+        <a href="#rules" data-nav="rules" title="Custom rules"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"></path><path d="M15 3v4h4"></path><path d="M9 12h6M9 16h4"></path></svg><span class="sr-only-collapse">Custom rules</span></a>
+        <a href="#integrations" data-nav="integrations" title="Agents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0V8ZM12 17v5"></path></svg><span class="sr-only-collapse">Agents</span></a>
         <a href="#settings" data-nav="settings" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"></path><circle cx="16" cy="8" r="2.2"></circle><circle cx="8" cy="16" r="2.2"></circle></svg><span class="sr-only-collapse">Settings</span></a>
       </nav>
       <div class="sidebar-foot">
-        <div class="sidebar-links">
-          <a href="https://github.com/kenryu42/cc-safety-net" target="_blank" rel="noopener">GitHub</a>
-          <a href="https://ccsafetynet.com/docs" target="_blank" rel="noopener">Documentation</a>
-        </div>
+        <a href="https://github.com/kenryu42/cc-safety-net" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://ccsafetynet.com/docs" target="_blank" rel="noopener">Documentation</a>
       </div>
     </aside>
     <div class="content">
-      <header class="topbar" id="topbar">
-        <div class="topbar-row">
-          <h2 class="topbar-title" id="topbar-title">Overview</h2>
-          <label class="view-search topbar-search" data-search-view="activity" hidden>
-            <span class="sr-only">Filter activity</span>
-            <input type="search" id="activity-search" autocomplete="off" placeholder="Filter by rule or command">
-          </label>
-          <label class="view-search topbar-search" data-search-view="policy" hidden>
-            <span class="sr-only">Search all protections</span>
-            <input type="search" id="policy-search" autocomplete="off" placeholder="Filter by name, category, or rule ID">
-          </label>
-          <div class="topbar-actions">
-            <div class="app-status" id="app-status" role="status" aria-live="polite">Loading...</div>
-            <button type="button" class="dirty-chip" id="dirty-chip" hidden>Unsaved policy changes · Review</button>
-          </div>
-        </div>
-      </header>
       <main>
-        <div class="protection-banner" id="protection-banner" role="alert" hidden></div>
-        <div class="status" id="status" role="status" aria-live="polite"></div>
+        <div class="banner" id="protection-banner" role="alert" hidden></div>
 
         <section class="view" data-view="overview">
-          <div class="view-head">
-            <p class="panel-sub muted">What CC Safety Net has been doing on this machine.</p>
-          </div>
-          <div class="status health-strip" id="health-strip" hidden></div>
-          <p class="tiles-window" id="overview-window"></p>
+          <header class="page-head">
+            <div>
+              <h2>Overview</h2>
+              <p>What CC Safety Net has been doing on this machine.</p>
+            </div>
+          </header>
+          <div class="card status-card" id="status-card" aria-live="polite"><p class="muted">Loading…</p></div>
+          <section class="section" id="attention" hidden>
+            <div class="section-head"><h3 class="section-title">Needs attention</h3></div>
+            <ul class="card list" id="attention-list"></ul>
+          </section>
           <div class="tiles" id="overview-tiles"></div>
+          <section class="section">
+            <div class="section-head">
+              <h3 class="section-title">Recent blocks</h3>
+              <a class="link-button" href="#activity">All activity</a>
+            </div>
+            <div id="recent-blocks"></div>
+          </section>
+          <section class="section">
+            <div class="section-head">
+              <h3 class="section-title" id="top-rules-title">Most-triggered rules</h3>
+            </div>
+            <div id="top-rules"></div>
+          </section>
           <div class="star-row" id="star-row" hidden>
             <p class="star-pitch"><span id="star-pitch-text"></span> <span class="star-mechanism" id="star-mechanism" hidden>One click via your GitHub CLI. No redirect.</span></p>
             <span id="star-slot"></span>
           </div>
-          <section class="panel" id="protection-card" hidden></section>
-          <div class="dual-panels">
-            <section class="panel">
-              <div class="panel-head">
-                <div class="panel-title">
-                  <h2>Top blocked commands</h2>
-                </div>
-              </div>
-              <div id="top-commands"></div>
-            </section>
-            <section class="panel">
-              <div class="panel-head">
-                <div class="panel-title">
-                  <h2>Top blocked rules</h2>
-                </div>
-              </div>
-              <div id="top-rules"></div>
-            </section>
-          </div>
-          <button type="button" class="guard-errors" id="guard-errors" hidden></button>
         </section>
 
         <section class="view" data-view="activity" hidden>
-          <div class="view-head">
-            <p class="panel-sub muted">Audited commands from the local log, newest first. Commands are secret-redacted at write time.</p>
-          </div>
-          <section class="panel">
-            <div class="activity-controls">
-              <div class="activity-controls-row">
-                <label class="activity-days"><span>Window</span>
-                  <select id="activity-days"></select>
-                </label>
-                <button type="button" class="icon-button activity-refresh" id="activity-refresh" aria-label="Refresh activity" title="Refresh activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg></button>
-              </div>
-              <div class="chip-row" id="activity-decision" role="group" aria-label="Filter by decision"></div>
-              <div class="chip-row" id="activity-agents" role="group" aria-label="Filter by agent"></div>
-              <div class="chip-row" id="activity-command-filter"></div>
+          <header class="page-head">
+            <div>
+              <h2>Activity</h2>
+              <p>Commands your agents ran, newest first. Commands are secret-redacted when they are logged.</p>
             </div>
-            <div id="activity-feed"></div>
-            <p class="muted activity-count" id="activity-count"></p>
-          </section>
+            <button type="button" id="activity-refresh">Refresh</button>
+          </header>
+          <div class="toolbar">
+            <div class="pills" id="activity-decision" role="group" aria-label="Decision"></div>
+            <span class="toolbar-spacer"></span>
+            <label class="toolbar-search"><span class="sr-only">Search activity</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="search" id="activity-search" autocomplete="off" placeholder="Search commands or rule IDs"></label>
+            <label class="toolbar-select"><span class="sr-only">Agent</span><select id="activity-agent"></select></label>
+            <label class="toolbar-select"><span class="sr-only">Time window</span><select id="activity-days"></select></label>
+          </div>
+          <div class="filter-line" id="activity-command-filter" hidden></div>
+          <div class="card list" id="activity-feed"><p class="empty">Loading activity…</p></div>
+          <p class="footnote" id="activity-count"></p>
         </section>
 
         <section class="view" data-view="policy" hidden>
-          <div class="view-head view-head-actions">
-            <p class="panel-sub muted">Choose what CC Safety Net blocks. Changes apply after you save.</p>
-            <button type="button" id="project-draft-enter">Draft project policy</button>
-          </div>
-          <div class="project-draft-bar" id="project-draft-bar" hidden>
-            <div class="project-draft-target">
-              <strong>Project policy draft</strong>
-              <code id="project-draft-path"></code>
-              <p class="muted">Only the fields you mark are written here; everything else keeps inheriting from each member's own policy.</p>
+          <header class="page-head">
+            <div>
+              <h2>Protections</h2>
+              <p>Choose what CC Safety Net blocks. Changes apply after you save.</p>
             </div>
-            <div class="savebar-actions">
-              <button type="button" id="project-draft-change" hidden>Change…</button>
-              <button type="button" id="project-draft-exit">Exit draft</button>
+            <div class="page-actions">
+              <div class="pills" role="group" aria-label="Policy you are editing">
+                <button type="button" id="scope-user" aria-pressed="true">My policy</button>
+                <button type="button" id="project-draft-enter" aria-pressed="false">Project policy</button>
+              </div>
+              <button type="button" id="tester-open" aria-haspopup="dialog">Test a command</button>
             </div>
+          </header>
+          <div class="project-bar" id="project-draft-bar" hidden>
+            <div>
+              <strong>Editing the project policy</strong> <code id="project-draft-path"></code>
+              <p>Only settings tagged <span class="project-chip">Project</span> are written. Everything else keeps following each person's own policy. Click a Project tag to stop setting that field.</p>
+            </div>
+            <button type="button" id="project-draft-change" hidden>Change folder…</button>
           </div>
-          <p class="status error" id="project-draft-diagnostics" hidden></p>
-          <div class="policy-savebar" id="policy-savebar" hidden><span>Unsaved changes</span><div class="savebar-actions"><button type="button" id="discard-changes">Discard</button><button class="primary" id="save">Save</button></div></div>
+          <p class="notice error" id="project-draft-diagnostics" hidden></p>
           <div class="recovery" id="recovery" hidden>
             <div>
-              <strong>Policy repair available</strong>
-              <p class="muted">Repair writes canonical JSON by preserving valid settings. If the JSON cannot be parsed, defaults are restored.</p>
+              <strong>Your policy file needs repair</strong>
+              <p>Repair keeps every valid setting and rewrites the file. If the JSON cannot be read at all, defaults are restored.</p>
+              <p class="notice error" id="policy-errors"></p>
             </div>
             <button class="primary" id="repair" type="button">Repair</button>
           </div>
-          <section class="panel">
+
+          <section class="section">
+            <div class="section-head">
+              <div>
+                <h3 class="section-title">Safety preset</h3>
+                <p class="section-sub">Each preset includes everything in the one before it.</p>
+              </div>
+              <span class="preset-status" id="safety-preset-status"></span>
+              <span class="project-chip-slot" id="safety-level-chip"></span>
+            </div>
+            <div class="preset-grid" id="safety-level"></div>
+            <p class="notice" id="environment-overrides" hidden></p>
+            <details class="advanced">
+              <summary>Advanced settings</summary>
+              <div class="card rows">
+                <div id="safety-overrides"></div>
+                <div id="workflow"></div>
+              </div>
+            </details>
+          </section>
+
+          <div class="toolbar policy-toolbar">
+            <label class="toolbar-search primary-search"><span class="sr-only">Search protections</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="search" id="policy-search" autocomplete="off" aria-keyshortcuts="/" placeholder="Type / to search by name, path or rule ID"></label>
+            <div class="pills" role="group" aria-label="Which protections to show">
+              <button type="button" data-policy-show="all" aria-pressed="true">All</button>
+              <button type="button" data-policy-show="changed" aria-pressed="false">Changed from default <span class="count" id="changed-count"></span></button>
+            </div>
+          </div>
+
+          <section class="card panel" id="destructive-panel">
             <div class="panel-head">
-              <div class="panel-title">
-                <h2 id="tester-label">Test a command</h2>
-                <p class="panel-sub muted">Paste a shell command to see whether it is blocked under your current unsaved edits. Custom rulebook rules are enforced here too.</p>
+              <div>
+                <h3 class="section-title" id="destructive-label">Command protection</h3>
+                <p class="section-sub" id="destructive-command-summary"></p>
+              </div>
+              <div class="section-actions">
+                <button type="button" class="quiet" id="reset-rule-customizations">Reset all</button>
+                <span class="project-chip-slot" id="destructive-enabled-chip"></span>
+                <label class="master-switch"><span class="master-state"></span><input type="checkbox" class="switch" id="destructive-enabled" aria-labelledby="destructive-label"></label>
               </div>
             </div>
-            <div class="tester-row">
-              <input type="text" id="tester-input" autocomplete="off" spellcheck="false" placeholder="Paste a shell command and press Enter" aria-labelledby="tester-label">
-              <button type="button" id="tester-run">Test</button>
-            </div>
-            <div id="tester-result" class="status" hidden></div>
+            <div class="panel-list" id="destructive-command-rules"></div>
           </section>
-          <section class="panel">
+
+          <section class="card panel" id="secret-panel">
             <div class="panel-head">
-              <div class="panel-title">
-                <h2>Safety preset</h2>
-                <p class="panel-sub muted">Choose inherited protection defaults, then customize only what this workspace needs.</p>
+              <div>
+                <h3 class="section-title" id="secret-label">Secret protection</h3>
+                <p class="section-sub" id="secret-summary"></p>
+              </div>
+              <div class="section-actions">
+                <button type="button" class="quiet" id="reset-secret-customizations">Reset all</button>
+                <span class="project-chip-slot" id="secret-enabled-chip"></span>
+                <label class="master-switch"><span class="master-state"></span><input type="checkbox" class="switch" id="secret-enabled" aria-labelledby="secret-label"></label>
               </div>
             </div>
-            <div id="safety-preset-status" class="preset-status"></div>
-            <div id="environment-overrides" class="status" hidden></div>
-            <div class="grid" id="safety-level"></div>
-            <div class="field field-toggle">
-              <button class="panel-toggle" type="button" aria-expanded="false" aria-controls="safety-overrides-content"><span class="panel-chevron" aria-hidden="true"></span><span>Advanced overrides</span></button>
-            </div>
-            <div class="foldable-field-content" id="safety-overrides-content" hidden>
-              <p class="muted">Inherit from the selected level unless a capability needs an explicit exception.</p>
-              <div class="grid" id="safety-overrides"></div>
-            </div>
-            <div class="field">
-              <span>Workflow</span>
-              <small>Workflow exceptions are separate from safety level.</small>
-            </div>
-            <div class="grid" id="workflow"></div>
+            <div class="panel-list" id="secret-patterns"></div>
           </section>
-          <section class="panel">
+
+          <section class="card panel">
             <div class="panel-head">
-              <div class="panel-title">
-                <h2>Destructive Command Protection</h2>
-                <p class="panel-sub muted" id="destructive-command-summary"></p>
+              <div>
+                <h3 class="section-title">Exceptions and extra paths</h3>
+                <p class="section-sub">Paths can be absolute or start with <code>~/</code>. Paste several lines to add many at once. Paths that cover your home directory are rejected.</p>
               </div>
-              <button type="button" id="reset-rule-customizations" class="panel-head-action">Restore defaults</button>
             </div>
-            <div id="destructive-command"></div>
-          </section>
-          <section class="panel">
-            <header class="panel-head">
-              <div class="panel-title">
-                <h2>Secret Protection</h2>
-                <p class="panel-sub muted" id="secret-summary">Default sensitive paths and coding CLI credential locations can be disabled individually. Deny paths are blocked while Secret protection is on.</p>
+            <div class="panel-rows">
+              <div class="path-list">
+                <div class="path-list-head"><strong id="allow-paths-label">Allow recursive deletes in</strong><span class="count" id="allow-paths-count"></span><span class="project-chip-slot" id="allow-paths-chip"></span></div>
+                <p class="path-list-help">Recursive deletes inside these paths are not blocked, like a scratch folder under <code>/tmp</code>.</p>
+                <div class="input-row"><input type="text" class="mono" id="allow-paths-input" data-path-input="allow-paths" autocomplete="off" spellcheck="false" placeholder="/absolute/path or ~/path" aria-labelledby="allow-paths-label"><button type="button" id="allow-paths-add-button" data-path-add="allow-paths">Add</button></div>
+                <p class="field-error" id="allow-paths-hint" hidden></p>
+                <ul class="paths" id="allow-paths-list"></ul>
               </div>
-              <button type="button" id="reset-secret-customizations" class="panel-head-action">Restore defaults</button>
-            </header>
-            <div id="secret"></div>
-          </section>
-          <section class="panel">
-            <div class="panel-head raw-json-head">
-              <div class="panel-title">
-                <h2>Policy JSON</h2>
-                <p class="panel-sub muted" id="raw-source">Read-only mirror of the policy controls.</p>
+              <div class="path-list">
+                <div class="path-list-head"><strong id="deny-paths-label">Always block access to</strong><span class="count" id="deny-paths-count"></span><span class="project-chip-slot" id="deny-paths-chip"></span></div>
+                <p class="path-list-help">These paths and everything inside them are blocked while secret protection is on.</p>
+                <div class="input-row"><input type="text" class="mono" id="deny-paths-input" data-path-input="deny-paths" autocomplete="off" spellcheck="false" placeholder="path/to/protect" aria-labelledby="deny-paths-label"><button type="button" id="deny-paths-add-button" data-path-add="deny-paths">Add</button></div>
+                <p class="field-error" id="deny-paths-hint" hidden></p>
+                <ul class="paths" id="deny-paths-list"></ul>
               </div>
-              <button class="icon-button" id="raw-copy" type="button" aria-label="Copy raw JSON to clipboard"></button>
+              <div class="path-list">
+                <div class="path-list-head"><strong id="secret-allow-paths-label">Exempt from secret patterns</strong><span class="count" id="secret-allow-paths-count"></span><span class="project-chip-slot" id="secret-allow-paths-chip"></span></div>
+                <p class="path-list-help">Files, folders, or one file name under a folder such as <code>~/code/**/.env.local</code>. Deny paths and coding agent credentials still apply.</p>
+                <div class="input-row"><input type="text" class="mono" id="secret-allow-paths-input" data-path-input="secret-allow-paths" autocomplete="off" spellcheck="false" placeholder="~/code/**/.env.local" aria-labelledby="secret-allow-paths-label"><button type="button" id="secret-allow-paths-add-button" data-path-add="secret-allow-paths">Add</button></div>
+                <p class="field-error" id="secret-allow-paths-hint" hidden></p>
+                <ul class="paths" id="secret-allow-paths-list"></ul>
+              </div>
             </div>
-            <textarea id="raw" aria-label="Raw policy JSON" aria-describedby="raw-source" readonly></textarea>
           </section>
+
+          <details class="json-panel">
+            <summary>Policy JSON</summary>
+            <div class="card pad">
+              <div class="json-head">
+                <p class="section-sub" id="raw-source">Read-only. Mirrors the settings above.</p>
+                <button type="button" class="quiet" id="raw-copy"></button>
+              </div>
+              <textarea id="raw" aria-label="Policy JSON" aria-describedby="raw-source" readonly></textarea>
+            </div>
+          </details>
+
+          <div class="savebar" id="policy-savebar" hidden>
+            <div class="savebar-text">
+              <strong id="savebar-title">Unsaved changes</strong>
+              <span id="savebar-summary"></span>
+            </div>
+            <div class="savebar-actions">
+              <button type="button" id="discard-changes">Discard</button>
+              <button type="button" class="primary" id="save">Save</button>
+            </div>
+          </div>
         </section>
 
         <section class="view" data-view="rules" hidden>
-          <div class="view-head">
-            <p class="panel-sub muted">Custom rulebook rules enforced on this machine, and a prompt to hand rule authoring to your coding agent.</p>
-          </div>
-          <section class="panel" id="rules-composer-panel">
-            <div class="panel-head">
-              <div class="panel-title">
-                <h2>Create a rule</h2>
-                <p class="panel-sub muted">CC Safety Net never writes rulebooks from here. Copy the prompt and paste it into your coding agent.</p>
+          <header class="page-head">
+            <div>
+              <h2>Custom rules</h2>
+              <p>Your own blocking rules from rulebooks, enforced on top of the built-in protections.</p>
+            </div>
+            <button type="button" id="rules-refresh">Refresh</button>
+          </header>
+          <section class="section" id="rules-diagnostics-panel" hidden>
+            <div class="section-head">
+              <div>
+                <h3 class="section-title">Problems</h3>
+                <p class="section-sub">An error means a rulebook was skipped and none of its rules are enforced.</p>
               </div>
             </div>
-            <div class="field">
-              <span>Scope</span>
-              <div class="chip-row" role="group" aria-label="Rule scope">
-                <button type="button" class="chip" data-rules-scope="project" aria-pressed="true">Project</button>
-                <button type="button" class="chip" data-rules-scope="user" aria-pressed="false">All projects</button>
-              </div>
-            </div>
-            <div class="field" id="rules-project-path-field">
-              <span id="rules-project-path-label">Project path</span>
-              <div class="rules-path-row">
-                <input type="text" id="rules-project-path" spellcheck="false" autocomplete="off" aria-labelledby="rules-project-path-label" aria-describedby="rules-project-path-hint">
-                <button type="button" id="rules-choose-directory" hidden>Choose…</button>
-              </div>
-              <small id="rules-project-path-hint">Where the rulebook is written. Defaults to the directory this GUI was launched from.</small>
-            </div>
-            <div class="field">
-              <span id="rules-composer-label">Request</span>
-              <textarea id="rules-composer-input" spellcheck="false" placeholder="Describe the custom rules you want..." aria-labelledby="rules-composer-label" aria-describedby="rules-composer-hint"></textarea>
-              <small id="rules-composer-hint">Rules match a command, its subcommand path, and exact arguments - not file paths or patterns.</small>
-            </div>
-            <div class="field">
-              <span>Examples</span>
-              <div class="chip-row">
-                <button type="button" class="chip" data-rules-example="read my package.json and suggest blocking rules">Suggest rules</button>
-                <button type="button" class="chip" data-rules-example="set up rules to block all terraform destroy commands">Block a command</button>
-                <button type="button" class="chip" data-rules-example="verify my rules and fix any errors">Verify rules</button>
-              </div>
-            </div>
-            <div class="rules-composer-actions">
-              <button type="button" class="primary" id="rules-copy-prompt">Copy prompt</button>
-            </div>
+            <div class="notices" id="rules-diagnostics"></div>
           </section>
-          <section class="panel">
-            <div class="panel-head">
-              <div class="panel-title">
-                <h2>Rulebooks</h2>
-                <p class="panel-sub muted">Read-only. Rules are shown as enforced, after overrides.</p>
+          <section class="section">
+            <div class="section-head">
+              <div>
+                <h3 class="section-title">Rulebooks</h3>
+                <p class="section-sub">Read-only. Rules are shown as they are enforced.</p>
               </div>
-              <button type="button" class="icon-button rules-refresh" id="rules-refresh" aria-label="Refresh rules" title="Refresh rules"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg></button>
             </div>
             <div id="rules-list"><p class="empty">Loading rules…</p></div>
           </section>
-          <section class="panel" id="rules-diagnostics-panel" hidden>
-            <div class="panel-head">
-              <div class="panel-title">
-                <h2>Diagnostics</h2>
-                <p class="panel-sub muted">Errors mean a rulebook was dropped and its rules are not enforced.</p>
-              </div>
-            </div>
-            <div id="rules-diagnostics"></div>
-          </section>
-        </section>
-
-        <section class="view" data-view="settings" hidden>
-          <div class="view-head">
-            <p class="panel-sub muted">Appearance, file locations, and maintenance.</p>
-          </div>
-          <section class="panel">
-            <div class="panel-head">
-              <div class="panel-title">
-                <h2>Appearance</h2>
-                <p class="panel-sub muted">Theme preference is stored in this browser.</p>
-              </div>
-              <button type="button" id="theme-toggle"></button>
-            </div>
-          </section>
-          <section class="panel">
-            <div class="panel-head">
-              <div class="panel-title">
-                <h2>Files</h2>
-                <p class="panel-sub muted">Where CC Safety Net reads and writes on this machine.</p>
-              </div>
-            </div>
-            <div class="info-rows">
-              <div class="info-row"><span>Policy file</span><code id="policy-path"></code></div>
-              <div class="info-row" id="project-policy-row" hidden><span>Project policy</span><code id="project-policy-path"></code></div>
-              <div class="info-row"><span>Audit logs</span><code id="logs-path"></code></div>
-            </div>
-            <p class="status" id="project-policy-notice" hidden></p>
-          </section>
-          <section class="panel">
-            <div class="panel-head">
-              <div class="panel-title">
-                <h2>Audit log retention</h2>
-                <p class="panel-sub muted">How long decisions are kept before the sweep deletes them. Every analyzed command is recorded, so a long window grows the log.</p>
-              </div>
-            </div>
-            <label class="retention-row">
-              <span>Keep for</span>
-              <input type="number" id="retention-days" min="1" max="365" step="1" inputmode="numeric" aria-describedby="retention-note">
-              <span id="retention-unit">days</span>
-            </label>
-            <p class="muted retention-note" id="retention-note"></p>
-          </section>
-          <section class="panel">
-            <div class="panel-head">
-              <div class="panel-title">
-                <h2>Version</h2>
-              </div>
-            </div>
-            <div class="info-rows">
-              <div class="info-row"><code id="app-version"></code></div>
-            </div>
-          </section>
-          <section class="panel">
-            <div class="panel-head">
-              <div class="panel-title">
-                <h2>Danger zone</h2>
-                <p class="panel-sub muted">Actions that discard saved configuration.</p>
-              </div>
-            </div>
-            <div class="danger-row">
+          <section class="section" id="rules-composer-panel">
+            <div class="section-head">
               <div>
-                <strong>Reset policy</strong>
-                <p class="muted">Restore the default policy JSON at the configured path.</p>
+                <h3 class="section-title">Create a rule</h3>
+                <p class="section-sub">Describe the rule and copy a ready-made prompt for your coding agent. CC Safety Net does not write rulebooks itself.</p>
               </div>
-              <button class="danger" id="reset">Reset</button>
+            </div>
+            <div class="card pad">
+              <div class="form-grid">
+                <div class="field">
+                  <span class="field-label">Applies to</span>
+                  <div class="pills" role="group" aria-label="Rule scope">
+                    <button type="button" data-rules-scope="project" aria-pressed="true">This project</button>
+                    <button type="button" data-rules-scope="user" aria-pressed="false">All projects</button>
+                  </div>
+                </div>
+                <div class="field" id="rules-project-path-field">
+                  <label class="field-label" id="rules-project-path-label" for="rules-project-path">Project folder</label>
+                  <div class="input-row">
+                    <input type="text" class="mono" id="rules-project-path" spellcheck="false" autocomplete="off" aria-describedby="rules-project-path-hint">
+                    <button type="button" id="rules-choose-directory" hidden>Choose…</button>
+                  </div>
+                  <small id="rules-project-path-hint">Where the rulebook is written. Defaults to the folder this GUI was started from.</small>
+                </div>
+                <div class="field">
+                  <label class="field-label" id="rules-composer-label" for="rules-composer-input">What should be blocked?</label>
+                  <textarea id="rules-composer-input" spellcheck="false" placeholder="Block terraform destroy in this project" aria-describedby="rules-composer-hint"></textarea>
+                  <small id="rules-composer-hint">Rules match a command, its subcommands, and exact arguments, not file paths or patterns.</small>
+                  <div class="chip-row">
+                    <span class="chip-row-label">Try:</span>
+                    <button type="button" class="chip" data-rules-example="read my package.json and suggest blocking rules">Suggest rules</button>
+                    <button type="button" class="chip" data-rules-example="set up rules to block all terraform destroy commands">Block a command</button>
+                    <button type="button" class="chip" data-rules-example="verify my rules and fix any errors">Verify rules</button>
+                  </div>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="primary" id="rules-copy-prompt">Copy prompt</button>
+              </div>
             </div>
           </section>
         </section>
 
         <section class="view" data-view="integrations" hidden>
-          <div class="view-head">
-            <p class="panel-sub muted">Install or remove the cc-safety-net hook for each coding agent on this machine.</p>
-          </div>
-          <section class="panel">
-            <div class="panel-head">
-              <div class="panel-title">
-                <h2>Agents</h2>
-                <p class="panel-sub muted">Detected CLIs and hook status.</p>
-              </div>
-              <button type="button" class="icon-button integrations-refresh" id="integrations-refresh" aria-label="Refresh integrations" title="Refresh integrations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg></button>
+          <header class="page-head">
+            <div>
+              <h2>Agents</h2>
+              <p>Install or remove the CC Safety Net hook for each coding agent on this machine.</p>
             </div>
-            <div id="integrations-list"><p class="empty">Checking integrations…</p></div>
+            <button type="button" id="integrations-refresh">Refresh</button>
+          </header>
+          <div class="agent-groups" id="integrations-list"><p class="empty">Checking agents…</p></div>
+        </section>
+
+        <section class="view" data-view="settings" hidden>
+          <header class="page-head">
+            <div>
+              <h2>Settings</h2>
+              <p>Appearance, log retention, file locations, and maintenance.</p>
+            </div>
+          </header>
+          <section class="section">
+            <div class="section-head"><h3 class="section-title">Appearance</h3></div>
+            <div class="card rows">
+              <div class="setting-row">
+                <div class="setting-text"><strong>Theme</strong><small>Saved in this browser.</small></div>
+                <div class="pills" id="settings-theme" role="group" aria-label="Theme">
+                  <button type="button" data-theme-choice="auto" aria-pressed="true">Auto</button>
+                  <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+                  <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+                </div>
+              </div>
+            </div>
           </section>
-          <section class="panel" id="integrations-system" hidden>
-            <div class="panel-head">
-              <div class="panel-title">
-                <h2>System</h2>
-                <p class="panel-sub muted">Runtime detected on this machine.</p>
+          <section class="section">
+            <div class="section-head"><h3 class="section-title">Audit log</h3></div>
+            <div class="card rows">
+              <div class="setting-row">
+                <div class="setting-text"><label for="retention-days"><strong>Keep logs for</strong></label><small id="retention-note">Every checked command is logged. Lowering this deletes older entries, and Activity can only look back this far.</small></div>
+                <span class="retention-input"><input type="number" id="retention-days" min="1" max="365" step="1" inputmode="numeric" aria-describedby="retention-note"><span id="retention-unit">days</span></span>
               </div>
+              <div class="setting-row info"><span class="setting-label">Log folder</span><code id="logs-path"></code></div>
             </div>
-            <div class="info-rows">
-              <div class="info-row"><span>cc-safety-net</span><code id="integrations-pkg-version"></code></div>
-              <div class="info-row"><span>Node.js</span><code id="integrations-node-version"></code></div>
-              <div class="info-row"><span>Platform</span><code id="integrations-platform"></code></div>
+          </section>
+          <section class="section">
+            <div class="section-head"><h3 class="section-title">Files</h3></div>
+            <div class="card rows">
+              <div class="setting-row info"><span class="setting-label">Policy file</span><code id="policy-path"></code></div>
+              <div class="setting-row info" id="project-policy-row" hidden><span class="setting-label">Project policy</span><code id="project-policy-path"></code></div>
+            </div>
+            <p class="notice" id="project-policy-notice" hidden></p>
+          </section>
+          <section class="section">
+            <div class="section-head"><h3 class="section-title">About</h3></div>
+            <div class="card rows">
+              <div class="setting-row info"><span class="setting-label">CC Safety Net</span><code id="app-version"></code></div>
+              <div class="setting-row info"><span class="setting-label">Node.js</span><code id="integrations-node-version"></code></div>
+              <div class="setting-row info"><span class="setting-label">Platform</span><code id="integrations-platform"></code></div>
+            </div>
+          </section>
+          <section class="section">
+            <div class="section-head"><h3 class="section-title">Danger zone</h3></div>
+            <div class="card rows">
+              <div class="setting-row">
+                <div class="setting-text"><strong>Reset policy</strong><small>Replace your policy file with the defaults. This cannot be undone.</small></div>
+                <button type="button" class="danger-quiet" id="reset">Reset policy</button>
+              </div>
             </div>
           </section>
         </section>
@@ -370,15 +375,23 @@
       </footer>
     </div>
   </div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+    <div class="toast-text">
+      <strong id="toast-title"></strong>
+      <p id="toast-detail" hidden></p>
+    </div>
+    <button type="button" class="quiet icon-only" id="toast-close" aria-label="Dismiss message">✕</button>
+  </div>
   <div class="rule-example-popover" id="rule-example-popover" popover="auto" role="dialog" aria-labelledby="rule-example-title" aria-describedby="rule-example-command">
-    <span class="rule-example-label" id="rule-example-label">Blocked command example</span>
+    <span class="rule-example-label" id="rule-example-label"></span>
     <strong id="rule-example-title"></strong>
+    <p id="rule-example-description"></p>
     <code id="rule-example-command"></code>
   </div>
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-body confirm-dialog-detail">
     <form method="dialog">
       <h2 id="confirm-dialog-title"></h2>
-      <p class="muted" id="confirm-dialog-body"></p>
+      <p id="confirm-dialog-body"></p>
       <div class="dialog-rows" id="confirm-dialog-rows" hidden></div>
       <p class="dialog-detail"><code id="confirm-dialog-detail"></code></p>
       <div class="dialog-actions">
@@ -387,10 +400,24 @@
       </div>
     </form>
   </dialog>
+  <dialog class="confirm-dialog tester-dialog" id="tester-dialog" aria-labelledby="tester-label" aria-describedby="tester-help">
+    <form id="tester-form">
+      <h2 id="tester-label">Test a command</h2>
+      <p id="tester-help">Checks a command against the Protections settings, including unsaved changes and custom rules. Nothing is run.</p>
+      <div class="input-row">
+        <label class="prompt-field"><span class="prompt" aria-hidden="true">$</span><input type="text" id="tester-input" class="mono" autocomplete="off" spellcheck="false" placeholder="git push --force" aria-labelledby="tester-label"></label>
+        <button type="submit" class="primary" id="tester-run">Test</button>
+      </div>
+      <div id="tester-result" class="notice" aria-live="polite" hidden></div>
+      <div class="dialog-actions">
+        <button type="button" id="tester-close">Close</button>
+      </div>
+    </form>
+  </dialog>
   <dialog class="confirm-dialog report-dialog" id="report-dialog" aria-labelledby="report-dialog-title" aria-describedby="report-dialog-body">
     <form method="dialog">
-      <h2 id="report-dialog-title">Report false positive</h2>
-      <p class="muted" id="report-dialog-body">This opens a prefilled GitHub issue form — it is public, and nothing is submitted until you submit it there. Paths were replaced with <code>&lt;project&gt;</code> and <code>~</code>; edit anything else you would rather not publish.</p>
+      <h2 id="report-dialog-title">Report a false positive</h2>
+      <p id="report-dialog-body">This opens a prefilled public GitHub issue form. Nothing is sent until you submit it there. Paths were replaced with <code>&lt;project&gt;</code> and <code>~</code>; edit anything else you would rather not publish.</p>
       <label class="report-field"><span>Blocked command</span><textarea id="report-command" spellcheck="false"></textarea></label>
       <label class="report-field"><span>Audit log entry</span><textarea id="report-entry" spellcheck="false"></textarea></label>
       <div class="dialog-actions">
