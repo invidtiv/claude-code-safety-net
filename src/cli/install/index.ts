@@ -31,6 +31,7 @@ import {
   hasCopilotPreRenamePlugin,
   hasCopilotSafetyNetPlugin,
 } from '@/hosts/copilot-cli/plugin-id';
+import { CURSOR_CLAUDE_PLUGIN_METHOD } from '@/hosts/cursor/detect';
 import { installCursor, uninstallCursor } from '@/hosts/cursor/install';
 import {
   markDeepSeekHarnessDesktopAvailable,
@@ -791,7 +792,12 @@ async function detectUpdateTargets(environment: Environment, fetchVersion = defa
   const copilotPluginsDir = join(_getCopilotConfigHome(environment), 'installed-plugins');
   const targets = orderInstallTargets([
     ...state.hooks
-      .filter((hook) => hook.platform !== 'copilot-cli' && hook.detected)
+      .filter(
+        (hook) =>
+          hook.platform !== 'copilot-cli' &&
+          hook.detected &&
+          hook.method !== CURSOR_CLAUDE_PLUGIN_METHOD,
+      )
       .map((hook) => hook.platform as InstallTarget),
     ...(
       [COPILOT_PLUGIN_DIR, COPILOT_PRE_RENAME_PLUGIN_DIR, COPILOT_LEGACY_PLUGIN_DIR] as const

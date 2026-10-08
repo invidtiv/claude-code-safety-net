@@ -9,6 +9,7 @@ import {
   type Outcome,
   type TreeEntry,
   type TreeSpec,
+  withHomePlaceholder,
   writeTree,
 } from './fixture-tree';
 import {
@@ -24,7 +25,7 @@ import {
 function seedHome(prefix: string, seed: TreeSpec): string {
   const home = join(createTempRoot(prefix), 'home');
   mkdirSync(home, { recursive: true });
-  writeTree(home, seed);
+  writeTree(home, withHomePlaceholder(seed, home));
   return home;
 }
 

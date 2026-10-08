@@ -11,6 +11,16 @@ import { dirname, join, sep } from 'node:path';
 
 export type TreeSpec = Record<string, string | null | { symlink: string }>;
 
+export function withHomePlaceholder(spec: TreeSpec, home: string): TreeSpec {
+  const jsonEscapedHome = JSON.stringify(home).slice(1, -1);
+  return Object.fromEntries(
+    Object.entries(spec).map(([path, entry]) => [
+      path,
+      typeof entry === 'string' ? entry.replaceAll('<home>', jsonEscapedHome) : entry,
+    ]),
+  );
+}
+
 export function writeTree(root: string, spec: TreeSpec): void {
   const entries = Object.entries(spec).sort(
     ([, a], [, b]) => Number(isLink(a)) - Number(isLink(b)),

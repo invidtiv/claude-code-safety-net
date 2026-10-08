@@ -304,3 +304,26 @@ test('a Claude Code install under CLAUDE_CONFIG_DIR is found and updated', async
   });
   expect(result.lines[0]).toBe('Updated Claude Code integration');
 });
+
+test('a Cursor protected only through the Claude Code plugin gets no npx hook on update', async () => {
+  const install = '.claude/plugins/cache/cc-marketplace/cc-safety-net/2.6.1';
+  const result = await flow({
+    invoke: 'update',
+    seed: {
+      '.claude/plugins/installed_plugins.json': JSON.stringify({
+        plugins: {
+          'cc-safety-net@cc-marketplace': [{ scope: 'user', installPath: `<home>/${install}` }],
+        },
+      }),
+      '.claude/settings.json': '{"enabledPlugins":{"cc-safety-net@cc-marketplace":true}}\n',
+      [`${install}/.cursor-plugin/plugin.json`]: '{}',
+    },
+    script: [{ command: 'claude' }],
+    options: () => versions(),
+  });
+
+  expect(result.exitCode).toBe(0);
+  expect(result.lines[0]).toBe('Updated Claude Code integration');
+  expect(result.lines.join('\n')).not.toContain('Cursor');
+  expect(fileAt(result.tree, CURSOR_HOOKS)).toBeUndefined();
+});

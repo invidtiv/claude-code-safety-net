@@ -139,3 +139,59 @@ describe('the Cursor detector differential', () => {
     });
   });
 });
+
+const CLAUDE_INSTALL = '.claude/plugins/cache/cc-marketplace/cc-safety-net/2.6.1';
+const CLAUDE_CURSOR_MANIFEST = `${CLAUDE_INSTALL}/.cursor-plugin/plugin.json`;
+const claudePlugin = (enabled: boolean) => ({
+  '.claude/plugins/installed_plugins.json': JSON.stringify({
+    plugins: {
+      'cc-safety-net@cc-marketplace': [
+        { scope: 'user', installPath: `<home>/${CLAUDE_INSTALL}`, version: '2.6.1' },
+      ],
+    },
+  }),
+  '.claude/settings.json': JSON.stringify({
+    enabledPlugins: { 'cc-safety-net@cc-marketplace': enabled },
+  }),
+});
+const CLAUDE_CURSOR_PLUGIN = { ...claudePlugin(true), [CLAUDE_CURSOR_MANIFEST]: '{}' };
+
+describe('Cursor protected through the Claude Code plugin', () => {
+  test('counts as configured when the enabled Claude Code plugin carries the Cursor manifest', async () => {
+    expect(await detection(CLAUDE_CURSOR_PLUGIN)).toEqual({
+      kind: 'returned',
+      value: {
+        platform: 'cursor',
+        status: 'configured',
+        method: 'Claude Code plugin',
+        configPath: `<home>/${CLAUDE_CURSOR_MANIFEST}`,
+      },
+    });
+  });
+
+  test('warns that the npx hook duplicates the Claude Code plugin', async () => {
+    expect(
+      await detection({ ...CLAUDE_CURSOR_PLUGIN, [CONFIG]: cursorConfig([CANONICAL]) }),
+    ).toEqual({
+      kind: 'returned',
+      value: {
+        ...CONFIGURED,
+        errors: [
+          'The Claude Code plugin already runs this check in Cursor, so every tool call is checked twice. Run `cc-safety-net uninstall --cursor` to remove this hook.',
+        ],
+      },
+    });
+  });
+
+  test('ignores a Claude Code plugin that is disabled or predates the Cursor manifest', async () => {
+    const absent = {
+      kind: 'returned',
+      value: { platform: 'cursor', status: 'n/a', configPath: CONFIG_PATH },
+    } as const;
+
+    expect(await detection({ ...claudePlugin(false), [CLAUDE_CURSOR_MANIFEST]: '{}' })).toEqual(
+      absent,
+    );
+    expect(await detection(claudePlugin(true))).toEqual(absent);
+  });
+});
