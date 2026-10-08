@@ -8,7 +8,12 @@ import type { InstallTarget } from '@/hosts/install/targets';
 import { type FlowSpec, openCodeV2Script, runSide } from '../../helpers/command-flow';
 import { type TreeSpec, writeTree } from '../../helpers/fixture-tree';
 import { fileAt } from '../../helpers/host-differential';
-import { createTempRoot, DEVIN_CONFIG, removeTempRoots } from '../../helpers/temp-home';
+import {
+  CLAUDE_CURSOR_PLUGIN_SEED,
+  createTempRoot,
+  DEVIN_CONFIG,
+  removeTempRoots,
+} from '../../helpers/temp-home';
 
 const flow = async (spec: FlowSpec) => await runSide(spec);
 
@@ -1137,4 +1142,29 @@ test('the selector can cancel, install several targets in order, or hand over to
 
   const handedOver = await flow({ invoke: 'install', options: selection('update') });
   expect(handedOver).toMatchObject({ exitCode: 7, lines: [''], log: [] });
+});
+
+test('the uninstall selector does not offer a Cursor covered only by the Claude Code plugin', async () => {
+  const offered: InstallTargetChoice[] = [];
+  const result = await flow({
+    invoke: 'uninstall',
+    seed: CLAUDE_CURSOR_PLUGIN_SEED,
+    options: () => ({
+      probeTargets: () => true,
+      fetchVersion: async () => null,
+      selectTargets: async (_action: string, choices: readonly InstallTargetChoice[]) => {
+        offered.push(...choices);
+        return null;
+      },
+    }),
+  });
+
+  expect(result.exitCode).toBe(0);
+  expect(offered.find((choice) => choice.target === 'cursor')).toMatchObject({
+    available: false,
+    unavailableReason: 'not installed',
+  });
+  expect(offered.find((choice) => choice.target === 'claude-code')).toMatchObject({
+    available: true,
+  });
 });

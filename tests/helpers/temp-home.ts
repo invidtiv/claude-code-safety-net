@@ -9,6 +9,19 @@ import { snapshotTree } from './fixture-tree';
 export const DEVIN_CONFIG =
   process.platform === 'win32' ? 'AppData/Roaming/devin/config.json' : '.config/devin/config.json';
 
+const CLAUDE_INSTALL = '.claude/plugins/cache/cc-marketplace/cc-safety-net/2.6.1';
+
+export const CLAUDE_CURSOR_PLUGIN_SEED = {
+  '.claude/plugins/installed_plugins.json': JSON.stringify({
+    plugins: {
+      'cc-safety-net@cc-marketplace': [{ scope: 'user', installPath: `<home>/${CLAUDE_INSTALL}` }],
+    },
+  }),
+  '.claude/settings.json': '{"enabledPlugins":{"cc-safety-net@cc-marketplace":true}}\n',
+  [`${CLAUDE_INSTALL}/.cursor-plugin/plugin.json`]: '{"hooks":"./hooks/cursor.json"}',
+  [`${CLAUDE_INSTALL}/hooks/cursor.json`]: '{}',
+};
+
 const roots: string[] = [];
 
 export function createTempRoot(prefix: string): string {

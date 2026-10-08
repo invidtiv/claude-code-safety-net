@@ -2,7 +2,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { type FlowSpec, openCodeV2Script, runSide } from '../../helpers/command-flow';
 import { fileAt } from '../../helpers/host-differential';
-import { removeTempRoots } from '../../helpers/temp-home';
+import { CLAUDE_CURSOR_PLUGIN_SEED, removeTempRoots } from '../../helpers/temp-home';
 
 const flow = async (spec: FlowSpec) => await runSide(spec);
 
@@ -303,4 +303,18 @@ test('a Claude Code install under CLAUDE_CONFIG_DIR is found and updated', async
     ].sort(),
   });
   expect(result.lines[0]).toBe('Updated Claude Code integration');
+});
+
+test('a Cursor protected only through the Claude Code plugin gets no npx hook on update', async () => {
+  const result = await flow({
+    invoke: 'update',
+    seed: CLAUDE_CURSOR_PLUGIN_SEED,
+    script: [{ command: 'claude' }],
+    options: () => versions(),
+  });
+
+  expect(result.exitCode).toBe(0);
+  expect(result.lines[0]).toBe('Updated Claude Code integration');
+  expect(result.lines.join('\n')).not.toContain('Cursor');
+  expect(fileAt(result.tree, CURSOR_HOOKS)).toBeUndefined();
 });

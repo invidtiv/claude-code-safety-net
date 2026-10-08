@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { findClaudeCursorPluginManifest } from '@/hosts/claude-code/detect';
 import { CURSOR_HOOK_COMMAND, getCursorHooksPath } from '@/hosts/cursor/install';
 import type { DetectContext, HookDetection } from '@/hosts/detect/context';
 
@@ -33,7 +34,35 @@ function _cursorDriftErrors(entries: Array<Record<string, unknown>>): string[] {
   return errors;
 }
 
+export const CURSOR_CLAUDE_PLUGIN_METHOD = 'Claude Code plugin';
+
 export function detect(context: DetectContext): HookDetection {
+  const hookConfig = detectHookConfig(context);
+  const claudeManifest = findClaudeCursorPluginManifest(context.environment);
+  if (!claudeManifest) return hookConfig;
+  const importCaveat =
+    'Cursor runs the Claude Code plugin only while it imports Claude Code plugins, which doctor cannot check.';
+  if (hookConfig.status === 'configured')
+    return {
+      ...hookConfig,
+      errors: [
+        ...(hookConfig.errors ?? []),
+        `The Claude Code plugin also runs this check in Cursor, so every tool call is checked twice. ${importCaveat} If Cursor runs it, run \`cc-safety-net uninstall --cursor\` to remove this hook.`,
+      ],
+    };
+  return {
+    platform: 'cursor',
+    status: 'configured',
+    method: CURSOR_CLAUDE_PLUGIN_METHOD,
+    configPath: claudeManifest,
+    errors: [
+      ...(hookConfig.errors ?? []),
+      `${importCaveat} If it stops, run \`cc-safety-net install --cursor\`.`,
+    ],
+  };
+}
+
+function detectHookConfig(context: DetectContext): HookDetection {
   const configPath = getCursorHooksPath(context.environment);
 
   if (!existsSync(configPath)) {

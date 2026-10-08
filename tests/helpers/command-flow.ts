@@ -8,7 +8,7 @@ import {
 import type { UpdateInfo } from '@/hosts/doctor-types';
 import { createFakeBin, type FakeScriptEntry } from './fake-bin';
 import { createFakeInput, createFakeOutput } from './fake-tty';
-import { snapshotTree, type TreeSpec, writeTree } from './fixture-tree';
+import { snapshotTree, type TreeSpec, withHomePlaceholder, writeTree } from './fixture-tree';
 import { resolvePlaceholders } from './host-differential';
 import {
   createTempRoot,
@@ -74,7 +74,7 @@ export async function runSide(spec: FlowSpec) {
   const tmp = join(root, 'tmp');
   mkdirSync(home, { recursive: true });
   mkdirSync(tmp, { recursive: true });
-  writeTree(home, spec.seed ?? {});
+  writeTree(home, withHomePlaceholder(spec.seed ?? {}, home));
   writeTree(tmp, spec.seedTmp ?? {});
   const fakeBin = createFakeBin(
     root,

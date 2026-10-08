@@ -139,3 +139,74 @@ describe('the Cursor detector differential', () => {
     });
   });
 });
+
+const CLAUDE_INSTALL = '.claude/plugins/cache/cc-marketplace/cc-safety-net/2.6.1';
+const CLAUDE_CURSOR_MANIFEST = `${CLAUDE_INSTALL}/.cursor-plugin/plugin.json`;
+const CLAUDE_CURSOR_HOOKS = `${CLAUDE_INSTALL}/hooks/cursor.json`;
+const claudePlugin = (enabled: boolean, scope = 'user') => ({
+  '.claude/plugins/installed_plugins.json': JSON.stringify({
+    plugins: {
+      'cc-safety-net@cc-marketplace': [
+        { scope, installPath: `<home>/${CLAUDE_INSTALL}`, version: '2.6.1' },
+      ],
+    },
+  }),
+  '.claude/settings.json': JSON.stringify({
+    enabledPlugins: { 'cc-safety-net@cc-marketplace': enabled },
+  }),
+});
+const CURSOR_MANIFEST_FILES = {
+  [CLAUDE_CURSOR_MANIFEST]: '{"name":"cc-safety-net","hooks":"./hooks/cursor.json"}',
+  [CLAUDE_CURSOR_HOOKS]: '{}',
+};
+const CLAUDE_CURSOR_PLUGIN = { ...claudePlugin(true), ...CURSOR_MANIFEST_FILES };
+const IMPORT_CAVEAT =
+  'Cursor runs the Claude Code plugin only while it imports Claude Code plugins, which doctor cannot check.';
+
+describe('Cursor protected through the Claude Code plugin', () => {
+  test('counts as configured when the enabled Claude Code plugin carries the Cursor hook', async () => {
+    expect(await detection(CLAUDE_CURSOR_PLUGIN)).toEqual({
+      kind: 'returned',
+      value: {
+        platform: 'cursor',
+        status: 'configured',
+        method: 'Claude Code plugin',
+        configPath: `<home>/${CLAUDE_CURSOR_MANIFEST}`,
+        errors: [`${IMPORT_CAVEAT} If it stops, run \`cc-safety-net install --cursor\`.`],
+      },
+    });
+  });
+
+  test('warns that the npx hook duplicates the Claude Code plugin', async () => {
+    expect(
+      await detection({ ...CLAUDE_CURSOR_PLUGIN, [CONFIG]: cursorConfig([CANONICAL]) }),
+    ).toEqual({
+      kind: 'returned',
+      value: {
+        ...CONFIGURED,
+        errors: [
+          `The Claude Code plugin also runs this check in Cursor, so every tool call is checked twice. ${IMPORT_CAVEAT} If Cursor runs it, run \`cc-safety-net uninstall --cursor\` to remove this hook.`,
+        ],
+      },
+    });
+  });
+
+  test('ignores a Claude Code plugin that is disabled, not user-scoped, predates the Cursor manifest, or lost its hook file', async () => {
+    const absent = {
+      kind: 'returned',
+      value: { platform: 'cursor', status: 'n/a', configPath: CONFIG_PATH },
+    } as const;
+
+    expect(await detection({ ...claudePlugin(false), ...CURSOR_MANIFEST_FILES })).toEqual(absent);
+    expect(await detection({ ...claudePlugin(true, 'project'), ...CURSOR_MANIFEST_FILES })).toEqual(
+      absent,
+    );
+    expect(await detection(claudePlugin(true))).toEqual(absent);
+    expect(
+      await detection({
+        ...claudePlugin(true),
+        [CLAUDE_CURSOR_MANIFEST]: CURSOR_MANIFEST_FILES[CLAUDE_CURSOR_MANIFEST],
+      }),
+    ).toEqual(absent);
+  });
+});

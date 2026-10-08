@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Environment } from '@/core/environment';
 import {
@@ -60,6 +61,24 @@ export function detectClaudeCode(environment: Environment): HookDetection {
     method: 'plugin config',
     configPath: installedPath,
   };
+}
+
+export function findClaudeCursorPluginManifest(environment: Environment): string | undefined {
+  if (detectClaudeCode(environment).status !== 'configured') return undefined;
+  const installed = readStateFile(getClaudeInstalledPluginsPath(environment));
+  const records =
+    installed.kind === 'ok'
+      ? readRecord(readRecord(installed.value, 'plugins'), CLAUDE_SAFETY_NET_PLUGIN_ID)
+      : undefined;
+  const installPath = (Array.isArray(records) ? records : [])
+    .filter((record) => readRecord(record, 'scope') === 'user')
+    .map((record) => readRecord(record, 'installPath'))
+    .find((path): path is string => typeof path === 'string');
+  if (!installPath) return undefined;
+  const manifest = join(installPath, '.cursor-plugin', 'plugin.json');
+  const parsed = readStateFile(manifest);
+  const hooks = parsed.kind === 'ok' ? readRecord(parsed.value, 'hooks') : undefined;
+  return typeof hooks === 'string' && existsSync(join(installPath, hooks)) ? manifest : undefined;
 }
 
 export function detect(context: DetectContext): HookDetection {
