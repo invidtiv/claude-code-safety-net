@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildReportRequest, scrubReportPaths } from '@/gui/frontend/report';
+import { buildReportRequest, reportTitle, scrubReportPaths } from '@/gui/frontend/report';
 
 const ISSUE_URL =
   'https://github.com/kenryu42/cc-safety-net/issues/new?template=false_positive.yml';
@@ -48,5 +48,23 @@ describe('the false-positive report', () => {
     expect(request.dropped).toStrictEqual(['command']);
     expect(request.url.length).toBeLessThanOrEqual(8000);
     expect(new URL(request.url).searchParams.get('why')).toBe('e'.repeat(20));
+  });
+
+  test('titles the issue with the rule and the blocked command', () => {
+    expect(reportTitle('git-checkout-discard', 'git checkout -- src/app.ts')).toBe(
+      '[False Positive]: git-checkout-discard blocked `git checkout -- src/app.ts`',
+    );
+  });
+
+  test('titles a long or multi-line command by its first line, cut short', () => {
+    const title = reportTitle('rm-rf', `rm -rf ${'a'.repeat(200)}\necho done`);
+
+    expect(title).toBe(`[False Positive]: rm-rf blocked \`rm -rf ${'a'.repeat(73)}…\``);
+  });
+
+  test('titles an entry with no rule by the command alone', () => {
+    expect(reportTitle(undefined, 'git reset --hard')).toBe(
+      '[False Positive]: blocked `git reset --hard`',
+    );
   });
 });

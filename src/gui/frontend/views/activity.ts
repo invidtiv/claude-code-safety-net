@@ -8,7 +8,7 @@ import {
   visibleEntries,
 } from '../activity-filter';
 import { dayCount, formatCount, plural } from '../format';
-import { buildReportRequest, scrubReportPaths } from '../report';
+import { buildReportRequest, reportTitle, scrubReportPaths } from '../report';
 import type { ActivityFeed, FeedEntry } from '../types';
 import {
   agentLabels,
@@ -232,6 +232,11 @@ export const showActivity = (params: URLSearchParams) => {
 const openReportDialog = (entry: FeedEntry) => {
   const scrub = (text: string) => scrubReportPaths(text, entry.cwd, activity?.homeDir);
   qs<HTMLTextAreaElement>('report-command').value = scrub(entry.command || entry.segment || '');
+  qs<HTMLInputElement>('report-title').value = reportTitle(
+    entry.ruleId,
+    scrub(entry.segment || entry.command || ''),
+  );
+  qs<HTMLTextAreaElement>('report-why').value = '';
   qs<HTMLTextAreaElement>('report-entry').value = JSON.stringify(
     entry,
     (_key, value) => (typeof value === 'string' ? scrub(value) : value),
@@ -243,6 +248,8 @@ const openReportDialog = (entry: FeedEntry) => {
 
 const openFalsePositiveForm = async () => {
   const fields: Record<string, string> = {
+    title: qs<HTMLInputElement>('report-title').value,
+    expected: qs<HTMLTextAreaElement>('report-why').value.trim(),
     command: qs<HTMLTextAreaElement>('report-command').value,
     entry: qs<HTMLTextAreaElement>('report-entry').value,
   };

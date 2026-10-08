@@ -415,6 +415,8 @@
     <form method="dialog">
       <h2 id="report-dialog-title">Report a false positive</h2>
       <p id="report-dialog-body">This opens a prefilled public GitHub issue form. Nothing is sent until you submit it there. Paths were replaced with <code>&lt;project&gt;</code> and <code>~</code>; edit anything else you would rather not publish.</p>
+      <label class="report-field"><span>Why should it have been allowed? (optional)</span><textarea id="report-why" placeholder="What was the agent trying to do, and what makes the command safe there?"></textarea></label>
+      <label class="report-field"><span>Title</span><input id="report-title" type="text" spellcheck="false"></label>
       <label class="report-field"><span>Blocked command</span><textarea id="report-command" spellcheck="false"></textarea></label>
       <label class="report-field"><span>Audit log entry</span><textarea id="report-entry" spellcheck="false"></textarea></label>
       <div class="dialog-actions">

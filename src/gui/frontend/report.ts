@@ -2,6 +2,14 @@ const reportIssueUrl =
   'https://github.com/kenryu42/cc-safety-net/issues/new?template=false_positive.yml';
 
 const reportUrlLimit = 8000;
+const titleCommandLimit = 80;
+
+export const reportTitle = (ruleId: string | undefined, command: string) => {
+  const firstLine = command.trim().split('\n')[0] ?? '';
+  const shown =
+    firstLine.length > titleCommandLimit ? `${firstLine.slice(0, titleCommandLimit)}…` : firstLine;
+  return `[False Positive]: ${ruleId ? `${ruleId} ` : ''}blocked \`${shown}\``;
+};
 
 const endsAtPathBoundary = (following: string) => following === '' || /^[/\\\s'"]/.test(following);
 export const scrubReportPaths = (text: string, cwd?: string | null, home?: string | null) =>
