@@ -90,14 +90,6 @@ const sparkline = (byDay: number[], noun: string) => {
     .join('')}</div>`;
 };
 
-const ruleLabels = () =>
-  new Map(
-    [
-      ...(shared.policy?.destructiveCommandRules ?? []),
-      ...(shared.policy?.secretPatterns ?? []),
-    ].map((rule) => [rule.id, rule.label]),
-  );
-
 const ruleHref = (ruleId: string) =>
   ruleId.startsWith('custom.')
     ? `#rules?focus=${encodeURIComponent(ruleId)}`
@@ -131,7 +123,6 @@ const renderActivity = () => {
             </a></li>`,
           )
           .join('')}</ul>`;
-  const labels = ruleLabels();
   const top = Object.entries(loaded.counts.rules)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
@@ -142,8 +133,7 @@ const renderActivity = () => {
       : `<ul class="card list">${top
           .map(
             ([ruleId, count]) => `<li><a class="list-row rule-count-row" href="${ruleHref(ruleId)}">
-              <span class="rule-label">${escapeHtml(labels.get(ruleId) ?? ruleId)}</span>
-              <code class="feed-rule">${escapeHtml(ruleId)}</code>
+              <code class="rule-label">${escapeHtml(ruleId)}</code>
               <span class="count">${plural(count, 'block')}</span>
             </a></li>`,
           )
@@ -230,10 +220,7 @@ const starRepo = async (button: HTMLButtonElement) => {
 };
 
 export const initOverview = () => {
-  on('policy', () => {
-    renderStatusCard();
-    renderActivity();
-  });
+  on('policy', renderStatusCard);
   on('integrations', () => {
     renderStatusCard();
     renderAttention();

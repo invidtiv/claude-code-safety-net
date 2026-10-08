@@ -925,7 +925,7 @@ input[readonly] {
 
 .compact-row {
   display: grid;
-  grid-template-columns: 80px 110px minmax(0, 1fr) minmax(0, max-content);
+  grid-template-columns: 80px 110px minmax(0, 3fr) minmax(0, 2fr);
 }
 
 .compact-row time {
@@ -936,7 +936,7 @@ input[readonly] {
 
 .rule-count-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, max-content) 72px;
+  grid-template-columns: minmax(0, 1fr) 72px;
 }
 
 .rule-count-row .count {
@@ -2201,10 +2201,6 @@ button.chip:hover:not(:disabled) {
 
   .rule-count-row {
     grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .rule-count-row .feed-rule {
-    display: none;
   }
 
   .agent-row {

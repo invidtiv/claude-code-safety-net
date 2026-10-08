@@ -42,6 +42,18 @@ describe('the overview attention list', () => {
     ).toEqual([]);
   });
 
+  test('leaves a missing hook to the status card above it', () => {
+    expect(
+      attentionItems({
+        targets: [target('Codex', 'not-installed')],
+        update: null,
+        errors: 0,
+        suspects: 0,
+        days: 7,
+      }),
+    ).toEqual([]);
+  });
+
   test('links each problem to the place that fixes it', () => {
     expect(
       attentionItems({
@@ -52,10 +64,6 @@ describe('the overview attention list', () => {
         days: 7,
       }),
     ).toEqual([
-      {
-        text: 'No coding agent has an active hook, so no command is being checked.',
-        href: '#integrations',
-      },
       { text: 'Claude Code is detected but its hook is disabled.', href: '#integrations' },
       {
         text: '1 block in the last 7 days looks like a false positive.',

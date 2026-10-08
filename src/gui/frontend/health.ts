@@ -17,12 +17,6 @@ export const attentionItems = (facts: {
   days: number;
 }) =>
   [
-    facts.targets && !facts.targets.some((row) => row.status === 'active')
-      ? {
-          text: 'No coding agent has an active hook, so no command is being checked.',
-          href: '#integrations',
-        }
-      : null,
     ...(facts.targets ?? [])
       .filter((row) => row.status === 'disabled')
       .map((row) => ({

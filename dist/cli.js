@@ -1232,7 +1232,7 @@ input[readonly] {
 
 .compact-row {
   display: grid;
-  grid-template-columns: 80px 110px minmax(0, 1fr) minmax(0, max-content);
+  grid-template-columns: 80px 110px minmax(0, 3fr) minmax(0, 2fr);
 }
 
 .compact-row time {
@@ -1243,7 +1243,7 @@ input[readonly] {
 
 .rule-count-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, max-content) 72px;
+  grid-template-columns: minmax(0, 1fr) 72px;
 }
 
 .rule-count-row .count {
@@ -2510,10 +2510,6 @@ button.chip:hover:not(:disabled) {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .rule-count-row .feed-rule {
-    display: none;
-  }
-
   .agent-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
@@ -3713,10 +3709,6 @@ var groupIntegrations = (rows) => ({
   missing: rows.filter((row) => row.status !== "active" && row.version === null)
 });
 var attentionItems = (facts) => [
-  facts.targets && !facts.targets.some((row) => row.status === "active") ? {
-    text: "No coding agent has an active hook, so no command is being checked.",
-    href: "#integrations"
-  } : null,
   ...(facts.targets ?? []).filter((row) => row.status === "disabled").map((row) => ({
     text: \`\${row.label} is detected but its hook is disabled.\`,
     href: "#integrations"
@@ -3865,10 +3857,6 @@ var sparkline = (byDay, noun) => {
   const max = Math.max(...byDay, 1);
   return \`<div class="tile-spark" role="img" aria-label="\${escapeHtml(\`\${noun} per day, oldest to newest: \${byDay.join(", ")}\`)}">\${byDay.map((count) => \`<span class="spark-bar\${count === 0 ? " spark-zero" : ""}" style="height:\${count === 0 ? 2 : Math.max(3, Math.round(count / max * 36))}px" title="\${formatCount(count)}"></span>\`).join("")}</div>\`;
 };
-var ruleLabels = () => new Map([
-  ...shared.policy?.destructiveCommandRules ?? [],
-  ...shared.policy?.secretPatterns ?? []
-].map((rule) => [rule.id, rule.label]));
 var ruleHref = (ruleId) => ruleId.startsWith("custom.") ? \`#rules?focus=\${encodeURIComponent(ruleId)}\` : \`#activity?rule=\${encodeURIComponent(ruleId)}\`;
 var renderActivity = () => {
   if (!feed)
@@ -3885,12 +3873,10 @@ var renderActivity = () => {
               <code class="feed-command">\${escapeHtml(entry.segment || entry.command || "(no command recorded)")}</code>
               <span class="feed-rule">\${escapeHtml(entry.failureStage ? "guard error" : entry.ruleId ?? "")}</span>
             </a></li>\`).join("")}</ul>\`;
-  const labels = ruleLabels();
   const top = Object.entries(loaded.counts.rules).sort((a, b) => b[1] - a[1]).slice(0, 5);
   qs("top-rules-title").textContent = \`Most-triggered rules · last \${dayCount(loaded.days)}\`;
   qs("top-rules").innerHTML = top.length === 0 ? '<p class="empty">No rule has blocked anything yet.</p>' : \`<ul class="card list">\${top.map(([ruleId, count]) => \`<li><a class="list-row rule-count-row" href="\${ruleHref(ruleId)}">
-              <span class="rule-label">\${escapeHtml(labels.get(ruleId) ?? ruleId)}</span>
-              <code class="feed-rule">\${escapeHtml(ruleId)}</code>
+              <code class="rule-label">\${escapeHtml(ruleId)}</code>
               <span class="count">\${plural(count, "block")}</span>
             </a></li>\`).join("")}</ul>\`;
 };
@@ -3952,10 +3938,7 @@ var starRepo = async (button) => {
   renderStarPitch(true);
 };
 var initOverview = () => {
-  on("policy", () => {
-    renderStatusCard();
-    renderActivity();
-  });
+  on("policy", renderStatusCard);
   on("integrations", () => {
     renderStatusCard();
     renderAttention();
@@ -4227,7 +4210,7 @@ var markProjectOverride = (section, ruleId) => {
   if (projectDraft)
     markedFields.add(\`\${section}.overrides.\${ruleId}\`);
 };
-var ruleLabels2 = () => Object.fromEntries([...state?.destructiveCommandRules ?? [], ...state?.secretPatterns ?? []].map((rule) => [
+var ruleLabels = () => Object.fromEntries([...state?.destructiveCommandRules ?? [], ...state?.secretPatterns ?? []].map((rule) => [
   rule.id,
   rule.label
 ]));
@@ -4247,7 +4230,7 @@ var renderSavebar = () => {
   qs("save").textContent = projectDraft ? "Review and apply" : "Save";
   if (!shared.dirty || !state)
     return;
-  const changes = policyChanges(savedComparisonPolicy(), draftPolicy, ruleLabels2());
+  const changes = policyChanges(savedComparisonPolicy(), draftPolicy, ruleLabels());
   qs("savebar-title").textContent = changes.length === 0 ? "Unsaved changes" : plural(changes.length, "unsaved change");
   qs("savebar-summary").textContent = changes.slice(0, 3).join("; ") + (changes.length > 3 ? \`; and \${changes.length - 3} more\` : "");
 };
