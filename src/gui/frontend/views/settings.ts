@@ -6,7 +6,9 @@ import { dayCount } from '../format';
 import { clonePolicy } from '../project-draft';
 import {
   confirmDialog,
+  copyText,
   errorText,
+  icons,
   isWriteSuccess,
   notify,
   on,
@@ -108,6 +110,12 @@ const resetPolicy = async () => {
 };
 
 export const initSettings = () => {
+  document.querySelectorAll<HTMLElement>('[data-copy-path]').forEach((button) => {
+    button.innerHTML = `${icons.copy}<span>Copy</span>`;
+    button.addEventListener('click', () => {
+      void copyText(button, qs(button.dataset.copyPath ?? '').dataset.path ?? '');
+    });
+  });
   const stored = localStorage.getItem('cc-safety-net-theme') as Theme;
   applyTheme(themes.includes(stored) ? stored : 'auto');
   qs('settings-theme').addEventListener('click', (event) => {

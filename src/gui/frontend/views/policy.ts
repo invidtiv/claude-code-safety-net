@@ -34,6 +34,7 @@ import {
   qs,
   requestJson,
   shared,
+  showPath,
 } from '../ui';
 import { plural } from '../format';
 import { isSearchShortcut } from '../shortcuts';
@@ -783,10 +784,10 @@ const render = () => {
   preview = loaded.preview;
   shared.dirty = false;
   qs('policy-savebar').hidden = true;
-  qs('policy-path').textContent = loaded.path + (loaded.exists ? '' : ' (not created yet)');
+  showPath('policy-path', loaded.path, loaded.exists ? '' : ' (not created yet)');
   const projectPolicy = loaded.projectPolicy;
   qs('project-policy-row').hidden = !projectPolicy;
-  qs('project-policy-path').textContent = projectPolicy?.path ?? '';
+  showPath('project-policy-path', projectPolicy?.path ?? '');
   qs('project-policy-notice').hidden = !projectPolicy || projectPolicy.weakenings.length === 0;
   qs('project-policy-notice').textContent = projectPolicy
     ? ['The project policy changes these settings:', ...projectPolicy.weakenings].join('\n')

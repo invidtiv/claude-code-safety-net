@@ -275,6 +275,11 @@ main {
   gap: 12px 20px;
 }
 
+.page-head:has(> .icon-button) {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
 .page-head h2 {
   font-size: 22px;
   font-weight: 600;
@@ -436,7 +441,26 @@ label.setting-text {
 .setting-row.info code {
   flex: 1;
   min-width: 0;
+}
+
+.setting-row.info button {
+  align-self: center;
+}
+
+.path-part {
+  display: inline-block;
+  max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.icon-button {
+  width: var(--control-h);
+  padding: 0;
+}
+
+.icon-button svg {
+  width: 16px;
+  height: 16px;
 }
 
 .banner {
@@ -1003,7 +1027,7 @@ input[readonly] {
 
 .feed-summary {
   display: grid;
-  grid-template-columns: 68px 76px 112px minmax(0, 1fr) minmax(0, max-content);
+  grid-template-columns: 68px 76px 112px minmax(0, 3fr) minmax(0, 2fr);
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -2224,6 +2248,10 @@ button.chip:hover:not(:disabled) {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  .agent-status:empty {
+    display: none;
+  }
+
   .agent-version {
     display: none;
   }
@@ -2249,6 +2277,11 @@ button.chip:hover:not(:disabled) {
 
   .panel-head .section-actions > .quiet {
     margin-left: -13px;
+  }
+
+  .setting-row.info button {
+    align-self: flex-start;
+    margin-left: -9px;
   }
 
   .toolbar-search {

@@ -11,7 +11,7 @@ const statusText = (row: IntegrationRow) =>
   ({
     active: 'Hook installed',
     disabled: 'Hook disabled',
-    'not-installed': 'Not installed',
+    'not-installed': '',
     'not-inspected': 'Status unknown: its settings file could not be read',
   })[row.status];
 
@@ -33,24 +33,30 @@ const rowHtml = (row: IntegrationRow) => {
         }</button>`;
   return `<li class="setting-row agent-row">
     <span class="agent-name">${escapeHtml(row.label)}</span>
-    <span class="agent-version">${row.version === null ? 'Not detected' : `v${escapeHtml(row.version)}`}</span>
+    <span class="agent-version"${row.version === null ? '' : ` title="v${escapeHtml(row.version)}"`}>${row.version === null ? 'Not detected' : `v${escapeHtml(row.version)}`}</span>
     <span class="agent-status ${row.status}">${statusText(row)}</span>
     <span class="agent-action">${action}</span>
     ${row.note ? `<p class="notice ${row.note.kind}">${escapeHtml(row.note.text)}</p>` : ''}
   </li>`;
 };
 
-const groupHtml = (title: string, rows: IntegrationRow[]) =>
+const groupHtml = (title: string, rows: IntegrationRow[], sub = '') =>
   rows.length === 0
     ? ''
-    : `<section class="section"><div class="section-head"><h3 class="section-title">${title} <span class="count">${rows.length}</span></h3></div><ul class="card rows">${rows.map(rowHtml).join('')}</ul></section>`;
+    : `<section class="section"><div class="section-head"><div><h3 class="section-title">${title} <span class="count">${rows.length}</span></h3>${sub ? `<p class="section-sub">${sub}</p>` : ''}</div></div><ul class="card rows">${rows.map(rowHtml).join('')}</ul></section>`;
 
 const render = () => {
   if (!targets) return;
   const groups = groupIntegrations(targets);
   qs('integrations-list').innerHTML =
     groupHtml('Installed', groups.installed) +
-    groupHtml('Detected on this machine', groups.available) +
+    groupHtml(
+      'Detected on this machine',
+      groups.available,
+      groups.installed.length === 0
+        ? 'No agent has the hook yet. Install it for each agent you use; until then its commands are not checked.'
+        : '',
+    ) +
     (groups.missing.length === 0
       ? ''
       : `<details class="section missing-agents"><summary>Not detected on this machine <span class="count">${groups.missing.length}</span></summary><ul class="card rows">${groups.missing.map(rowHtml).join('')}</ul></details>`);

@@ -23,6 +23,12 @@ let scope = 'project';
 let pendingFocus: string | null = null;
 let directoryPickerFailed = false;
 
+const showPathEnd = () => {
+  const input = qs<HTMLInputElement>('rules-project-path');
+  input.title = input.value;
+  if (document.activeElement !== input) input.scrollLeft = input.scrollWidth;
+};
+
 const render = () => {
   const loaded = rulesData;
   if (!loaded) return;
@@ -31,6 +37,7 @@ const render = () => {
   const canPick = loaded.canPickDirectory && !directoryPickerFailed;
   pathInput.readOnly = canPick;
   qs('rules-choose-directory').hidden = !canPick;
+  showPathEnd();
   qs('rules-list').innerHTML =
     loaded.rulebooks.length === 0
       ? loaded.errors.length > 0
@@ -97,6 +104,7 @@ export const showRules = (params: URLSearchParams) => {
     qs('rules-composer-panel').scrollIntoView({ block: 'start' });
     qs('rules-composer-input').focus();
   }
+  showPathEnd();
   if (!requested) {
     void loadRules();
     return;
@@ -110,6 +118,7 @@ const setScope = (next: string) => {
     button.setAttribute('aria-pressed', String(button.dataset.rulesScope === next));
   });
   qs('rules-project-path-field').hidden = next !== 'project';
+  showPathEnd();
 };
 
 const chooseProjectDirectory = async (button: HTMLButtonElement) => {
@@ -119,6 +128,7 @@ const chooseProjectDirectory = async (button: HTMLButtonElement) => {
   button.disabled = false;
   if (result.ok && result.data.path) {
     qs<HTMLInputElement>('rules-project-path').value = result.data.path;
+    showPathEnd();
     return;
   }
   if (result.ok && result.data.cancelled) return;
@@ -167,6 +177,7 @@ export const initRules = () => {
   qs('rules-refresh').addEventListener('click', (event) => {
     void runRefresh(event.currentTarget as HTMLButtonElement, loadRules);
   });
+  qs('rules-project-path').addEventListener('blur', showPathEnd);
   qs('rules-choose-directory').addEventListener('click', (event) => {
     void chooseProjectDirectory(event.currentTarget as HTMLButtonElement);
   });

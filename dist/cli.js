@@ -582,6 +582,11 @@ main {
   gap: 12px 20px;
 }
 
+.page-head:has(> .icon-button) {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
 .page-head h2 {
   font-size: 22px;
   font-weight: 600;
@@ -743,7 +748,26 @@ label.setting-text {
 .setting-row.info code {
   flex: 1;
   min-width: 0;
+}
+
+.setting-row.info button {
+  align-self: center;
+}
+
+.path-part {
+  display: inline-block;
+  max-width: 100%;
   overflow-wrap: anywhere;
+}
+
+.icon-button {
+  width: var(--control-h);
+  padding: 0;
+}
+
+.icon-button svg {
+  width: 16px;
+  height: 16px;
 }
 
 .banner {
@@ -1310,7 +1334,7 @@ input[readonly] {
 
 .feed-summary {
   display: grid;
-  grid-template-columns: 68px 76px 112px minmax(0, 1fr) minmax(0, max-content);
+  grid-template-columns: 68px 76px 112px minmax(0, 3fr) minmax(0, 2fr);
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -2531,6 +2555,10 @@ button.chip:hover:not(:disabled) {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  .agent-status:empty {
+    display: none;
+  }
+
   .agent-version {
     display: none;
   }
@@ -2556,6 +2584,11 @@ button.chip:hover:not(:disabled) {
 
   .panel-head .section-actions > .quiet {
     margin-left: -13px;
+  }
+
+  .setting-row.info button {
+    align-self: flex-start;
+    margin-left: -9px;
   }
 
   .toolbar-search {
@@ -2649,7 +2682,7 @@ button.chip:hover:not(:disabled) {
               <h2>Activity</h2>
               <p>Commands your agents ran, newest first. Commands are secret-redacted when they are logged.</p>
             </div>
-            <button type="button" id="activity-refresh">Refresh</button>
+            <button type="button" class="quiet icon-button" id="activity-refresh" aria-label="Refresh activity" title="Refresh activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4v7h-7"></path></svg></button>
           </header>
           <div class="toolbar">
             <div class="pills" id="activity-decision" role="group" aria-label="Decision"></div>
@@ -2810,7 +2843,7 @@ button.chip:hover:not(:disabled) {
               <h2>Custom rules</h2>
               <p>Your own blocking rules from rulebooks, enforced on top of the built-in protections.</p>
             </div>
-            <button type="button" id="rules-refresh">Refresh</button>
+            <button type="button" class="quiet icon-button" id="rules-refresh" aria-label="Refresh custom rules" title="Refresh custom rules"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4v7h-7"></path></svg></button>
           </header>
           <section class="section" id="rules-diagnostics-panel" hidden>
             <div class="section-head">
@@ -2879,7 +2912,7 @@ button.chip:hover:not(:disabled) {
               <h2>Agents</h2>
               <p>Install or remove the CC Safety Net hook for each coding agent on this machine.</p>
             </div>
-            <button type="button" id="integrations-refresh">Refresh</button>
+            <button type="button" class="quiet icon-button" id="integrations-refresh" aria-label="Refresh agents" title="Refresh agents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4v7h-7"></path></svg></button>
           </header>
           <div class="agent-groups" id="integrations-list"><p class="empty">Checking agents…</p></div>
         </section>
@@ -2911,14 +2944,14 @@ button.chip:hover:not(:disabled) {
                 <div class="setting-text"><label for="retention-days"><strong>Keep logs for</strong></label><small id="retention-note">Every checked command is logged. Lowering this deletes older entries, and Activity can only look back this far.</small></div>
                 <span class="retention-input"><input type="number" id="retention-days" min="1" max="365" step="1" inputmode="numeric" aria-describedby="retention-note"><span id="retention-unit">days</span></span>
               </div>
-              <div class="setting-row info"><span class="setting-label">Log folder</span><code id="logs-path"></code></div>
+              <div class="setting-row info"><span class="setting-label">Log folder</span><code id="logs-path"></code><button type="button" class="quiet small" data-copy-path="logs-path" aria-label="Copy the log folder path"></button></div>
             </div>
           </section>
           <section class="section">
             <div class="section-head"><h3 class="section-title">Files</h3></div>
             <div class="card rows">
-              <div class="setting-row info"><span class="setting-label">Policy file</span><code id="policy-path"></code></div>
-              <div class="setting-row info" id="project-policy-row" hidden><span class="setting-label">Project policy</span><code id="project-policy-path"></code></div>
+              <div class="setting-row info"><span class="setting-label">Policy file</span><code id="policy-path"></code><button type="button" class="quiet small" data-copy-path="policy-path" aria-label="Copy the policy file path"></button></div>
+              <div class="setting-row info" id="project-policy-row" hidden><span class="setting-label">Project policy</span><code id="project-policy-path"></code><button type="button" class="quiet small" data-copy-path="project-policy-path" aria-label="Copy the project policy path"></button></div>
             </div>
             <p class="notice" id="project-policy-notice" hidden></p>
           </section>
@@ -3344,6 +3377,12 @@ var copyText = async (button, text) => {
     button.innerHTML = label;
   }, 1500);
 };
+var showPath = (id, path, suffix = "") => {
+  const element = qs(id);
+  element.dataset.path = path;
+  element.innerHTML = path.split(/(?<=[\\\\/])/).map((part) => \`<span class="path-part">\${escapeHtml(part)}</span>\`).join("") + escapeHtml(suffix);
+  document.querySelector(\`[data-copy-path="\${id}"]\`)?.toggleAttribute("hidden", path === "");
+};
 var runRefresh = async (button, reload) => {
   if (button.disabled)
     return;
@@ -3629,7 +3668,7 @@ var loadActivity = async () => {
   }
   activity = result.data;
   suspects = findSuspectEntries(activity.entries);
-  qs("logs-path").textContent = activity.logsDir ?? "Not available";
+  showPath("logs-path", activity.logsDir ?? "", activity.logsDir ? "" : "Not available");
   if (filters.agent !== "all" && !(filters.agent in activity.counts.agents))
     filters.agent = "all";
   if (filters.decision === "error" && activity.counts.errors === 0)
@@ -3796,7 +3835,7 @@ var integrationTargets = () => targets;
 var statusText = (row) => ({
   active: "Hook installed",
   disabled: "Hook disabled",
-  "not-installed": "Not installed",
+  "not-installed": "",
   "not-inspected": "Status unknown: its settings file could not be read"
 })[row.status];
 var rowHtml = (row) => {
@@ -3804,18 +3843,18 @@ var rowHtml = (row) => {
   const action = row.version === null ? "" : \`<button type="button" data-integration-action="\${uninstall ? "uninstall" : "install"}" data-integration-target="\${escapeHtml(row.target)}"\${busy.has(row.target) ? " disabled" : ""}>\${busy.has(row.target) ? uninstall ? "Uninstalling…" : "Installing…" : uninstall ? "Uninstall" : row.status === "disabled" ? "Enable" : "Install"}</button>\`;
   return \`<li class="setting-row agent-row">
     <span class="agent-name">\${escapeHtml(row.label)}</span>
-    <span class="agent-version">\${row.version === null ? "Not detected" : \`v\${escapeHtml(row.version)}\`}</span>
+    <span class="agent-version"\${row.version === null ? "" : \` title="v\${escapeHtml(row.version)}"\`}>\${row.version === null ? "Not detected" : \`v\${escapeHtml(row.version)}\`}</span>
     <span class="agent-status \${row.status}">\${statusText(row)}</span>
     <span class="agent-action">\${action}</span>
     \${row.note ? \`<p class="notice \${row.note.kind}">\${escapeHtml(row.note.text)}</p>\` : ""}
   </li>\`;
 };
-var groupHtml = (title, rows) => rows.length === 0 ? "" : \`<section class="section"><div class="section-head"><h3 class="section-title">\${title} <span class="count">\${rows.length}</span></h3></div><ul class="card rows">\${rows.map(rowHtml).join("")}</ul></section>\`;
+var groupHtml = (title, rows, sub = "") => rows.length === 0 ? "" : \`<section class="section"><div class="section-head"><div><h3 class="section-title">\${title} <span class="count">\${rows.length}</span></h3>\${sub ? \`<p class="section-sub">\${sub}</p>\` : ""}</div></div><ul class="card rows">\${rows.map(rowHtml).join("")}</ul></section>\`;
 var render = () => {
   if (!targets)
     return;
   const groups = groupIntegrations(targets);
-  qs("integrations-list").innerHTML = groupHtml("Installed", groups.installed) + groupHtml("Detected on this machine", groups.available) + (groups.missing.length === 0 ? "" : \`<details class="section missing-agents"><summary>Not detected on this machine <span class="count">\${groups.missing.length}</span></summary><ul class="card rows">\${groups.missing.map(rowHtml).join("")}</ul></details>\`);
+  qs("integrations-list").innerHTML = groupHtml("Installed", groups.installed) + groupHtml("Detected on this machine", groups.available, groups.installed.length === 0 ? "No agent has the hook yet. Install it for each agent you use; until then its commands are not checked." : "") + (groups.missing.length === 0 ? "" : \`<details class="section missing-agents"><summary>Not detected on this machine <span class="count">\${groups.missing.length}</span></summary><ul class="card rows">\${groups.missing.map(rowHtml).join("")}</ul></details>\`);
 };
 var loadIntegrations = async () => {
   const result = await requestJson("/api/integrations");
@@ -4737,10 +4776,10 @@ var render2 = () => {
   preview = loaded.preview;
   shared.dirty = false;
   qs("policy-savebar").hidden = true;
-  qs("policy-path").textContent = loaded.path + (loaded.exists ? "" : " (not created yet)");
+  showPath("policy-path", loaded.path, loaded.exists ? "" : " (not created yet)");
   const projectPolicy = loaded.projectPolicy;
   qs("project-policy-row").hidden = !projectPolicy;
-  qs("project-policy-path").textContent = projectPolicy?.path ?? "";
+  showPath("project-policy-path", projectPolicy?.path ?? "");
   qs("project-policy-notice").hidden = !projectPolicy || projectPolicy.weakenings.length === 0;
   qs("project-policy-notice").textContent = projectPolicy ? ["The project policy changes these settings:", ...projectPolicy.weakenings].join(\`
 \`) : "";
@@ -5380,6 +5419,12 @@ var requested = false;
 var scope = "project";
 var pendingFocus = null;
 var directoryPickerFailed = false;
+var showPathEnd = () => {
+  const input = qs("rules-project-path");
+  input.title = input.value;
+  if (document.activeElement !== input)
+    input.scrollLeft = input.scrollWidth;
+};
 var render3 = () => {
   const loaded = rulesData;
   if (!loaded)
@@ -5390,6 +5435,7 @@ var render3 = () => {
   const canPick = loaded.canPickDirectory && !directoryPickerFailed;
   pathInput.readOnly = canPick;
   qs("rules-choose-directory").hidden = !canPick;
+  showPathEnd();
   qs("rules-list").innerHTML = loaded.rulebooks.length === 0 ? loaded.errors.length > 0 ? '<p class="empty">Every rulebook was skipped because of errors, so no custom rule is enforced. See Problems above.</p>' : '<p class="empty">No custom rules yet. Use <strong>Create a rule</strong> below, or run <code>npx -y cc-safety-net rule init</code>.</p>' : loaded.rulebooks.map((rulebook) => \`<section class="rulebook">
     <div class="rulebook-head">
       <strong>\${escapeHtml(rulebook.name)}</strong>
@@ -5442,6 +5488,7 @@ var showRules = (params) => {
     qs("rules-composer-panel").scrollIntoView({ block: "start" });
     qs("rules-composer-input").focus();
   }
+  showPathEnd();
   if (!requested) {
     loadRules();
     return;
@@ -5455,6 +5502,7 @@ var setScope = (next) => {
     button.setAttribute("aria-pressed", String(button.dataset.rulesScope === next));
   });
   qs("rules-project-path-field").hidden = next !== "project";
+  showPathEnd();
 };
 var chooseProjectDirectory = async (button) => {
   if (button.disabled)
@@ -5464,6 +5512,7 @@ var chooseProjectDirectory = async (button) => {
   button.disabled = false;
   if (result.ok && result.data.path) {
     qs("rules-project-path").value = result.data.path;
+    showPathEnd();
     return;
   }
   if (result.ok && result.data.cancelled)
@@ -5502,6 +5551,7 @@ var initRules = () => {
   qs("rules-refresh").addEventListener("click", (event) => {
     runRefresh(event.currentTarget, loadRules);
   });
+  qs("rules-project-path").addEventListener("blur", showPathEnd);
   qs("rules-choose-directory").addEventListener("click", (event) => {
     chooseProjectDirectory(event.currentTarget);
   });
@@ -5598,6 +5648,12 @@ var resetPolicy = async () => {
     notify("Policy reset to the defaults", "ok", result.data.path);
 };
 var initSettings = () => {
+  document.querySelectorAll("[data-copy-path]").forEach((button) => {
+    button.innerHTML = \`\${icons.copy}<span>Copy</span>\`;
+    button.addEventListener("click", () => {
+      copyText(button, qs(button.dataset.copyPath ?? "").dataset.path ?? "");
+    });
+  });
   const stored = localStorage.getItem("cc-safety-net-theme");
   applyTheme(themes.includes(stored) ? stored : "auto");
   qs("settings-theme").addEventListener("click", (event) => {

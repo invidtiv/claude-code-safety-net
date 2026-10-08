@@ -74,7 +74,7 @@
               <h2>Activity</h2>
               <p>Commands your agents ran, newest first. Commands are secret-redacted when they are logged.</p>
             </div>
-            <button type="button" id="activity-refresh">Refresh</button>
+            <button type="button" class="quiet icon-button" id="activity-refresh" aria-label="Refresh activity" title="Refresh activity"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4v7h-7"></path></svg></button>
           </header>
           <div class="toolbar">
             <div class="pills" id="activity-decision" role="group" aria-label="Decision"></div>
@@ -235,7 +235,7 @@
               <h2>Custom rules</h2>
               <p>Your own blocking rules from rulebooks, enforced on top of the built-in protections.</p>
             </div>
-            <button type="button" id="rules-refresh">Refresh</button>
+            <button type="button" class="quiet icon-button" id="rules-refresh" aria-label="Refresh custom rules" title="Refresh custom rules"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4v7h-7"></path></svg></button>
           </header>
           <section class="section" id="rules-diagnostics-panel" hidden>
             <div class="section-head">
@@ -304,7 +304,7 @@
               <h2>Agents</h2>
               <p>Install or remove the CC Safety Net hook for each coding agent on this machine.</p>
             </div>
-            <button type="button" id="integrations-refresh">Refresh</button>
+            <button type="button" class="quiet icon-button" id="integrations-refresh" aria-label="Refresh agents" title="Refresh agents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4v7h-7"></path></svg></button>
           </header>
           <div class="agent-groups" id="integrations-list"><p class="empty">Checking agents…</p></div>
         </section>
@@ -336,14 +336,14 @@
                 <div class="setting-text"><label for="retention-days"><strong>Keep logs for</strong></label><small id="retention-note">Every checked command is logged. Lowering this deletes older entries, and Activity can only look back this far.</small></div>
                 <span class="retention-input"><input type="number" id="retention-days" min="1" max="365" step="1" inputmode="numeric" aria-describedby="retention-note"><span id="retention-unit">days</span></span>
               </div>
-              <div class="setting-row info"><span class="setting-label">Log folder</span><code id="logs-path"></code></div>
+              <div class="setting-row info"><span class="setting-label">Log folder</span><code id="logs-path"></code><button type="button" class="quiet small" data-copy-path="logs-path" aria-label="Copy the log folder path"></button></div>
             </div>
           </section>
           <section class="section">
             <div class="section-head"><h3 class="section-title">Files</h3></div>
             <div class="card rows">
-              <div class="setting-row info"><span class="setting-label">Policy file</span><code id="policy-path"></code></div>
-              <div class="setting-row info" id="project-policy-row" hidden><span class="setting-label">Project policy</span><code id="project-policy-path"></code></div>
+              <div class="setting-row info"><span class="setting-label">Policy file</span><code id="policy-path"></code><button type="button" class="quiet small" data-copy-path="policy-path" aria-label="Copy the policy file path"></button></div>
+              <div class="setting-row info" id="project-policy-row" hidden><span class="setting-label">Project policy</span><code id="project-policy-path"></code><button type="button" class="quiet small" data-copy-path="project-policy-path" aria-label="Copy the project policy path"></button></div>
             </div>
             <p class="notice" id="project-policy-notice" hidden></p>
           </section>

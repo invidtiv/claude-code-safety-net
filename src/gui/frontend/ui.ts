@@ -110,6 +110,17 @@ export const copyText = async (button: HTMLElement, text: string) => {
   }, 1500);
 };
 
+export const showPath = (id: string, path: string, suffix = '') => {
+  const element = qs(id);
+  element.dataset.path = path;
+  element.innerHTML =
+    path
+      .split(/(?<=[\\/])/)
+      .map((part) => `<span class="path-part">${escapeHtml(part)}</span>`)
+      .join('') + escapeHtml(suffix);
+  document.querySelector(`[data-copy-path="${id}"]`)?.toggleAttribute('hidden', path === '');
+};
+
 export const runRefresh = async (button: HTMLButtonElement, reload: () => Promise<unknown>) => {
   if (button.disabled) return;
   button.disabled = true;

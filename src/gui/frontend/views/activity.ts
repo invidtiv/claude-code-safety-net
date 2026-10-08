@@ -22,6 +22,7 @@ import {
   requestJson,
   runRefresh,
   shared,
+  showPath,
 } from '../ui';
 
 const filters = initialActivityFilters();
@@ -195,7 +196,7 @@ export const loadActivity = async () => {
   }
   activity = result.data as ActivityFeed;
   suspects = findSuspectEntries(activity.entries);
-  qs('logs-path').textContent = activity.logsDir ?? 'Not available';
+  showPath('logs-path', activity.logsDir ?? '', activity.logsDir ? '' : 'Not available');
   if (filters.agent !== 'all' && !(filters.agent in activity.counts.agents)) filters.agent = 'all';
   if (filters.decision === 'error' && activity.counts.errors === 0) filters.decision = 'deny';
   if (filters.decision === 'suspect' && suspects.size === 0) filters.decision = 'deny';
