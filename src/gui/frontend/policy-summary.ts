@@ -1,4 +1,5 @@
 import type { SafetyLevelCapability } from '@/core/policy/safety-level';
+import { viewHash } from './format';
 import type { Policy, RuleOverrides, SafetyLevel } from './project-draft';
 import type { CapabilitySources, DestructiveRule, RuleState } from './types';
 
@@ -47,6 +48,17 @@ export const commandRuleGroups = <T extends { category: string; catastrophic?: b
     })),
   ];
 };
+
+export const policyFiltersFromParams = (params: URLSearchParams) => ({
+  query: params.get('q') ?? '',
+  changedOnly: params.get('show') === 'changed',
+});
+
+export const policyHash = (filters: ReturnType<typeof policyFiltersFromParams>) =>
+  viewHash('policy', [
+    ['q', filters.query, ''],
+    ['show', filters.changedOnly ? 'changed' : 'all', 'all'],
+  ]);
 
 export const ruleNote = (
   rule: Pick<DestructiveRule, 'activationCapability'>,

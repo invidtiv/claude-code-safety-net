@@ -93,7 +93,7 @@ const sparkline = (byDay: number[], noun: string) => {
 const ruleHref = (ruleId: string) =>
   ruleId.startsWith('custom.')
     ? `#rules?focus=${encodeURIComponent(ruleId)}`
-    : `#activity?rule=${encodeURIComponent(ruleId)}`;
+    : `#activity?q=${encodeURIComponent(ruleId)}`;
 
 const renderActivity = () => {
   if (!feed) return;

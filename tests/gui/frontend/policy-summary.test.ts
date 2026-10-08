@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { clonePolicy, type Policy } from '@/gui/frontend/project-draft';
-import { commandRuleGroups, policyChanges, ruleNote } from '@/gui/frontend/policy-summary';
+import {
+  commandRuleGroups,
+  policyChanges,
+  policyFiltersFromParams,
+  policyHash,
+  ruleNote,
+} from '@/gui/frontend/policy-summary';
 
 describe('commandRuleGroups', () => {
   const command = (id: string, category: string, catastrophic?: boolean) => ({
@@ -107,5 +113,22 @@ describe('the unsaved change summary', () => {
       'Git push force: off',
       'Allowed delete paths: 2 added, 1 removed',
     ]);
+  });
+});
+
+describe('the protections address', () => {
+  test('is the bare view when nothing is filtered', () => {
+    expect(policyHash({ query: '', changedOnly: false })).toBe('policy');
+    expect(policyFiltersFromParams(new URLSearchParams(''))).toEqual({
+      query: '',
+      changedOnly: false,
+    });
+  });
+
+  test('records the search and the changed-only view and reads them back', () => {
+    const filters = { query: 'git.push force', changedOnly: true };
+    const hash = policyHash(filters);
+    expect(hash).toBe('policy?q=git.push+force&show=changed');
+    expect(policyFiltersFromParams(new URLSearchParams(hash.split('?')[1]))).toEqual(filters);
   });
 });

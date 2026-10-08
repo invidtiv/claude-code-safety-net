@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { initialActivityFilters, visibleEntries } from '@/gui/frontend/activity-filter';
+import {
+  activityFiltersFromParams,
+  activityHash,
+  initialActivityFilters,
+  visibleEntries,
+} from '@/gui/frontend/activity-filter';
 
 const ts = '2026-10-06T09:00:00.000Z';
 const entries = [
@@ -36,8 +41,40 @@ describe('the activity list', () => {
     ]);
   });
 
+  test('matches a search as typed, ignoring case and outer spaces', () => {
+    expect(commands({ ...initialActivityFilters(), query: ' RM.Recursive ' })).toEqual([
+      'rm -rf ~/x',
+    ]);
+  });
+
   test('shows every decision when asked for all of them', () => {
     expect(commands({ ...initialActivityFilters(), decision: 'all' })).toHaveLength(4);
     expect(commands({ ...initialActivityFilters(), decision: 'error' })).toEqual(['echo $(']);
+  });
+});
+
+describe('the activity address', () => {
+  test('is the bare view for the default filters', () => {
+    expect(activityHash(initialActivityFilters())).toBe('activity');
+  });
+
+  test('records every filter that differs from the default and reads it back', () => {
+    const filters = {
+      days: 30,
+      decision: 'all' as const,
+      agent: 'codex',
+      query: 'Git.Reset',
+      command: 'git reset',
+    };
+    const hash = activityHash(filters);
+    expect(hash).toBe('activity?days=30&decision=all&agent=codex&q=Git.Reset&command=git+reset');
+    expect(activityFiltersFromParams(new URLSearchParams(hash.split('?')[1]))).toEqual(filters);
+  });
+
+  test('falls back to the defaults for missing or unknown values', () => {
+    expect(activityFiltersFromParams(new URLSearchParams(''))).toEqual(initialActivityFilters());
+    expect(activityFiltersFromParams(new URLSearchParams('decision=nope&days=abc'))).toEqual(
+      initialActivityFilters(),
+    );
   });
 });

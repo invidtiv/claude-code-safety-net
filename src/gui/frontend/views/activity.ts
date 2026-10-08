@@ -1,6 +1,12 @@
 import { findSuspectEntries, formatRelativeTime } from '@/audit/display';
 import { DEFAULT_AUDIT_RETENTION_DAYS } from '@/core/policy/audit-retention-days';
-import { type Decision, initialActivityFilters, visibleEntries } from '../activity-filter';
+import {
+  activityFiltersFromParams,
+  activityHash,
+  type Decision,
+  initialActivityFilters,
+  visibleEntries,
+} from '../activity-filter';
 import { dayCount, formatCount, plural } from '../format';
 import { buildReportRequest, scrubReportPaths } from '../report';
 import type { ActivityFeed, FeedEntry } from '../types';
@@ -23,6 +29,11 @@ let activity: ActivityFeed | null = null;
 let suspects = new Set<FeedEntry>();
 let renderedEntries: FeedEntry[] = [];
 let queryTimer: number | undefined;
+
+const syncHash = () => {
+  if (document.body.dataset.view === 'activity')
+    history.replaceState(null, '', `#${activityHash(filters)}`);
+};
 
 export const retentionDays = () =>
   shared.policy?.policy.audit.retention_days ?? DEFAULT_AUDIT_RETENTION_DAYS;
@@ -190,6 +201,7 @@ export const loadActivity = async () => {
   if (filters.decision === 'suspect' && suspects.size === 0) filters.decision = 'deny';
   renderControls();
   renderFeed();
+  syncHash();
 };
 
 export const limitActivityDays = (days: number) => {
@@ -199,18 +211,20 @@ export const limitActivityDays = (days: number) => {
 const rerender = () => {
   renderControls();
   renderFeed();
+  syncHash();
 };
 
 export const showActivity = (params: URLSearchParams) => {
-  const rule = params.get('rule');
-  const command = params.get('command');
-  const decision = params.get('decision') as Decision | null;
-  if (!rule && !command && !decision) return;
-  filters.query = (rule ?? '').toLowerCase();
-  filters.command = command ?? '';
-  filters.decision = decision ?? 'deny';
-  filters.agent = 'all';
-  qs<HTMLInputElement>('activity-search').value = rule ?? '';
+  const next = activityFiltersFromParams(params);
+  next.days = Math.min(next.days, retentionDays());
+  if (activityHash(next) === activityHash(filters)) return;
+  const reload = next.days !== filters.days;
+  Object.assign(filters, next);
+  qs<HTMLInputElement>('activity-search').value = filters.query;
+  if (reload && activity) {
+    void loadActivity();
+    return;
+  }
   rerender();
 };
 
@@ -257,17 +271,21 @@ export const initActivity = () => {
     if (activity) rerender();
   });
   qs('activity-search').addEventListener('input', (event) => {
-    filters.query = (event.target as HTMLInputElement).value.trim().toLowerCase();
+    filters.query = (event.target as HTMLInputElement).value;
     if (filters.command) {
       filters.command = '';
       renderControls();
     }
     clearTimeout(queryTimer);
-    queryTimer = setTimeout(renderFeed, 120);
+    queryTimer = setTimeout(() => {
+      renderFeed();
+      syncHash();
+    }, 120);
   });
   qs('activity-agent').addEventListener('change', (event) => {
     filters.agent = (event.target as HTMLSelectElement).value;
     renderFeed();
+    syncHash();
   });
   qs('activity-days').addEventListener('change', (event) => {
     filters.days = Number((event.target as HTMLSelectElement).value);

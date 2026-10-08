@@ -15,6 +15,8 @@ import {
   commandRuleGroups,
   levelName,
   policyChanges,
+  policyFiltersFromParams,
+  policyHash,
   ruleNote,
   safetyLevels,
   tierForRule,
@@ -70,6 +72,23 @@ const groupExpanded = new Map<string, boolean>();
 
 const searchQuery = () => qs<HTMLInputElement>('policy-search').value.trim().toLowerCase();
 const filtering = () => searchQuery() !== '' || showChangedOnly;
+const currentFilters = () => ({
+  query: qs<HTMLInputElement>('policy-search').value,
+  changedOnly: showChangedOnly,
+});
+const syncHash = () => {
+  if (document.body.dataset.view === 'policy')
+    history.replaceState(null, '', `#${policyHash(currentFilters())}`);
+};
+const setChangedOnly = (changedOnly: boolean) => {
+  showChangedOnly = changedOnly;
+  document.querySelectorAll('[data-policy-show]').forEach((button) => {
+    button.setAttribute(
+      'aria-pressed',
+      String((button.getAttribute('data-policy-show') === 'changed') === changedOnly),
+    );
+  });
+};
 
 const collectFormPolicy = () => ({
   version: 1,
@@ -1275,12 +1294,10 @@ const handleClick = (target: Element) => {
   }
   const show = target.closest<HTMLElement>('[data-policy-show]');
   if (show) {
-    showChangedOnly = show.dataset.policyShow === 'changed';
-    document.querySelectorAll('[data-policy-show]').forEach((button) => {
-      button.setAttribute('aria-pressed', String(button === show));
-    });
+    setChangedOnly(show.dataset.policyShow === 'changed');
     groupExpanded.clear();
     renderRules();
+    syncHash();
     return;
   }
   const example = state?.destructiveCommandRules.find(
@@ -1343,17 +1360,16 @@ const handleClick = (target: Element) => {
 };
 
 export const showPolicy = (params: URLSearchParams) => {
-  const query = params.get('q');
-  if (query === null) return;
-  qs<HTMLInputElement>('policy-search').value = query;
-  showChangedOnly = false;
-  document.querySelectorAll('[data-policy-show]').forEach((button) => {
-    button.setAttribute('aria-pressed', String(button.getAttribute('data-policy-show') === 'all'));
-  });
-  groupExpanded.clear();
-  renderRules();
+  const next = policyFiltersFromParams(params);
+  if (policyHash(next) !== policyHash(currentFilters())) {
+    qs<HTMLInputElement>('policy-search').value = next.query;
+    setChangedOnly(next.changedOnly);
+    groupExpanded.clear();
+    renderRules();
+  }
+  if (!next.query) return;
   document
-    .querySelector(`[data-rule-row="${CSS.escape(query)}"]`)
+    .querySelector(`[data-rule-row="${CSS.escape(next.query)}"]`)
     ?.scrollIntoView({ block: 'center' });
 };
 
@@ -1381,6 +1397,7 @@ export const initPolicy = () => {
   qs('policy-search').addEventListener('input', () => {
     groupExpanded.clear();
     renderRules();
+    syncHash();
   });
   view.addEventListener('keydown', (event) => {
     const input = event.target;
