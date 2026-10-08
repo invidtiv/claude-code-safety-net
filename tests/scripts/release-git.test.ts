@@ -42,6 +42,7 @@ function getRepositorySeed() {
   writeFileSync(join(source, 'file.txt'), 'base\n');
   mkdirSync(join(source, '.claude-plugin'));
   mkdirSync(join(source, '.codex-plugin'));
+  mkdirSync(join(source, '.cursor-plugin'));
   writeFileSync(
     join(source, 'package.json'),
     JSON.stringify({ name: 'cc-safety-net-release-test', version: '1.0.0' }),
@@ -51,6 +52,10 @@ function getRepositorySeed() {
     JSON.stringify({ version: '1.0.0' }),
   );
   writeFileSync(join(source, '.codex-plugin', 'plugin.json'), JSON.stringify({ version: '1.0.0' }));
+  writeFileSync(
+    join(source, '.cursor-plugin', 'plugin.json'),
+    JSON.stringify({ version: '1.0.0' }),
+  );
   writeFileSync(join(source, 'kimi.plugin.json'), JSON.stringify({ version: '1.0.0' }));
   git(
     source,
@@ -59,6 +64,7 @@ function getRepositorySeed() {
     'package.json',
     '.claude-plugin/plugin.json',
     '.codex-plugin/plugin.json',
+    '.cursor-plugin/plugin.json',
     'kimi.plugin.json',
   );
   git(source, 'commit', '-m', 'base');
@@ -105,6 +111,9 @@ function prepareVersion(repo: string, version: string) {
   const pkg = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
   const plugin = JSON.parse(readFileSync(join(repo, '.claude-plugin', 'plugin.json'), 'utf8'));
   const codexPlugin = JSON.parse(readFileSync(join(repo, '.codex-plugin', 'plugin.json'), 'utf8'));
+  const cursorPlugin = JSON.parse(
+    readFileSync(join(repo, '.cursor-plugin', 'plugin.json'), 'utf8'),
+  );
   writeFileSync(join(repo, 'package.json'), JSON.stringify({ ...pkg, version }));
   writeFileSync(
     join(repo, '.claude-plugin', 'plugin.json'),
@@ -113,6 +122,10 @@ function prepareVersion(repo: string, version: string) {
   writeFileSync(
     join(repo, '.codex-plugin', 'plugin.json'),
     JSON.stringify({ ...codexPlugin, version }),
+  );
+  writeFileSync(
+    join(repo, '.cursor-plugin', 'plugin.json'),
+    JSON.stringify({ ...cursorPlugin, version }),
   );
   writeFileSync(
     join(repo, 'kimi.plugin.json'),
@@ -288,6 +301,26 @@ describe('release git transaction', () => {
 
         rmSync(join(repo, 'kimi.plugin.json'));
         await expect(runTransaction(repo, '2.0.0')).rejects.toThrow('kimi.plugin.json');
+        expectRemoteUnchanged(root, remote, before);
+      });
+    });
+  }, 30_000);
+
+  test('the release transaction rejects a missing or mismatched cursor manifest', async () => {
+    await withTempDir('cc-safety-net-release-', async (root) => {
+      await withPreparedRelease(root, async ({ remote, repo, before }) => {
+        writeFileSync(
+          join(repo, '.cursor-plugin', 'plugin.json'),
+          JSON.stringify({ version: '1.0.0' }),
+        );
+        await expect(runTransaction(repo, '2.0.0')).rejects.toThrow(
+          'Prepared manifests must all contain 2.0.0',
+        );
+
+        rmSync(join(repo, '.cursor-plugin', 'plugin.json'));
+        await expect(runTransaction(repo, '2.0.0')).rejects.toThrow(
+          join('.cursor-plugin', 'plugin.json'),
+        );
         expectRemoteUnchanged(root, remote, before);
       });
     });

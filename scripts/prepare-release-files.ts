@@ -10,6 +10,7 @@ export function updateReleaseManifests(cwd: string, requestedVersion: string): v
     'package.json',
     '.claude-plugin/plugin.json',
     '.codex-plugin/plugin.json',
+    '.cursor-plugin/plugin.json',
     'kimi.plugin.json',
   ].forEach((relativePath) => {
     const path = resolve(cwd, relativePath);

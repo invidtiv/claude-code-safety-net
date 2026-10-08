@@ -9,6 +9,7 @@ describe('release file preparation', () => {
     await withTempDir('cc-safety-net-prepare-', (directory) => {
       mkdirSync(join(directory, '.claude-plugin'));
       mkdirSync(join(directory, '.codex-plugin'));
+      mkdirSync(join(directory, '.cursor-plugin'));
       writeFileSync(join(directory, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n');
       writeFileSync(
         join(directory, '.claude-plugin', 'plugin.json'),
@@ -16,6 +17,10 @@ describe('release file preparation', () => {
       );
       writeFileSync(
         join(directory, '.codex-plugin', 'plugin.json'),
+        '{"name":"fixture","version":"1.0.0"}\n',
+      );
+      writeFileSync(
+        join(directory, '.cursor-plugin', 'plugin.json'),
         '{"name":"fixture","version":"1.0.0"}\n',
       );
       writeFileSync(join(directory, 'kimi.plugin.json'), '{"name":"fixture","version":"1.0.0"}\n');
@@ -31,6 +36,9 @@ describe('release file preparation', () => {
       expect(
         JSON.parse(readFileSync(join(directory, '.codex-plugin', 'plugin.json'), 'utf8')).version,
       ).toBe('2.0.0');
+      expect(
+        JSON.parse(readFileSync(join(directory, '.cursor-plugin', 'plugin.json'), 'utf8')).version,
+      ).toBe('2.0.0');
       expect(JSON.parse(readFileSync(join(directory, 'kimi.plugin.json'), 'utf8')).version).toBe(
         '2.0.0',
       );
@@ -41,11 +49,13 @@ describe('release file preparation', () => {
     await withTempDir('cc-safety-net-prepare-', (directory) => {
       mkdirSync(join(directory, '.claude-plugin'));
       mkdirSync(join(directory, '.codex-plugin'));
+      mkdirSync(join(directory, '.cursor-plugin'));
       const formatted =
         '{\n  "name": "fixture",\n  "version": "1.0.0",\n  "keywords": ["kimi-code", "security"]\n}\n';
       writeFileSync(join(directory, 'package.json'), formatted);
       writeFileSync(join(directory, '.claude-plugin', 'plugin.json'), formatted);
       writeFileSync(join(directory, '.codex-plugin', 'plugin.json'), formatted);
+      writeFileSync(join(directory, '.cursor-plugin', 'plugin.json'), formatted);
       writeFileSync(join(directory, 'kimi.plugin.json'), formatted);
 
       updateReleaseManifests(directory, '2.0.0');
@@ -54,6 +64,9 @@ describe('release file preparation', () => {
         formatted.replace('"version": "1.0.0"', '"version": "2.0.0"'),
       );
       expect(readFileSync(join(directory, '.codex-plugin', 'plugin.json'), 'utf8')).toBe(
+        formatted.replace('"version": "1.0.0"', '"version": "2.0.0"'),
+      );
+      expect(readFileSync(join(directory, '.cursor-plugin', 'plugin.json'), 'utf8')).toBe(
         formatted.replace('"version": "1.0.0"', '"version": "2.0.0"'),
       );
     });
@@ -69,5 +82,6 @@ describe('release file preparation', () => {
       .find((line) => line.includes('tar -czf "$RUNNER_TEMP/prepared-release.tgz"'));
 
     expect(artifactCommand?.split(' ')).toContain('.codex-plugin/plugin.json');
+    expect(artifactCommand?.split(' ')).toContain('.cursor-plugin/plugin.json');
   });
 });

@@ -82,8 +82,8 @@
     "eval": "claude plugin eval . --ablation with-without --judge-model sonnet --allow-tools \"Bash(npx -y cc-safety-net:*)\" \"Bash(npx cc-safety-net:*)\"",
     "prepare": "lefthook install",
     "lint:fix": "oxlint --fix src tests scripts knip.ts",
-    "format": "oxfmt src tests scripts knip.ts .oxfmtrc.json .oxlintrc.json package.json kimi.plugin.json tsconfig.json tsconfig.build.json tsconfig.gui.json .claude-plugin .codex-plugin assets/cc-safety-net.schema.json docs/residual-risk-registry.json hooks",
-    "format:check": "oxfmt --check src tests scripts knip.ts .oxfmtrc.json .oxlintrc.json package.json kimi.plugin.json tsconfig.json tsconfig.build.json tsconfig.gui.json .claude-plugin .codex-plugin assets/cc-safety-net.schema.json docs/residual-risk-registry.json hooks"
+    "format": "oxfmt src tests scripts knip.ts .oxfmtrc.json .oxlintrc.json package.json kimi.plugin.json tsconfig.json tsconfig.build.json tsconfig.gui.json .claude-plugin .codex-plugin .cursor-plugin assets/cc-safety-net.schema.json docs/residual-risk-registry.json hooks",
+    "format:check": "oxfmt --check src tests scripts knip.ts .oxfmtrc.json .oxlintrc.json package.json kimi.plugin.json tsconfig.json tsconfig.build.json tsconfig.gui.json .claude-plugin .codex-plugin .cursor-plugin assets/cc-safety-net.schema.json docs/residual-risk-registry.json hooks"
   },
   "devDependencies": {
     "@ampcode/plugin": "0.0.0-20260724002649-ga3413e7",

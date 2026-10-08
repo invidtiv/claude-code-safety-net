@@ -9,6 +9,7 @@ const RELEASE_PATHS = [
   'package.json',
   '.claude-plugin/plugin.json',
   '.codex-plugin/plugin.json',
+  '.cursor-plugin/plugin.json',
   'kimi.plugin.json',
   'assets/cc-safety-net.schema.json',
   'dist',
@@ -89,6 +90,7 @@ export async function runReleaseTransaction(options: {
     workingPackageVersion !== version ||
     workingPluginVersion !== version ||
     workingCodexPluginVersion !== version ||
+    manifestVersion(resolve(options.cwd, '.cursor-plugin/plugin.json')) !== version ||
     manifestVersion(resolve(options.cwd, 'kimi.plugin.json')) !== version
   ) {
     throw new Error(`Prepared manifests must all contain ${version}`);
@@ -119,6 +121,7 @@ export async function runReleaseTransaction(options: {
     packageVersion: committedManifestVersion(options.cwd, 'package.json'),
     pluginVersion: committedManifestVersion(options.cwd, '.claude-plugin/plugin.json'),
     codexVersion: committedManifestVersion(options.cwd, '.codex-plugin/plugin.json'),
+    cursorVersion: committedManifestVersion(options.cwd, '.cursor-plugin/plugin.json'),
     kimiVersion: committedManifestVersion(options.cwd, 'kimi.plugin.json'),
     headCommit,
     tagCommit,
