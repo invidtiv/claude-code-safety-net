@@ -54,14 +54,21 @@ export function verifyRepositoryPlugin(): void {
   if (codexCommand !== 'node "${PLUGIN_ROOT}/dist/bin/cc-safety-net.js" hook --codex') {
     throw new Error('Codex plugin hook target drifted');
   }
-  const cursorHooks = JSON.parse(readFileSync('hooks/cursor.json', 'utf8')) as {
-    hooks: { preToolUse: Array<{ command: string }> };
-  };
   if (
-    cursorHooks.hooks.preToolUse[0]?.command !==
-    'node "${CURSOR_PLUGIN_ROOT}/dist/bin/cc-safety-net.js" hook --cursor'
+    !Bun.deepEquals(JSON.parse(readFileSync('hooks/cursor.json', 'utf8')), {
+      version: 1,
+      hooks: {
+        preToolUse: [
+          {
+            command: 'node "${CURSOR_PLUGIN_ROOT}/dist/bin/cc-safety-net.js" hook --cursor',
+            timeout: 30,
+            failClosed: true,
+          },
+        ],
+      },
+    })
   ) {
-    throw new Error('Cursor plugin hook target drifted');
+    throw new Error('Cursor plugin hook config drifted');
   }
   run(['node', '--check', 'dist/bin/cc-safety-net.js']);
   run(['git', 'ls-files', '--error-unmatch', 'assets/cc-safety-net.schema.json']);
