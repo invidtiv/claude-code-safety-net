@@ -15,6 +15,7 @@ describe('release state', () => {
       packageVersion: '2.0.0',
       pluginVersion: '2.0.0',
       codexVersion: '2.0.0',
+      cursorVersion: '2.0.0',
       kimiVersion: '2.0.0',
       headCommit: 'release',
       tagCommit: 'release',
@@ -42,6 +43,12 @@ describe('release state', () => {
     expect(() =>
       classifyReleaseState({
         ...matchingRelease,
+        cursorVersion: '1.9.0',
+      }),
+    ).toThrow('version files disagree');
+    expect(() =>
+      classifyReleaseState({
+        ...matchingRelease,
         headCommit: 'other',
       }),
     ).toThrow('immutable tag');
@@ -54,6 +61,7 @@ describe('release state', () => {
         packageVersion: '2.0.0',
         pluginVersion: '2.0.0',
         codexVersion: '2.0.0',
+        cursorVersion: '2.0.0',
         kimiVersion: '2.0.0',
         headCommit: 'release',
         tagCommit: null,
@@ -69,6 +77,7 @@ describe('release state', () => {
         packageVersion: '2.0.0',
         pluginVersion: '2.0.0',
         codexVersion: '2.0.0',
+        cursorVersion: '2.0.0',
         kimiVersion: '2.0.0',
         headCommit: 'release',
         tagCommit: 'release',
@@ -84,6 +93,7 @@ describe('release state', () => {
         packageVersion: '2.0.0',
         pluginVersion: '2.0.0',
         codexVersion: '2.0.0',
+        cursorVersion: '2.0.0',
         kimiVersion: '2.0.0',
         headCommit: 'release',
         tagCommit: 'release',

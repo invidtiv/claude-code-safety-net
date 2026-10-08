@@ -20,11 +20,22 @@ export function verifyRepositoryPlugin(): void {
     hooks: string;
     interface: { logo: string; websiteURL: string };
   };
-  if (pkg.version !== plugin.version || pkg.version !== codexPlugin.version) {
+  const cursorPlugin = JSON.parse(readFileSync('.cursor-plugin/plugin.json', 'utf8')) as {
+    version: string;
+    hooks: string;
+  };
+  if (
+    pkg.version !== plugin.version ||
+    pkg.version !== codexPlugin.version ||
+    pkg.version !== cursorPlugin.version
+  ) {
     throw new Error('Package and plugin versions disagree');
   }
   if (codexPlugin.hooks !== './hooks/codex.json') {
     throw new Error('Codex plugin hook path drifted');
+  }
+  if (cursorPlugin.hooks !== './hooks/cursor.json') {
+    throw new Error('Cursor plugin hook path drifted');
   }
   if (codexPlugin.interface.websiteURL !== 'https://ccsafetynet.com') {
     throw new Error('Codex plugin website drifted');
@@ -43,12 +54,23 @@ export function verifyRepositoryPlugin(): void {
   if (codexCommand !== 'node "${PLUGIN_ROOT}/dist/bin/cc-safety-net.js" hook --codex') {
     throw new Error('Codex plugin hook target drifted');
   }
+  const cursorHooks = JSON.parse(readFileSync('hooks/cursor.json', 'utf8')) as {
+    hooks: { preToolUse: Array<{ command: string }> };
+  };
+  if (
+    cursorHooks.hooks.preToolUse[0]?.command !==
+    'node "${CURSOR_PLUGIN_ROOT}/dist/bin/cc-safety-net.js" hook --cursor'
+  ) {
+    throw new Error('Cursor plugin hook target drifted');
+  }
   run(['node', '--check', 'dist/bin/cc-safety-net.js']);
   run(['git', 'ls-files', '--error-unmatch', 'assets/cc-safety-net.schema.json']);
   run(['git', 'ls-files', '--error-unmatch', '.claude-plugin/plugin.json']);
   run(['git', 'ls-files', '--error-unmatch', '.codex-plugin/plugin.json']);
+  run(['git', 'ls-files', '--error-unmatch', '.cursor-plugin/plugin.json']);
   run(['git', 'ls-files', '--error-unmatch', 'hooks/hooks.json']);
   run(['git', 'ls-files', '--error-unmatch', 'hooks/codex.json']);
+  run(['git', 'ls-files', '--error-unmatch', 'hooks/cursor.json']);
   run(['git', 'ls-files', '--error-unmatch', codexPlugin.interface.logo.slice(2)]);
   console.log(`Verified repository plugin v${pkg.version}`);
 }

@@ -10,6 +10,7 @@ interface ReleaseStateInput {
   packageVersion: string;
   pluginVersion: string;
   codexVersion: string;
+  cursorVersion: string;
   kimiVersion: string;
   headCommit: string;
   tagCommit: string | null;
@@ -21,6 +22,7 @@ export function classifyReleaseState(input: ReleaseStateInput) {
   if (
     input.packageVersion !== input.pluginVersion ||
     input.packageVersion !== input.codexVersion ||
+    input.packageVersion !== input.cursorVersion ||
     input.packageVersion !== input.kimiVersion
   ) {
     throw new Error('Release manifest version files disagree');
