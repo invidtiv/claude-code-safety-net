@@ -15,14 +15,15 @@
   "repository": "https://github.com/kenryu42/cc-safety-net.git",
   "license": "MIT",
   "keywords": [
-    "claude",
-    "claude-code",
+    "security",
+    "safety",
+    "guardrails",
+    "destructive-commands",
+    "secret-protection",
     "git",
-    "safety net",
-    "destructive",
-    "command",
-    "guard",
-    "hook",
-    "plugin"
+    "rm-rf",
+    "env-files",
+    "ssh-keys",
+    "pretooluse"
   ]
 }
