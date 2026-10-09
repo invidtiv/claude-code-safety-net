@@ -696,7 +696,7 @@ function isManagedArtifactTarget(target: InstallTarget): target is ManagedArtifa
 const KIMI_PLUGIN_INSTRUCTIONS = [
   'Install CC Safety Net as a native Kimi Code plugin:',
   '',
-  '  1. Start Kimi Code and run: /plugins install https://github.com/kenryu42/cc-safety-net',
+  '  1. Start Kimi Code and run: /plugins install https://github.com/kenryu42/cc-safety-net/tree/plugin',
   '     Confirm the trust prompt; it defaults to cancel.',
   '  2. Run /reload, or start a new session.',
   '',

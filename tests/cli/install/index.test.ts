@@ -142,8 +142,8 @@ test('Kimi Code offers the native plugin instead of the global hook', async () =
 
   expect(instructions.exitCode).toBe(0);
   expect(instructions.lines[0]).toBe('Install CC Safety Net as a native Kimi Code plugin:');
-  expect(instructions.lines.join('\n')).toContain(
-    '/plugins install https://github.com/kenryu42/cc-safety-net',
+  expect(instructions.lines).toContain(
+    '  1. Start Kimi Code and run: /plugins install https://github.com/kenryu42/cc-safety-net/tree/plugin',
   );
   expect(instructions.lines.join('\n')).not.toContain('CAUTION');
   expect(instructions.tree.map((entry) => entry.path)).not.toContain('.kimi-code');
