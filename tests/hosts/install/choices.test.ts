@@ -75,4 +75,13 @@ describe('the install picker rows', () => {
     );
     expect(groupedReasons(applyInstallTargetState(base, options))).toEqual(expected);
   });
+
+  test('offers Cursor when only the standalone cursor-agent CLI answers', async () => {
+    const choices = await buildInstallTargetChoicesAsync(
+      (command) => command.join(' ') === 'cursor-agent --version',
+    );
+    expect(choices.filter((choice) => choice.available).map((choice) => choice.target)).toEqual([
+      'cursor',
+    ]);
+  });
 });

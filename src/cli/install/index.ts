@@ -31,8 +31,8 @@ import {
   hasCopilotPreRenamePlugin,
   hasCopilotSafetyNetPlugin,
 } from '@/hosts/copilot-cli/plugin-id';
-import { CURSOR_CLAUDE_PLUGIN_METHOD } from '@/hosts/cursor/detect';
-import { installCursor, uninstallCursor } from '@/hosts/cursor/install';
+import { CURSOR_CLAUDE_PLUGIN_METHOD, CURSOR_NATIVE_PLUGIN_METHOD } from '@/hosts/cursor/detect';
+import { installCursor, uninstallCursor, uninstallCursorPlugin } from '@/hosts/cursor/install';
 import {
   markDeepSeekHarnessDesktopAvailable,
   planDeepSeekHarnessInstall,
@@ -672,10 +672,12 @@ const INSTALL_EXTRAS: Partial<
       beforeInstall?: (environment: Environment, updating: boolean) => void;
       afterInstall?: (environment: Environment) => string | undefined | Promise<string | undefined>;
       beforeUninstall?: (environment: Environment) => void;
+      afterUninstall?: (environment: Environment) => Promise<string | undefined>;
     }
   >
 > = {
   'copilot-cli': { afterInstall: enableCopilotPlugin },
+  cursor: { afterUninstall: uninstallCursorPlugin },
   'hermes-agent': {
     beforeInstall: (environment, updating) => {
       if (!updating) clearNpxSafetyNetCache(environment);
@@ -696,7 +698,7 @@ function isManagedArtifactTarget(target: InstallTarget): target is ManagedArtifa
 const KIMI_PLUGIN_INSTRUCTIONS = [
   'Install CC Safety Net as a native Kimi Code plugin:',
   '',
-  '  1. Start Kimi Code and run: /plugins install https://github.com/kenryu42/cc-safety-net',
+  '  1. Start Kimi Code and run: /plugins install https://github.com/kenryu42/cc-safety-net/tree/plugin',
   '     Confirm the trust prompt; it defaults to cancel.',
   '  2. Run /reload, or start a new session.',
   '',
@@ -767,7 +769,12 @@ async function runSingleInstallTarget(
   if (action === 'install') extras?.beforeInstall?.(environment, updating);
   if (action === 'uninstall') extras?.beforeUninstall?.(environment);
   if (isConfigInstallTarget(target))
-    return runConfigInstallTarget(action, target, environment, updating);
+    return [
+      runConfigInstallTarget(action, target, environment, updating),
+      action === 'uninstall' ? await extras?.afterUninstall?.(environment) : undefined,
+    ]
+      .filter(Boolean)
+      .join('\n');
   if (isManagedArtifactTarget(target))
     return runManagedArtifactInstallTarget(action, target, environment, updating);
   if (action === 'uninstall')
@@ -797,7 +804,8 @@ async function detectUpdateTargets(environment: Environment, fetchVersion = defa
         (hook) =>
           hook.platform !== 'copilot-cli' &&
           hook.detected &&
-          hook.method !== CURSOR_CLAUDE_PLUGIN_METHOD,
+          hook.method !== CURSOR_CLAUDE_PLUGIN_METHOD &&
+          hook.method !== CURSOR_NATIVE_PLUGIN_METHOD,
       )
       .map((hook) => hook.platform as InstallTarget),
     ...(

@@ -142,8 +142,8 @@ test('Kimi Code offers the native plugin instead of the global hook', async () =
 
   expect(instructions.exitCode).toBe(0);
   expect(instructions.lines[0]).toBe('Install CC Safety Net as a native Kimi Code plugin:');
-  expect(instructions.lines.join('\n')).toContain(
-    '/plugins install https://github.com/kenryu42/cc-safety-net',
+  expect(instructions.lines).toContain(
+    '  1. Start Kimi Code and run: /plugins install https://github.com/kenryu42/cc-safety-net/tree/plugin',
   );
   expect(instructions.lines.join('\n')).not.toContain('CAUTION');
   expect(instructions.tree.map((entry) => entry.path)).not.toContain('.kimi-code');
@@ -173,6 +173,118 @@ test('the plugin instructions warn while the global Kimi Code hook is still conf
     'CAUTION: the global Kimi Code hook is installed and will run alongside the plugin.',
   );
   expect(filesUnder(caution.tree, '.kimi-code/')).toEqual(seed);
+});
+
+const CURSOR_AGENT_VERSION = {
+  command: 'cursor-agent',
+  args: ['--version'],
+  stdout: '2026.10.01\n',
+};
+const CURSOR_PLUGIN_CACHE = '.cursor/plugins/cache/cc-safety-net';
+const CURSOR_PLUGIN_VERSION = `${CURSOR_PLUGIN_CACHE}/cc-safety-net/cd9c9d896cf070aa3ae463c1da180a4839a7b21a`;
+const CURSOR_MARKETPLACE_CLONE = '.cursor/plugins/marketplaces/github.com/kenryu42/cc-safety-net';
+const CURSOR_PLUGIN_SEED = {
+  [`${CURSOR_PLUGIN_VERSION}/.cache-complete`]: '',
+  [`${CURSOR_PLUGIN_VERSION}/.cursor-plugin/plugin.json`]: '{"name":"cc-safety-net"}\n',
+  [`${CURSOR_MARKETPLACE_CLONE}/cd9c9d896cf070aa3ae463c1da180a4839a7b21a/.cursor-plugin/marketplace.json`]:
+    '{"name":"cc-safety-net"}\n',
+};
+
+test('Cursor installs the npx hook without calling cursor-agent even when it is on PATH', async () => {
+  const result = await flow({
+    invoke: 'install',
+    args: ['--cursor'],
+    script: [CURSOR_AGENT_VERSION],
+  });
+
+  expect(result).toMatchObject({
+    exitCode: 0,
+    lines: ['Installed Cursor hook in <home>/.cursor/hooks.json', ''],
+    errors: [],
+    log: [],
+  });
+  expect(fileAt(result.tree, '.cursor/hooks.json')).toBeString();
+});
+
+test('Cursor uninstall removes the plugin marketplace it finds on disk', async () => {
+  const removed = await flow({
+    invoke: 'uninstall',
+    args: ['--cursor'],
+    seed: CURSOR_PLUGIN_SEED,
+    script: [
+      { command: 'cursor-agent', args: ['plugin', 'marketplace', 'remove', 'cc-safety-net'] },
+    ],
+  });
+
+  expect(removed).toMatchObject({
+    exitCode: 0,
+    lines: [
+      'Cursor hook not installed in <home>/.cursor/hooks.json',
+      'Removed the cc-safety-net marketplace from your Cursor account.',
+      'If /plugins in cursor-agent still lists CC Safety Net as installed, uninstall it there.',
+      '',
+    ],
+    errors: [],
+    log: ['cursor-agent plugin marketplace remove cc-safety-net\t<root>'],
+  });
+  expect(removed.tree.map((entry) => entry.path)).not.toContain(CURSOR_PLUGIN_CACHE);
+  expect(removed.tree.map((entry) => entry.path)).not.toContain(CURSOR_MARKETPLACE_CLONE);
+
+  const alreadyGone = await flow({
+    invoke: 'uninstall',
+    args: ['--cursor'],
+    seed: CURSOR_PLUGIN_SEED,
+    script: [
+      {
+        command: 'cursor-agent',
+        args: ['plugin', 'marketplace', 'remove'],
+        stderr: 'No marketplace matches "cc-safety-net". Available: cursor-public\n',
+        exit: 1,
+      },
+    ],
+  });
+  expect(alreadyGone.exitCode).toBe(0);
+  expect(alreadyGone.tree.map((entry) => entry.path)).not.toContain(CURSOR_PLUGIN_CACHE);
+
+  const loggedOut = await flow({
+    invoke: 'uninstall',
+    args: ['--cursor'],
+    seed: CURSOR_PLUGIN_SEED,
+    script: [
+      {
+        command: 'cursor-agent',
+        args: ['plugin', 'marketplace', 'remove'],
+        stderr: 'Not logged in. Run `cursor-agent login` first.\n',
+        exit: 1,
+      },
+    ],
+  });
+  expect(loggedOut).toMatchObject({
+    exitCode: 1,
+    errors: [
+      'Failed to run cursor-agent plugin marketplace remove cc-safety-net (exit 1).\nNot logged in. Run `cursor-agent login` first.',
+    ],
+  });
+  expect(fileAt(loggedOut.tree, `${CURSOR_PLUGIN_VERSION}/.cache-complete`)).toBe('');
+});
+
+test('a Cursor protected only by the native plugin gets no npx hook on update', async () => {
+  const result = await flow({
+    invoke: 'update',
+    seed: CURSOR_PLUGIN_SEED,
+    options: () => ({
+      fetchVersion: async () => null,
+      checkLatestVersion: async () => ({
+        currentVersion: 'dev',
+        latestVersion: 'dev',
+        updateAvailable: false,
+      }),
+    }),
+  });
+
+  expect(result.exitCode).toBe(0);
+  expect(result.lines.join('\n')).not.toContain('Cursor');
+  expect(fileAt(result.tree, '.cursor/hooks.json')).toBeUndefined();
 });
 
 const HERMES_DIR = '.hermes/plugins/cc-safety-net';

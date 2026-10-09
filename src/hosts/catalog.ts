@@ -30,6 +30,8 @@ export const DEEPSEEK_HARNESS_NPM_PROBE = [
   '--version',
 ] as const;
 
+export const CURSOR_AGENT_PROBE = ['cursor-agent', '--version'] as const;
+
 const catalog = [
   {
     id: 'antigravity-cli',

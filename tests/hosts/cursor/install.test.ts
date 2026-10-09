@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { chmodSync } from 'node:fs';
+import { join } from 'node:path';
 import { detect as detectCursor } from '@/hosts/cursor/detect';
 import { installCursor, uninstallCursor } from '@/hosts/cursor/install';
-import { expectRow, fileAt, hostRunner } from '../../helpers/host-differential';
+import { differential, expectRow, fileAt, hostRunner } from '../../helpers/host-differential';
 import { removeTempRoots } from '../../helpers/temp-home';
 
 const CONFIG = '.cursor/hooks.json';
@@ -208,5 +210,86 @@ describe('Cursor protected through the Claude Code plugin', () => {
         [CLAUDE_CURSOR_MANIFEST]: CURSOR_MANIFEST_FILES[CLAUDE_CURSOR_MANIFEST],
       }),
     ).toEqual(absent);
+  });
+});
+
+const CURSOR_PLUGIN_VERSIONS = '.cursor/plugins/cache/cc-safety-net/cc-safety-net';
+const CURSOR_PLUGIN_VERSION = `${CURSOR_PLUGIN_VERSIONS}/cd9c9d896cf070aa3ae463c1da180a4839a7b21a`;
+const CURSOR_PLUGIN_FILES = {
+  [`${CURSOR_PLUGIN_VERSION}/.cursor-plugin/plugin.json`]:
+    '{"name":"cc-safety-net","hooks":"./hooks/cursor.json"}',
+  [`${CURSOR_PLUGIN_VERSION}/hooks/cursor.json`]: '{}',
+};
+const CURSOR_PLUGIN = { ...CURSOR_PLUGIN_FILES, [`${CURSOR_PLUGIN_VERSION}/.cache-complete`]: '' };
+const ACCOUNT_CAVEAT =
+  "Cursor records enabled plugins on your Cursor account, which doctor cannot check, and keeps a plugin's files after it is uninstalled.";
+const PINNED =
+  'Cursor pins marketplace plugins to the commit they were added at, so `cc-safety-net update` cannot update this plugin, while the npx hook (`cc-safety-net install --cursor`) stays current.';
+
+describe('Cursor protected through its native plugin', () => {
+  test('counts as configured when the plugin cache Cursor completed is on disk', async () => {
+    expect(await detection(CURSOR_PLUGIN)).toEqual({
+      kind: 'returned',
+      value: {
+        platform: 'cursor',
+        status: 'configured',
+        method: 'Cursor plugin',
+        configPath: `<home>/${CURSOR_PLUGIN_VERSION}`,
+        errors: [
+          `${ACCOUNT_CAVEAT} ${PINNED} If /plugins in cursor-agent does not list CC Safety Net as installed, run \`cc-safety-net install --cursor\`.`,
+        ],
+      },
+    });
+  });
+
+  test('warns that the npx hook duplicates the native plugin', async () => {
+    expect(await detection({ ...CURSOR_PLUGIN, [CONFIG]: cursorConfig([CANONICAL]) })).toEqual({
+      kind: 'returned',
+      value: {
+        ...CONFIGURED,
+        errors: [
+          `The Cursor plugin also runs this check, so every tool call is checked twice. ${ACCOUNT_CAVEAT} ${PINNED} If the plugin is installed, run \`cc-safety-net uninstall --cursor\`, uninstall CC Safety Net from /plugins in cursor-agent, then run \`cc-safety-net install --cursor\`.`,
+        ],
+      },
+    });
+  });
+
+  test.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'keeps the hook result when the plugin cache cannot be listed',
+    async () => {
+      const detectUnlistable = async (seed: Record<string, string>) =>
+        (
+          await differential({ seed: { ...CURSOR_PLUGIN, ...seed } }, (environment) => {
+            const versions = join(environment.home, CURSOR_PLUGIN_VERSIONS);
+            chmodSync(versions, 0o000);
+            try {
+              return detectCursor({ environment, cwd: environment.home });
+            } finally {
+              chmodSync(versions, 0o700);
+            }
+          })
+        ).outcome;
+
+      expect(await detectUnlistable({ [CONFIG]: cursorConfig([CANONICAL]) })).toEqual({
+        kind: 'returned',
+        value: {
+          ...CONFIGURED,
+          errors: [
+            `Cannot read <home>/${CURSOR_PLUGIN_VERSIONS}, so doctor cannot tell whether the Cursor plugin also runs this check.`,
+          ],
+        },
+      });
+      expect(await detectUnlistable({})).toEqual({
+        kind: 'returned',
+        value: { platform: 'cursor', status: 'not-inspected' },
+      });
+    },
+  );
+
+  test('ignores a plugin download Cursor never completed', async () => {
+    expect(await detection(CURSOR_PLUGIN_FILES)).toEqual({
+      kind: 'returned',
+      value: { platform: 'cursor', status: 'n/a', configPath: CONFIG_PATH },
+    });
   });
 });

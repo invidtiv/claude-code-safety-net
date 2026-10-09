@@ -17,15 +17,14 @@ const ONE_LITERAL_PER_DENYING_RULE = [
   ).values(),
 ].map((rows) => rows[0]?.literal ?? '');
 
-const MANIFESTS = [
-  '.claude-plugin/plugin.json',
-  '.codex-plugin/plugin.json',
-  '.cursor-plugin/plugin.json',
+const VERBATIM_MANIFESTS = [
   'kimi.plugin.json',
   'hooks/hooks.json',
   'hooks/codex.json',
   'hooks/cursor.json',
 ];
+
+const readJson = (path: string) => JSON.parse(readFileSync(path, 'utf8'));
 
 const claudeShapedPayload = (command: string, cwd: string) => ({
   hook_event_name: 'PreToolUse',
@@ -89,6 +88,8 @@ describe('the plugin tree', () => {
       '.cursor-plugin/marketplace.json',
       '.cursor-plugin/plugin.json',
       'LICENSE',
+      'assets/logo.png',
+      'assets/logo.svg',
       'dist/bin/analyzer-core.js',
       'dist/bin/analyzer.js',
       'dist/bin/cc-safety-net.js',
@@ -103,28 +104,47 @@ describe('the plugin tree', () => {
       'kimi.plugin.json',
       'skills/cc-safety-net/SKILL.md',
       'skills/cc-safety-net/agents/openai.yaml',
-      'src/gui/frontend/favicon.svg',
     ]);
   });
 
-  test('copies every manifest verbatim and ships each path they reference', () => {
-    MANIFESTS.forEach((path) =>
+  test('copies the hook configs and the Kimi manifest verbatim', () => {
+    VERBATIM_MANIFESTS.forEach((path) =>
       expect(readFileSync(join(tree, path), 'utf8')).toBe(readFileSync(path, 'utf8')),
     );
-    const codex = JSON.parse(readFileSync(join(tree, '.codex-plugin/plugin.json'), 'utf8'));
-    const cursor = JSON.parse(readFileSync(join(tree, '.cursor-plugin/plugin.json'), 'utf8'));
-    const kimi = JSON.parse(readFileSync(join(tree, 'kimi.plugin.json'), 'utf8'));
+  });
+
+  test('copies the Claude, Codex and Cursor manifests with only their logos moved to assets/', () => {
+    const codex = readJson('.codex-plugin/plugin.json');
+    expect(readJson(join(tree, '.claude-plugin/plugin.json'))).toEqual({
+      ...readJson('.claude-plugin/plugin.json'),
+      icon: './assets/logo.png',
+    });
+    expect(readJson(join(tree, '.codex-plugin/plugin.json'))).toEqual({
+      ...codex,
+      interface: {
+        ...codex.interface,
+        logo: './assets/logo.png',
+        composerIcon: './assets/logo.png',
+      },
+    });
+    expect(readJson(join(tree, '.cursor-plugin/plugin.json'))).toEqual({
+      ...readJson('.cursor-plugin/plugin.json'),
+      logo: 'assets/logo.svg',
+    });
+  });
+
+  test('ships each path the manifests reference', () => {
+    const claude = readJson(join(tree, '.claude-plugin/plugin.json'));
+    const codex = readJson(join(tree, '.codex-plugin/plugin.json'));
+    const cursor = readJson(join(tree, '.cursor-plugin/plugin.json'));
+    const kimi = readJson(join(tree, 'kimi.plugin.json'));
     const files = listFiles(tree);
-    [
-      codex.skills,
-      codex.hooks,
-      codex.interface.logo,
-      codex.interface.composerIcon,
-      cursor.logo,
-      cursor.hooks,
-      kimi.skills,
-    ]
-      .map((path: string) => path.replace(/^\.\//, ''))
+    const relativeToTree = (path: string) => path.replace(/^\.\//, '');
+    [claude.icon, codex.interface.logo, codex.interface.composerIcon, cursor.logo]
+      .map(relativeToTree)
+      .forEach((path) => expect(files).toContain(path));
+    [codex.skills, codex.hooks, cursor.hooks, kimi.skills]
+      .map(relativeToTree)
       .forEach((path) => expect(files.some((file) => file.startsWith(path))).toBeTrue());
   });
 
