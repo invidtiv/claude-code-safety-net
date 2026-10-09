@@ -17,6 +17,7 @@ const config: KnipConfig = {
     'scripts/check-comments.ts!',
     'scripts/gui-dev.ts!',
     'scripts/project-bun.ts!',
+    'scripts/publish-plugin-branch.ts!',
     'scripts/prepare-release-files.ts!',
     'scripts/release-assets.ts!',
     'scripts/release-transaction.ts!',
