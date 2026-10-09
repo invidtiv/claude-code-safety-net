@@ -6,6 +6,7 @@ import {
   collectHookModules,
   verifyPluginTree,
 } from '../../scripts/build-plugin-tree';
+import pkg from '../../package.json';
 import { loadHarvestedVerdicts } from '../helpers/harvested-verdicts';
 import { createTempRoot, isolatedSpawnEnv, removeTempRoots } from '../helpers/temp-home';
 
@@ -88,6 +89,7 @@ describe('the plugin tree', () => {
       '.cursor-plugin/marketplace.json',
       '.cursor-plugin/plugin.json',
       'LICENSE',
+      'README.md',
       'assets/logo.png',
       'assets/logo.svg',
       'dist/bin/analyzer-core.js',
@@ -131,6 +133,22 @@ describe('the plugin tree', () => {
       ...readJson('.cursor-plugin/plugin.json'),
       logo: 'assets/logo.svg',
     });
+  });
+
+  test('ships the repository README with its repository links pinned to the release tag', () => {
+    const readme = readFileSync(join(tree, 'README.md'), 'utf8');
+    const repositoryLinks = [
+      ...readme.matchAll(/(?:src|srcset)="(?!https:)([^"]+)"|\]\((?!https:|#)([^)]+)\)/g),
+    ].map((match) => match[1] ?? match[2]);
+
+    expect(readme).toContain('CC Safety Net (Coding CLI Safety Net) blocks destructive commands');
+    expect(repositoryLinks).toEqual([]);
+    expect(readme).toContain(
+      `src="https://raw.githubusercontent.com/kenryu42/cc-safety-net/v${pkg.version}/.github/assets/how-it-works-light.svg"`,
+    );
+    expect(readme).toContain(
+      `(https://github.com/kenryu42/cc-safety-net/blob/v${pkg.version}/CONTRIBUTING.md)`,
+    );
   });
 
   test('ships each path the manifests reference', () => {

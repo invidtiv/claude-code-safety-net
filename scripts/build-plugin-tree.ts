@@ -21,6 +21,8 @@ const COPIED_PATHS = [
 const LOGO_SVG_SOURCE = 'src/gui/frontend/favicon.svg';
 const TREE_LOGO_SVG = 'assets/logo.svg';
 const TREE_LOGO_PNG = './assets/logo.png';
+const RELEASE_RAW_URL = `https://raw.githubusercontent.com/kenryu42/cc-safety-net/v${pkg.version}/`;
+const RELEASE_BLOB_URL = `https://github.com/kenryu42/cc-safety-net/blob/v${pkg.version}/`;
 const HOOK_BUNDLE_GROUPS = [
   ['gate/analyzer/analyze-command', 'analyzer-core'],
   ['gate/analyzer/segment', 'analyzer-core'],
@@ -143,6 +145,12 @@ export async function buildPluginTree(outdir: string) {
   const cursorPlugin = readManifest('.cursor-plugin/plugin.json');
   await Promise.all([
     Bun.write(join(binDir, 'cc-safety-net.js'), BIN_COMPILE_CACHE_LOADER),
+    Bun.write(
+      join(outdir, 'README.md'),
+      readFileSync(join(REPOSITORY_ROOT, 'README.md'), 'utf8')
+        .replace(/((?:src|srcset)=")\.\//g, `$1${RELEASE_RAW_URL}`)
+        .replace(/\]\((?!https:|#)(?:\.\/)?/g, `](${RELEASE_BLOB_URL}`),
+    ),
     Bun.write(join(binDir, 'package.json'), `${JSON.stringify({ type: 'commonjs' })}\n`),
     writeJson(join(outdir, '.claude-plugin', 'plugin.json'), {
       ...readManifest('.claude-plugin/plugin.json'),
