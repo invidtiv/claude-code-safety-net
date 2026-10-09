@@ -10,17 +10,17 @@ const SOURCE_SPECIFIER = /^(\.|@\/)/;
 const CLI_SPECIFIER = '@/cli/main';
 const VIRTUAL_BUNDLE_ENTRY_DIR = 'bin/';
 const COPIED_PATHS = [
-  '.claude-plugin/plugin.json',
-  '.codex-plugin/plugin.json',
-  '.cursor-plugin/plugin.json',
   'kimi.plugin.json',
   'LICENSE',
+  'assets/logo.png',
   'hooks/hooks.json',
   'hooks/codex.json',
   'hooks/cursor.json',
   'skills/cc-safety-net',
-  'src/gui/frontend/favicon.svg',
 ];
+const LOGO_SVG_SOURCE = 'src/gui/frontend/favicon.svg';
+const TREE_LOGO_SVG = 'assets/logo.svg';
+const TREE_LOGO_PNG = './assets/logo.png';
 const HOOK_BUNDLE_GROUPS = [
   ['gate/analyzer/analyze-command', 'analyzer-core'],
   ['gate/analyzer/segment', 'analyzer-core'],
@@ -40,6 +40,12 @@ const MAX_READABLE_LINE_LENGTH = 4096;
 const LOCKFILES = ['bun.lock', 'bun.lockb', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'];
 
 const readSource = (path: string) => readFileSync(path, 'utf8').replace(/^#!.*/, '');
+
+const readManifest = (path: string) =>
+  JSON.parse(readFileSync(join(REPOSITORY_ROOT, path), 'utf8'));
+
+const writeJson = (path: string, value: unknown) =>
+  Bun.write(path, `${JSON.stringify(value, null, 2)}\n`);
 
 const resolveSourceModule = (specifier: string, importer: string) =>
   resolve(Bun.resolveSync(specifier.replace(/^@\//, `${SOURCE_ROOT}/`), dirname(importer)));
@@ -132,26 +138,29 @@ export async function buildPluginTree(outdir: string) {
   COPIED_PATHS.forEach((path) =>
     cpSync(join(REPOSITORY_ROOT, path), join(outdir, path), { recursive: true }),
   );
-  const cursorPlugin = JSON.parse(
-    readFileSync(join(REPOSITORY_ROOT, '.cursor-plugin/plugin.json'), 'utf8'),
-  );
+  cpSync(join(REPOSITORY_ROOT, LOGO_SVG_SOURCE), join(outdir, TREE_LOGO_SVG));
+  const codexPlugin = readManifest('.codex-plugin/plugin.json');
+  const cursorPlugin = readManifest('.cursor-plugin/plugin.json');
   await Promise.all([
     Bun.write(join(binDir, 'cc-safety-net.js'), BIN_COMPILE_CACHE_LOADER),
     Bun.write(join(binDir, 'package.json'), `${JSON.stringify({ type: 'commonjs' })}\n`),
-    Bun.write(
-      join(outdir, '.cursor-plugin', 'marketplace.json'),
-      `${JSON.stringify(
-        {
-          name: cursorPlugin.name,
-          owner: cursorPlugin.author,
-          plugins: [
-            { name: cursorPlugin.name, source: './', description: cursorPlugin.description },
-          ],
-        },
-        null,
-        2,
-      )}\n`,
-    ),
+    writeJson(join(outdir, '.claude-plugin', 'plugin.json'), {
+      ...readManifest('.claude-plugin/plugin.json'),
+      icon: TREE_LOGO_PNG,
+    }),
+    writeJson(join(outdir, '.codex-plugin', 'plugin.json'), {
+      ...codexPlugin,
+      interface: { ...codexPlugin.interface, logo: TREE_LOGO_PNG, composerIcon: TREE_LOGO_PNG },
+    }),
+    writeJson(join(outdir, '.cursor-plugin', 'plugin.json'), {
+      ...cursorPlugin,
+      logo: TREE_LOGO_SVG,
+    }),
+    writeJson(join(outdir, '.cursor-plugin', 'marketplace.json'), {
+      name: cursorPlugin.name,
+      owner: cursorPlugin.author,
+      plugins: [{ name: cursorPlugin.name, source: './', description: cursorPlugin.description }],
+    }),
   ]);
 }
 
