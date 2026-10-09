@@ -1,5 +1,6 @@
 {
   "name": "cc-safety-net",
+  "displayName": "CC Safety Net",
   "version": "2.6.5",
   "description": "Block destructive commands and secret access",
   "author": {
