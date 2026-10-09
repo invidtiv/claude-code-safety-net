@@ -1,8 +1,21 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, sep } from 'node:path';
-import { buildPluginTree, verifyPluginTree } from '../../scripts/build-plugin-tree';
+import { dirname, join, resolve, sep } from 'node:path';
+import {
+  buildPluginTree,
+  collectHookModules,
+  verifyPluginTree,
+} from '../../scripts/build-plugin-tree';
+import { loadHarvestedVerdicts } from '../helpers/harvested-verdicts';
 import { createTempRoot, isolatedSpawnEnv, removeTempRoots } from '../helpers/temp-home';
+
+const SOURCE_BIN = join(import.meta.dir, '..', '..', 'src', 'entries', 'bin.ts');
+const ONE_LITERAL_PER_DENYING_RULE = [
+  ...Map.groupBy(
+    loadHarvestedVerdicts().filter((row) => row['work/standard']?.startsWith('deny ')),
+    (row) => row['work/standard']?.split(' ')[1],
+  ).values(),
+].map((rows) => rows[0]?.literal ?? '');
 
 const MANIFESTS = [
   '.claude-plugin/plugin.json',
@@ -75,6 +88,7 @@ describe('the plugin tree', () => {
       '.codex-plugin/plugin.json',
       '.cursor-plugin/marketplace.json',
       '.cursor-plugin/plugin.json',
+      'LICENSE',
       'dist/bin/analyzer-core.js',
       'dist/bin/analyzer.js',
       'dist/bin/cc-safety-net.js',
@@ -150,6 +164,43 @@ describe('the plugin tree', () => {
     expect(proc.stderr.toString()).toBe('');
     expect(proc.exitCode).toBe(0);
     expect(reason(JSON.parse(proc.stdout.toString()))).toContain('git.reset-hard');
+  });
+
+  test('decides one command per denying rule exactly as the source does', async () => {
+    const home = createTempRoot('cc-safety-net-plugin-tree-home-');
+    const work = join(home, 'work');
+    mkdirSync(work);
+    const decide = (entry: string[]) =>
+      Promise.all(
+        ONE_LITERAL_PER_DENYING_RULE.map(async (literal) => {
+          const proc = Bun.spawn([...entry, 'hook', '--coding-cli'], {
+            cwd: work,
+            stdin: Buffer.from(JSON.stringify(claudeShapedPayload(literal, work))),
+            stdout: 'pipe',
+            stderr: 'pipe',
+            env: isolatedSpawnEnv(home),
+          });
+          return {
+            literal,
+            exitCode: await proc.exited,
+            stdout: await new Response(proc.stdout).text(),
+          };
+        }),
+      );
+
+    const [fromTree, fromSource] = await Promise.all([
+      decide(['node', join(tree, 'dist', 'bin', 'cc-safety-net.js')]),
+      decide([process.execPath, SOURCE_BIN]),
+    ]);
+
+    expect(fromTree).toEqual(fromSource);
+  });
+});
+
+describe('the hook module walk', () => {
+  test('lists every module once, under one spelling of its path', () => {
+    const modules = collectHookModules(SOURCE_BIN);
+    expect(modules).toEqual([...new Set(modules.map((path) => resolve(path)))]);
   });
 });
 

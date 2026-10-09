@@ -1,5 +1,5 @@
 import { cpSync, mkdirSync, readFileSync, statSync } from 'node:fs';
-import { basename, dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import type { BunPlugin } from 'bun';
 import pkg from '../package.json';
 import { BIN_COMPILE_CACHE_LOADER } from './build-runtime';
@@ -14,6 +14,7 @@ const COPIED_PATHS = [
   '.codex-plugin/plugin.json',
   '.cursor-plugin/plugin.json',
   'kimi.plugin.json',
+  'LICENSE',
   'hooks/hooks.json',
   'hooks/codex.json',
   'hooks/cursor.json',
@@ -41,7 +42,7 @@ const LOCKFILES = ['bun.lock', 'bun.lockb', 'package-lock.json', 'yarn.lock', 'p
 const readSource = (path: string) => readFileSync(path, 'utf8').replace(/^#!.*/, '');
 
 const resolveSourceModule = (specifier: string, importer: string) =>
-  Bun.resolveSync(specifier.replace(/^@\//, `${SOURCE_ROOT}/`), dirname(importer));
+  resolve(Bun.resolveSync(specifier.replace(/^@\//, `${SOURCE_ROOT}/`), dirname(importer)));
 
 const hookBundleOf = (path: string) => {
   const sourcePath = relative(SOURCE_ROOT, path).replaceAll('\\', '/');
@@ -50,7 +51,8 @@ const hookBundleOf = (path: string) => {
     : (HOOK_BUNDLE_GROUPS.find(([prefix]) => sourcePath.startsWith(prefix))?.[1] ?? 'hook');
 };
 
-function collectHookModules(entry: string) {
+/** @internal */
+export function collectHookModules(entry: string) {
   const transpiler = new Bun.Transpiler({ loader: 'ts' });
   const modules = new Set<string>();
   const pending = [entry];
@@ -105,11 +107,17 @@ async function buildHookBundles(outdir: string) {
     define: { __PKG_VERSION__: JSON.stringify(pkg.version) },
     plugins: [crossBundleImportsPlugin],
   });
+  const outputExports = new Map(
+    Object.entries(result.metafile?.outputs ?? {}).map(([path, output]) => [
+      basename(path.replaceAll('\\', '/')),
+      output.exports,
+    ]),
+  );
   const transpiler = new Bun.Transpiler({ loader: 'ts' });
   const droppedExports = [...bundles].flatMap(([bundle, paths]) =>
     paths
       .flatMap((path) => transpiler.scan(readSource(path)).exports)
-      .filter((name) => !result.metafile?.outputs[`./${bundle}.js`]?.exports.includes(name))
+      .filter((name) => !outputExports.get(`${bundle}.js`)?.includes(name))
       .map((name) => `${bundle}.js: ${name}`),
   );
   if (droppedExports.length > 0) {

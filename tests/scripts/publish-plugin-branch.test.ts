@@ -41,7 +41,7 @@ function createRepository(root: string) {
 }
 
 const PLUGIN_FILES = {
-  '.claude-plugin/plugin.json': '{"name":"cc-safety-net"}\n',
+  '.claude-plugin/plugin.json': '{"name":"cc-safety-net","version":"2.7.0"}\n',
   'dist/bin/hook.js': 'module.exports = {};\n',
 };
 
@@ -87,6 +87,18 @@ describe('publishPluginBranch', () => {
       expect(git(fixture.remote, 'show', 'refs/heads/plugin:dist/bin/hook.js')).toBe(
         'module.exports = { changed: true };',
       );
+    });
+  });
+
+  test('an older release leaves the newer tip in place', async () => {
+    await withPublishedTree((fixture) => {
+      writeTree(fixture.tree, {
+        '.claude-plugin/plugin.json': '{"name":"cc-safety-net","version":"2.6.9"}\n',
+        'dist/bin/hook.js': 'module.exports = { older: true };\n',
+      });
+
+      expect(fixture.publish('v2.6.9')).toEqual({ commit: fixture.first.commit, pushed: false });
+      expect(remoteTip(fixture.remote)).toBe(fixture.first.commit);
     });
   });
 

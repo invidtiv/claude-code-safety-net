@@ -1,5 +1,7 @@
-import { rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+
+const PLUGIN_MANIFEST = '.claude-plugin/plugin.json';
 
 function runGit(cwd: string, args: string[], env: Record<string, string> = {}) {
   const result = Bun.spawnSync(['git', ...args], {
@@ -22,12 +24,21 @@ export function publishPluginBranch(options: {
   const ref = `refs/heads/${options.branch}`;
   const tip = runGit(repository, ['ls-remote', 'origin', ref]).split('\t')[0] || undefined;
   if (tip !== undefined) runGit(repository, ['fetch', '--no-tags', 'origin', tip]);
+  const treeDir = resolve(options.tree);
+  if (
+    tip !== undefined &&
+    Bun.semver.order(
+      JSON.parse(readFileSync(join(treeDir, PLUGIN_MANIFEST), 'utf8')).version,
+      JSON.parse(runGit(repository, ['show', `${tip}:${PLUGIN_MANIFEST}`])).version,
+    ) < 0
+  ) {
+    return { commit: tip, pushed: false };
+  }
 
   const gitDir = runGit(repository, ['rev-parse', '--absolute-git-dir']);
   const index = join(gitDir, 'plugin-branch.index');
   rmSync(index, { force: true });
   const indexEnv = { GIT_INDEX_FILE: index };
-  const treeDir = resolve(options.tree);
   runGit(
     treeDir,
     ['--git-dir', gitDir, '--work-tree', treeDir, 'add', '--all', '--force', '.'],
@@ -60,6 +71,6 @@ if (import.meta.main) {
   console.log(
     result.pushed
       ? `Pushed ${result.commit} to ${branch}`
-      : `${branch} already holds this tree at ${result.commit}; nothing pushed`,
+      : `${branch} stays at ${result.commit}, which holds this tree or a newer release; nothing pushed`,
   );
 }
