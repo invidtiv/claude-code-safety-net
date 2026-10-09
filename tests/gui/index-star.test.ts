@@ -1,11 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import {
-  fetchStarContext as portedStarContext,
-  starRepo as portedStarRepo,
-  userHasStarredRepo as portedUserHasStarred,
-} from '@/gui/index';
+import { delimiter, dirname, join } from 'node:path';
+import { fetchStarContext as portedStarContext, starRepo as portedStarRepo } from '@/gui/index';
 import { createFakeBin, type FakeScriptEntry } from '../helpers/fake-bin';
 import {
   createTempRoot,
@@ -17,14 +13,9 @@ import {
 
 const STARRED_PATH = '/user/starred/kenryu42/cc-safety-net';
 
-type StarHelpers = {
-  userHasStarredRepo: typeof portedUserHasStarred;
-  starRepo: typeof portedStarRepo;
-};
-
 const bothSides = async <T>(
   script: readonly FakeScriptEntry[],
-  run: (side: { helpers: StarHelpers; command: string; root: string }) => Promise<T>,
+  run: (side: { command: string; root: string }) => Promise<T>,
   env: (root: string) => Record<string, string | undefined> = () => ({}),
 ) => {
   const root = createTempRoot('gui-star-ported-');
@@ -37,7 +28,6 @@ const bothSides = async <T>(
     },
     async () =>
       run({
-        helpers: { userHasStarredRepo: portedUserHasStarred, starRepo: portedStarRepo },
         command: join(fake.binDir, 'gh'),
         root,
       }),
@@ -50,57 +40,30 @@ const gh = (args: string[], exit: number, extra: Partial<FakeScriptEntry> = {}):
 
 const AUTH_OK = gh(['auth'], 0);
 
-describe('the GUI star helpers', () => {
+describe('the GUI star button', () => {
   afterEach(removeTempRoots);
 
-  test('stops at a failed gh auth and reports the state as unknown', async () => {
-    const row = await bothSides([gh(['auth'], 1)], (side) =>
-      side.helpers.userHasStarredRepo(side.command),
-    );
+  test('reports a failed star when gh is not on the machine', async () => {
+    const star = await bothSides([], (side) => portedStarRepo(join(side.root, 'missing', 'gh')));
 
-    expect(row.result).toBeNull();
-    expect(row.calls).toStrictEqual(['gh auth status']);
-  });
-
-  test.each([
-    ['a starred repo', 0, true],
-    ['an unstarred repo', 1, false],
-  ] as const)('maps the exit of the starred probe for %s', async (_label, exit, expected) => {
-    const row = await bothSides([AUTH_OK, gh(['api'], exit)], (side) =>
-      side.helpers.userHasStarredRepo(side.command),
-    );
-
-    expect(row.result).toBe(expected);
-    expect(row.calls).toStrictEqual(['gh auth status', `gh api ${STARRED_PATH}`]);
-  });
-
-  test('reports an unknown state and a failed star when gh is not on the machine', async () => {
-    const missing = await bothSides([], (side) =>
-      side.helpers.userHasStarredRepo(join(side.root, 'missing', 'gh')),
-    );
-    const star = await bothSides([], (side) =>
-      side.helpers.starRepo(join(side.root, 'missing', 'gh')),
-    );
-
-    expect(missing.result).toBeNull();
     expect(star.result).toStrictEqual({ ok: false });
-    expect([missing.calls, star.calls]).toStrictEqual([[], []]);
+    expect(star.calls).toStrictEqual([]);
   });
 
   test('gives up on a gh that never answers', async () => {
-    const row = await bothSides([gh(['auth'], 0, { delayMs: 2000 })], async (side) => {
+    const row = await bothSides([gh(['api'], 0, { delayMs: 2000 })], async (side) => {
       const started = Date.now();
-      const result = await side.helpers.userHasStarredRepo(side.command, 100);
+      const result = await portedStarRepo(side.command, 100);
       expect(Date.now() - started).toBeLessThan(1000);
       return result;
     });
 
-    expect(row.result).toBeNull();
+    expect(row.result).toStrictEqual({ ok: false });
   });
 
   test('stars the repository with a fixed argv', async () => {
     const row = await bothSides([gh(['api', '-X', 'PUT', STARRED_PATH], 0)], (side) =>
-      side.helpers.starRepo(side.command),
+      portedStarRepo(side.command),
     );
 
     expect(row.result).toStrictEqual({ ok: true });
@@ -131,28 +94,32 @@ describe('the GUI star context', () => {
 
   const contextOver = async (fetchRepo: typeof fetch) => {
     const row = await bothSides(
-      [gh(['auth'], 1)],
+      [AUTH_OK, gh(['api'], 0)],
       async (side) => {
         const home = join(side.root, 'home');
         const values = isolationEnv(home);
-        return portedStarContext(environmentFor(home, values), {
-          command: side.command,
-          logsDir: seedLogs(home),
-          fetchRepo,
-        });
+        return withProcessEnv(
+          { PATH: `${dirname(side.command)}${delimiter}${process.env.PATH}` },
+          () =>
+            portedStarContext(environmentFor(home, values), {
+              logsDir: seedLogs(home),
+              fetchRepo,
+            }),
+        );
       },
       (root) => isolationEnv(join(root, 'home')),
     );
+    expect(row.calls).toStrictEqual([]);
     return row.result;
   };
 
   const respondsWith = (body: unknown, status = 200) =>
     (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
 
-  test('reads the star count, the star state and the retained blocked total together', async () => {
+  test('reads the star count and the retained blocked total without running gh', async () => {
     const context = await contextOver(respondsWith({ stargazers_count: 42 }));
 
-    expect(context).toStrictEqual({ starred: null, starCount: 42, blockedTotal: 2 });
+    expect(context).toStrictEqual({ starCount: 42, blockedTotal: 2 });
   });
 
   test.each([
@@ -166,7 +133,6 @@ describe('the GUI star context', () => {
     ],
   ])('degrades the star count on %s without losing the rest', async (_label, fetchRepo) => {
     expect(await contextOver(fetchRepo)).toStrictEqual({
-      starred: null,
       starCount: null,
       blockedTotal: 2,
     });

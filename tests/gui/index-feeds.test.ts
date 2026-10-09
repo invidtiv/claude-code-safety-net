@@ -300,7 +300,7 @@ describe('the GUI rulebook listing', () => {
 });
 
 describe('the GUI star, integrations and install endpoints', () => {
-  const STAR_CONTEXT = { starred: true, starCount: 1234, blockedTotal: 5 };
+  const STAR_CONTEXT = { starCount: 1234, blockedTotal: 5 };
   const INTEGRATIONS = {
     targets: [
       { target: 'cursor' as const, label: 'Cursor', version: '1.2.3', status: 'active' as const },

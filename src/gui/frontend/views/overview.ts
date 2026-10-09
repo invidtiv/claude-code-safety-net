@@ -162,14 +162,14 @@ export const loadHealth = async () => {
   renderAttention();
 };
 
-type StarContext = { starred: boolean | null; starCount: number | null; blockedTotal: number };
+type StarContext = { starCount: number | null; blockedTotal: number };
 const starIcons = {
   outline:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"></path></svg>',
   filled:
     '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"></path></svg>',
 };
-let starContext: StarContext = { starred: null, starCount: null, blockedTotal: 0 };
+let starContext: StarContext = { starCount: null, blockedTotal: 0 };
 
 const starCountHtml = (count: number | null) =>
   typeof count === 'number'
@@ -193,22 +193,14 @@ const renderStarLink = (href: string) => {
 };
 export const loadStarContext = async () => {
   const result = await requestJson('/api/star/context');
-  starContext =
-    result.ok && result.data ? result.data : { starred: null, starCount: null, blockedTotal: 0 };
-  if (starContext.starred === true) return;
+  starContext = result.ok && result.data ? result.data : { starCount: null, blockedTotal: 0 };
   renderStarPitch(false);
-  qs('star-mechanism').hidden = starContext.starred !== false;
-  if (starContext.starred === null) {
-    renderStarLink(repoUrl);
-    return;
-  }
   qs('star-slot').innerHTML =
-    `<button type="button" class="star-cta" aria-label="Star CC Safety Net on GitHub. One click via your GitHub CLI."><span class="star-icon" aria-hidden="true">${starIcons.outline}</span><span class="star-label">Star on GitHub</span>${starCountHtml(starContext.starCount)}</button>`;
+    `<button type="button" class="star-cta" aria-label="Star CC Safety Net on GitHub"><span class="star-icon" aria-hidden="true">${starIcons.outline}</span><span class="star-label">Star on GitHub</span>${starCountHtml(starContext.starCount)}</button>`;
   qs('star-row').hidden = false;
 };
 const starRepo = async (button: HTMLButtonElement) => {
   button.disabled = true;
-  qs('star-mechanism').hidden = true;
   const result = await requestJson('/api/star', { method: 'POST' });
   if (!(result.ok && result.data?.ok === true)) {
     renderStarLink(result.data?.fallbackUrl ?? repoUrl);

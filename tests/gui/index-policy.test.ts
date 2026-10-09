@@ -194,7 +194,7 @@ describe('the policy GUI server', () => {
       options: () => ({
         chooseDirectory: async () => ({ cancelled: true }),
         starRepo: async () => ({ ok: true }),
-        fetchStarContext: async () => ({ starred: null, starCount: null, blockedTotal: 0 }),
+        fetchStarContext: async () => ({ starCount: null, blockedTotal: 0 }),
         fetchIntegrations: async () => ({
           targets: [],
           system: { version: 'dev', nodeVersion: null, platform: 'linux' },

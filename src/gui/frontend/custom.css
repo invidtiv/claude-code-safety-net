@@ -2122,11 +2122,6 @@ button.chip:hover:not(:disabled) {
   color: var(--ink);
 }
 
-.star-mechanism {
-  display: block;
-  color: var(--faint);
-}
-
 .star-cta {
   gap: 8px;
   text-decoration: none;
