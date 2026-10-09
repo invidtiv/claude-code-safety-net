@@ -7,6 +7,10 @@
     "email": "jliew@420024lab.com"
   },
   "homepage": "https://github.com/kenryu42/cc-safety-net",
+  "documentationUrl": "https://ccsafetynet.com/docs",
+  "supportUrl": "https://github.com/kenryu42/cc-safety-net/issues",
+  "privacyPolicyUrl": "https://ccsafetynet.com/privacy",
+  "termsOfServiceUrl": "https://github.com/kenryu42/cc-safety-net/blob/main/LICENSE",
   "repository": "https://github.com/kenryu42/cc-safety-net.git",
   "license": "MIT",
   "keywords": [
