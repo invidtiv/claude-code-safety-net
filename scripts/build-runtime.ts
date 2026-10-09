@@ -59,7 +59,7 @@ export async function buildRuntimeBundles(outdir: string) {
 
 const BIN_HOOK_BUNDLE = 'hook.js';
 const BIN_CLI_SPECIFIER = '../cli.js';
-const BIN_COMPILE_CACHE_LOADER = [
+export const BIN_COMPILE_CACHE_LOADER = [
   '#!/usr/bin/env node',
   "'use strict';",
   "const { enableCompileCache } = require('node:module');",
