@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { CURSOR_AGENT_PROBE } from '@/hosts/catalog';
 import { getSpawnCommand } from '@/hosts/system-info';
 import type { NativeCommand } from './native';
 import { INSTALL_TARGETS, type InstallAction, type InstallTarget } from './targets';
@@ -61,7 +62,8 @@ export function buildInstallTargetChoicesAsync(
       label: target.label,
       ...getChoiceAvailability(
         options.action,
-        await probe(target.probeCommand),
+        (await probe(target.probeCommand)) ||
+          (target.target === 'cursor' && (await probe(CURSOR_AGENT_PROBE))),
         configuredTargets.has(target.target),
       ),
     })),

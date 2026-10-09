@@ -45,17 +45,21 @@ export const CURSOR_CLAUDE_PLUGIN_METHOD = 'Claude Code plugin';
 export const CURSOR_NATIVE_PLUGIN_METHOD = 'Cursor plugin';
 export const CURSOR_HOOK_METHOD = 'hook config';
 
-function findCursorPluginVersion(environment: Environment): string | undefined {
+function findCursorPluginVersion(environment: Environment) {
   const versions = join(getCursorPluginDirs(environment).cache, CURSOR_MARKETPLACE_NAME);
-  return existsSync(versions)
-    ? readdirSync(versions)
+  if (!existsSync(versions)) return {};
+  try {
+    return {
+      version: readdirSync(versions)
         .map((version) => join(versions, version))
-        .find((dir) => existsSync(join(dir, '.cache-complete')))
-    : undefined;
+        .find((dir) => existsSync(join(dir, '.cache-complete'))),
+    };
+  } catch {
+    return { unreadable: versions };
+  }
 }
 
-function findCursorPluginRoute(environment: Environment) {
-  const nativeVersion = findCursorPluginVersion(environment);
+function findCursorPluginRoute(environment: Environment, nativeVersion: string | undefined) {
   if (nativeVersion) {
     const caveat =
       "Cursor records enabled plugins on your Cursor account, which doctor cannot check, and keeps a plugin's files after it is uninstalled.";
@@ -80,7 +84,18 @@ function findCursorPluginRoute(environment: Environment) {
 
 export function detect(context: DetectContext): HookDetection {
   const hookConfig = detectHookConfig(context);
-  const plugin = findCursorPluginRoute(context.environment);
+  const nativePlugin = findCursorPluginVersion(context.environment);
+  if (nativePlugin.unreadable)
+    return hookConfig.status === 'configured'
+      ? {
+          ...hookConfig,
+          errors: [
+            ...(hookConfig.errors ?? []),
+            `Cannot read ${nativePlugin.unreadable}, so doctor cannot tell whether the Cursor plugin also runs this check.`,
+          ],
+        }
+      : { platform: 'cursor', status: 'not-inspected' };
+  const plugin = findCursorPluginRoute(context.environment, nativePlugin.version);
   if (!plugin) return hookConfig;
   if (hookConfig.status === 'configured')
     return { ...hookConfig, errors: [...(hookConfig.errors ?? []), plugin.duplicate] };

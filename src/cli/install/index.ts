@@ -18,7 +18,7 @@ import { atomicWriteFile } from '@/core/io/atomic-write';
 import { stripJsonComments } from '@/core/io/jsonc';
 import { installAmp, uninstallAmp } from '@/hosts/amp/install';
 import { installAntigravityCli, uninstallAntigravityCli } from '@/hosts/antigravity-cli/install';
-import { getIntegrationDisplayName } from '@/hosts/catalog';
+import { CURSOR_AGENT_PROBE, getIntegrationDisplayName } from '@/hosts/catalog';
 import { detectClaudeCode, hasClaudeInstalledPlugin } from '@/hosts/claude-code/detect';
 import { CODEX_TRUST_HINT } from '@/hosts/codex/detect';
 import { _getCopilotConfigHome } from '@/hosts/copilot-cli/detect';
@@ -806,9 +806,7 @@ async function resolveCursorInstallMethod(
   if (!options.selectCursorInstallMethod && !canPromptInstallTargets(options.input, options.output))
     return 'hook';
 
-  const defaultMethod = (await probeInstallTarget(['cursor-agent', '--version']))
-    ? 'plugin'
-    : 'hook';
+  const defaultMethod = (await probeInstallTarget(CURSOR_AGENT_PROBE)) ? 'plugin' : 'hook';
   return options.selectCursorInstallMethod
     ? options.selectCursorInstallMethod(defaultMethod)
     : promptCursorInstallMethod({ input: options.input, output: options.output, defaultMethod });

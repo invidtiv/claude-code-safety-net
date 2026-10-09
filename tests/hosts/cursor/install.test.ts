@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { chmodSync } from 'node:fs';
+import { join } from 'node:path';
 import { detect as detectCursor } from '@/hosts/cursor/detect';
 import { installCursor, uninstallCursor } from '@/hosts/cursor/install';
-import { expectRow, fileAt, hostRunner } from '../../helpers/host-differential';
+import { differential, expectRow, fileAt, hostRunner } from '../../helpers/host-differential';
 import { removeTempRoots } from '../../helpers/temp-home';
 
 const CONFIG = '.cursor/hooks.json';
@@ -211,8 +213,8 @@ describe('Cursor protected through the Claude Code plugin', () => {
   });
 });
 
-const CURSOR_PLUGIN_VERSION =
-  '.cursor/plugins/cache/cc-safety-net/cc-safety-net/cd9c9d896cf070aa3ae463c1da180a4839a7b21a';
+const CURSOR_PLUGIN_VERSIONS = '.cursor/plugins/cache/cc-safety-net/cc-safety-net';
+const CURSOR_PLUGIN_VERSION = `${CURSOR_PLUGIN_VERSIONS}/cd9c9d896cf070aa3ae463c1da180a4839a7b21a`;
 const CURSOR_PLUGIN_FILES = {
   [`${CURSOR_PLUGIN_VERSION}/.cursor-plugin/plugin.json`]:
     '{"name":"cc-safety-net","hooks":"./hooks/cursor.json"}',
@@ -249,6 +251,38 @@ describe('Cursor protected through its native plugin', () => {
       },
     });
   });
+
+  test.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'keeps the hook result when the plugin cache cannot be listed',
+    async () => {
+      const detectUnlistable = async (seed: Record<string, string>) =>
+        (
+          await differential({ seed: { ...CURSOR_PLUGIN, ...seed } }, (environment) => {
+            const versions = join(environment.home, CURSOR_PLUGIN_VERSIONS);
+            chmodSync(versions, 0o000);
+            try {
+              return detectCursor({ environment, cwd: environment.home });
+            } finally {
+              chmodSync(versions, 0o700);
+            }
+          })
+        ).outcome;
+
+      expect(await detectUnlistable({ [CONFIG]: cursorConfig([CANONICAL]) })).toEqual({
+        kind: 'returned',
+        value: {
+          ...CONFIGURED,
+          errors: [
+            `Cannot read <home>/${CURSOR_PLUGIN_VERSIONS}, so doctor cannot tell whether the Cursor plugin also runs this check.`,
+          ],
+        },
+      });
+      expect(await detectUnlistable({})).toEqual({
+        kind: 'returned',
+        value: { platform: 'cursor', status: 'not-inspected' },
+      });
+    },
+  );
 
   test('ignores a plugin download Cursor never completed', async () => {
     expect(await detection(CURSOR_PLUGIN_FILES)).toEqual({
