@@ -43,7 +43,6 @@ function _cursorDriftErrors(entries: Array<Record<string, unknown>>): string[] {
 
 export const CURSOR_CLAUDE_PLUGIN_METHOD = 'Claude Code plugin';
 export const CURSOR_NATIVE_PLUGIN_METHOD = 'Cursor plugin';
-export const CURSOR_HOOK_METHOD = 'hook config';
 
 function findCursorPluginVersion(environment: Environment) {
   const versions = join(getCursorPluginDirs(environment).cache, CURSOR_MARKETPLACE_NAME);
@@ -61,12 +60,14 @@ function findCursorPluginVersion(environment: Environment) {
 
 function findCursorPluginRoute(environment: Environment, nativeVersion: string | undefined) {
   if (nativeVersion) {
-    const caveat =
-      "Cursor records enabled plugins on your Cursor account, which doctor cannot check, and keeps a plugin's files after it is uninstalled.";
+    const caveat = [
+      "Cursor records enabled plugins on your Cursor account, which doctor cannot check, and keeps a plugin's files after it is uninstalled.",
+      'Cursor pins marketplace plugins to the commit they were added at, so `cc-safety-net update` cannot update this plugin, while the npx hook (`cc-safety-net install --cursor`) stays current.',
+    ].join(' ');
     return {
       method: CURSOR_NATIVE_PLUGIN_METHOD,
       configPath: nativeVersion,
-      duplicate: `The Cursor plugin also runs this check, so every tool call is checked twice. ${caveat} If the plugin is installed, delete the "${CURSOR_HOOK_COMMAND}" entry from ${getCursorHooksPath(environment)}.`,
+      duplicate: `The Cursor plugin also runs this check, so every tool call is checked twice. ${caveat} If the plugin is installed, run \`cc-safety-net uninstall --cursor\`, uninstall CC Safety Net from /plugins in cursor-agent, then run \`cc-safety-net install --cursor\`.`,
       alone: `${caveat} If /plugins in cursor-agent does not list CC Safety Net as installed, run \`cc-safety-net install --cursor\`.`,
     };
   }
@@ -138,7 +139,7 @@ function detectHookConfig(context: DetectContext): HookDetection {
   return {
     platform: 'cursor',
     status: 'configured',
-    method: CURSOR_HOOK_METHOD,
+    method: 'hook config',
     configPath,
     errors: errors.length > 0 ? errors : undefined,
   };

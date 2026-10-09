@@ -223,6 +223,8 @@ const CURSOR_PLUGIN_FILES = {
 const CURSOR_PLUGIN = { ...CURSOR_PLUGIN_FILES, [`${CURSOR_PLUGIN_VERSION}/.cache-complete`]: '' };
 const ACCOUNT_CAVEAT =
   "Cursor records enabled plugins on your Cursor account, which doctor cannot check, and keeps a plugin's files after it is uninstalled.";
+const PINNED =
+  'Cursor pins marketplace plugins to the commit they were added at, so `cc-safety-net update` cannot update this plugin, while the npx hook (`cc-safety-net install --cursor`) stays current.';
 
 describe('Cursor protected through its native plugin', () => {
   test('counts as configured when the plugin cache Cursor completed is on disk', async () => {
@@ -234,7 +236,7 @@ describe('Cursor protected through its native plugin', () => {
         method: 'Cursor plugin',
         configPath: `<home>/${CURSOR_PLUGIN_VERSION}`,
         errors: [
-          `${ACCOUNT_CAVEAT} If /plugins in cursor-agent does not list CC Safety Net as installed, run \`cc-safety-net install --cursor\`.`,
+          `${ACCOUNT_CAVEAT} ${PINNED} If /plugins in cursor-agent does not list CC Safety Net as installed, run \`cc-safety-net install --cursor\`.`,
         ],
       },
     });
@@ -246,7 +248,7 @@ describe('Cursor protected through its native plugin', () => {
       value: {
         ...CONFIGURED,
         errors: [
-          `The Cursor plugin also runs this check, so every tool call is checked twice. ${ACCOUNT_CAVEAT} If the plugin is installed, delete the "${MANAGED}" entry from ${CONFIG_PATH}.`,
+          `The Cursor plugin also runs this check, so every tool call is checked twice. ${ACCOUNT_CAVEAT} ${PINNED} If the plugin is installed, run \`cc-safety-net uninstall --cursor\`, uninstall CC Safety Net from /plugins in cursor-agent, then run \`cc-safety-net install --cursor\`.`,
         ],
       },
     });

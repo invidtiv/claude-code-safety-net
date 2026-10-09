@@ -180,8 +180,6 @@ const CURSOR_AGENT_VERSION = {
   args: ['--version'],
   stdout: '2026.10.01\n',
 };
-const CURSOR_MARKETPLACE_ADD =
-  'cursor-agent plugin marketplace add https://github.com/kenryu42/cc-safety-net --git-ref plugin';
 const CURSOR_PLUGIN_CACHE = '.cursor/plugins/cache/cc-safety-net';
 const CURSOR_PLUGIN_VERSION = `${CURSOR_PLUGIN_CACHE}/cc-safety-net/cd9c9d896cf070aa3ae463c1da180a4839a7b21a`;
 const CURSOR_MARKETPLACE_CLONE = '.cursor/plugins/marketplaces/github.com/kenryu42/cc-safety-net';
@@ -191,93 +189,21 @@ const CURSOR_PLUGIN_SEED = {
   [`${CURSOR_MARKETPLACE_CLONE}/cd9c9d896cf070aa3ae463c1da180a4839a7b21a/.cursor-plugin/marketplace.json`]:
     '{"name":"cc-safety-net"}\n',
 };
-const CURSOR_PLUGIN_INSTRUCTIONS = [
-  'Added the cc-safety-net marketplace to your Cursor account. To enable the plugin:',
-  '',
-  '  1. Run cursor-agent and open /plugins.',
-  '  2. Press Tab to open Marketplace, select CC Safety Net (cc-safety-net), and choose',
-  '     Install for you (user scope).',
-];
 
-test('Cursor defaults to the native plugin when cursor-agent is on PATH', async () => {
-  const defaults: string[] = [];
+test('Cursor installs the npx hook without calling cursor-agent even when it is on PATH', async () => {
   const result = await flow({
     invoke: 'install',
     args: ['--cursor'],
-    script: [
-      CURSOR_AGENT_VERSION,
-      { command: 'cursor-agent', args: ['plugin', 'marketplace', 'add'] },
-    ],
-    options: () => ({
-      selectCursorInstallMethod: async (defaultMethod) => {
-        defaults.push(defaultMethod);
-        return defaultMethod;
-      },
-    }),
+    script: [CURSOR_AGENT_VERSION],
   });
 
-  expect(defaults).toEqual(['plugin']);
   expect(result).toMatchObject({
     exitCode: 0,
-    lines: [...CURSOR_PLUGIN_INSTRUCTIONS, ''],
+    lines: ['Installed Cursor hook in <home>/.cursor/hooks.json', ''],
     errors: [],
-    log: ['cursor-agent --version\t<root>', `${CURSOR_MARKETPLACE_ADD}\t<root>`],
+    log: [],
   });
-  expect(fileAt(result.tree, '.cursor/hooks.json')).toBeUndefined();
-});
-
-test('Cursor defaults to the hook without cursor-agent and can be cancelled', async () => {
-  const defaults: string[] = [];
-  const hook = await flow({
-    invoke: 'install',
-    args: ['--cursor'],
-    options: () => ({
-      selectCursorInstallMethod: async (defaultMethod) => {
-        defaults.push(defaultMethod);
-        return defaultMethod;
-      },
-    }),
-  });
-
-  expect(defaults).toEqual(['hook']);
-  expect(hook.lines).toEqual(['Installed Cursor hook in <home>/.cursor/hooks.json', '']);
-  expect(hook.log).toEqual([]);
-
-  const cancelled = await flow({
-    invoke: 'install',
-    args: ['--cursor'],
-    script: [CURSOR_AGENT_VERSION],
-    options: () => ({ selectCursorInstallMethod: async () => null }),
-  });
-
-  expect(cancelled.lines).toEqual(['Cancelled: Cursor integration was not installed.', '']);
-  expect(cancelled.log).toEqual(['cursor-agent --version\t<root>']);
-  expect(fileAt(cancelled.tree, '.cursor/hooks.json')).toBeUndefined();
-});
-
-test('the Cursor plugin instructions warn while the npx hook is still configured', async () => {
-  const configured = await flow({ invoke: 'install', args: ['--cursor'] });
-  const seed = filesUnder(configured.tree, '.cursor/');
-
-  const caution = await flow({
-    invoke: 'install',
-    args: ['--cursor'],
-    seed,
-    script: [
-      CURSOR_AGENT_VERSION,
-      { command: 'cursor-agent', args: ['plugin', 'marketplace', 'add'] },
-    ],
-    options: () => ({ selectCursorInstallMethod: async () => 'plugin' as const }),
-  });
-
-  expect(caution.lines).toEqual([
-    ...CURSOR_PLUGIN_INSTRUCTIONS,
-    '',
-    'CAUTION: the Cursor hook in <home>/.cursor/hooks.json will run alongside the plugin.',
-    'After the plugin is active, delete its "npx -y cc-safety-net hook --cursor" entry from that file.',
-    '',
-  ]);
-  expect(filesUnder(caution.tree, '.cursor/')).toEqual(seed);
+  expect(fileAt(result.tree, '.cursor/hooks.json')).toBeString();
 });
 
 test('Cursor uninstall removes the plugin marketplace it finds on disk', async () => {

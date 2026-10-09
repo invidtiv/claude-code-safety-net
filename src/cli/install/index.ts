@@ -4,10 +4,8 @@ import { parseCommandArgs } from '@/cli/args';
 import { checkForUpdates } from '@/cli/doctor/updates';
 import { printInstallBanner } from '@/cli/install/banner';
 import {
-  type CursorInstallMethod,
   canPromptInstallTargets,
   type KimiInstallMethod,
-  promptCursorInstallMethod,
   promptInstallTargets,
   promptKimiInstallMethod,
 } from '@/cli/install/prompt';
@@ -18,7 +16,7 @@ import { atomicWriteFile } from '@/core/io/atomic-write';
 import { stripJsonComments } from '@/core/io/jsonc';
 import { installAmp, uninstallAmp } from '@/hosts/amp/install';
 import { installAntigravityCli, uninstallAntigravityCli } from '@/hosts/antigravity-cli/install';
-import { CURSOR_AGENT_PROBE, getIntegrationDisplayName } from '@/hosts/catalog';
+import { getIntegrationDisplayName } from '@/hosts/catalog';
 import { detectClaudeCode, hasClaudeInstalledPlugin } from '@/hosts/claude-code/detect';
 import { CODEX_TRUST_HINT } from '@/hosts/codex/detect';
 import { _getCopilotConfigHome } from '@/hosts/copilot-cli/detect';
@@ -33,20 +31,8 @@ import {
   hasCopilotPreRenamePlugin,
   hasCopilotSafetyNetPlugin,
 } from '@/hosts/copilot-cli/plugin-id';
-import {
-  CURSOR_CLAUDE_PLUGIN_METHOD,
-  CURSOR_HOOK_METHOD,
-  CURSOR_NATIVE_PLUGIN_METHOD,
-  detect as detectCursorHook,
-} from '@/hosts/cursor/detect';
-import {
-  addCursorPluginMarketplace,
-  CURSOR_HOOK_COMMAND,
-  getCursorHooksPath,
-  installCursor,
-  uninstallCursor,
-  uninstallCursorPlugin,
-} from '@/hosts/cursor/install';
+import { CURSOR_CLAUDE_PLUGIN_METHOD, CURSOR_NATIVE_PLUGIN_METHOD } from '@/hosts/cursor/detect';
+import { installCursor, uninstallCursor, uninstallCursorPlugin } from '@/hosts/cursor/install';
 import {
   markDeepSeekHarnessDesktopAvailable,
   planDeepSeekHarnessInstall,
@@ -129,9 +115,6 @@ export type RunInstallCommandOptions = {
     choices: readonly InstallTargetChoice[],
   ) => Promise<InstallTargetSelection>;
   selectKimiInstallMethod?: () => Promise<KimiInstallMethod | null>;
-  selectCursorInstallMethod?: (
-    defaultMethod: CursorInstallMethod,
-  ) => Promise<CursorInstallMethod | null>;
   runUpdate?: () => Promise<number>;
 };
 
@@ -775,43 +758,6 @@ function resolveKimiInstallMethod(
   });
 }
 
-const CURSOR_PLUGIN_INSTRUCTIONS = [
-  'Added the cc-safety-net marketplace to your Cursor account. To enable the plugin:',
-  '',
-  '  1. Run cursor-agent and open /plugins.',
-  '  2. Press Tab to open Marketplace, select CC Safety Net (cc-safety-net), and choose',
-  '     Install for you (user scope).',
-].join('\n');
-
-async function installCursorPlugin(environment: Environment): Promise<string> {
-  await addCursorPluginMarketplace();
-  if (detectCursorHook({ environment, cwd: process.cwd() }).method !== CURSOR_HOOK_METHOD)
-    return CURSOR_PLUGIN_INSTRUCTIONS;
-
-  return [
-    CURSOR_PLUGIN_INSTRUCTIONS,
-    '',
-    colors.red(
-      [
-        `CAUTION: the Cursor hook in ${getCursorHooksPath(environment)} will run alongside the plugin.`,
-        `After the plugin is active, delete its "${CURSOR_HOOK_COMMAND}" entry from that file.`,
-      ].join('\n'),
-    ),
-  ].join('\n');
-}
-
-async function resolveCursorInstallMethod(
-  options: RunInstallCommandOptions,
-): Promise<CursorInstallMethod | null> {
-  if (!options.selectCursorInstallMethod && !canPromptInstallTargets(options.input, options.output))
-    return 'hook';
-
-  const defaultMethod = (await probeInstallTarget(CURSOR_AGENT_PROBE)) ? 'plugin' : 'hook';
-  return options.selectCursorInstallMethod
-    ? options.selectCursorInstallMethod(defaultMethod)
-    : promptCursorInstallMethod({ input: options.input, output: options.output, defaultMethod });
-}
-
 async function runSingleInstallTarget(
   action: InstallAction,
   target: InstallTarget,
@@ -1046,21 +992,6 @@ export async function runInstallCommand(
         }
         if (method === 'plugin') {
           output.write(`${formatKimiPluginInstructions(environment)}\n`);
-          return;
-        }
-      }
-      if (target === 'cursor' && action === 'install') {
-        const method = await resolveCursorInstallMethod(options);
-        if (method === null) {
-          output.write('Cancelled: Cursor integration was not installed.\n');
-          return;
-        }
-        if (method === 'plugin') {
-          const message = await awaitWithSpinner(installCursorPlugin(environment), {
-            loadingMessage: 'Adding the CC Safety Net marketplace to Cursor…',
-            output,
-          });
-          output.write(`${message}\n`);
           return;
         }
       }

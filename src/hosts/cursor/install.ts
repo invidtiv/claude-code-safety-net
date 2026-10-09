@@ -26,18 +26,6 @@ export function getCursorPluginDirs(environment: Environment) {
   };
 }
 
-export async function addCursorPluginMarketplace(): Promise<void> {
-  await runNativeCommand([
-    'cursor-agent',
-    'plugin',
-    'marketplace',
-    'add',
-    'https://github.com/kenryu42/cc-safety-net',
-    '--git-ref',
-    'plugin',
-  ]);
-}
-
 export async function uninstallCursorPlugin(environment: Environment): Promise<string | undefined> {
   const dirs = Object.values(getCursorPluginDirs(environment));
   if (!dirs.some((dir) => existsSync(dir))) return undefined;

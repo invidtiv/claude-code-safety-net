@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
   canPromptInstallTargets as portedCanPrompt,
-  promptCursorInstallMethod,
   promptInstallTargets as portedPromptInstallTargets,
   promptKimiInstallMethod as portedPromptKimi,
 } from '@/cli/install/prompt';
@@ -189,28 +188,6 @@ describe('cli/install/prompt', () => {
     expect(framesOf(fresh.chunks)[0]).toContain(
       'Global hook — write the hook into ~/.kimi-code/config.toml now',
     );
-  });
-
-  test('the Cursor method picker starts on the default it is given', async () => {
-    const pickCursor = (defaultMethod: 'plugin' | 'hook', keys: readonly KeyPress[]) =>
-      runPrompt((fakes) => promptCursorInstallMethod({ ...fakes, defaultMethod }), keys);
-
-    const plugin = await pickCursor('plugin', [KEY.enter]);
-    expect(plugin.result).toBe('plugin');
-    expect(Bun.stripANSI(framesOf(plugin.chunks)[0] ?? '').split('\n')).toEqual([
-      '',
-      'Install the Cursor integration as:',
-      '',
-      '  ◯ Hook — write the hook into ~/.cursor/hooks.json now',
-      '> ◉ Native Cursor plugin — add the marketplace with cursor-agent, then enable it in /plugins',
-      '',
-      'Enter: confirm  Up/Down: move  q/Esc: cancel',
-      '',
-    ]);
-
-    expect((await pickCursor('hook', [KEY.enter])).result).toBe('hook');
-    expect((await pickCursor('hook', [KEY.down, KEY.enter])).result).toBe('plugin');
-    expect((await pickCursor('plugin', [KEY.quit])).result).toBeNull();
   });
 
   test('the prompt is offered only to a full TTY on both implementations', () => {

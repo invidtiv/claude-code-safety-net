@@ -150,19 +150,32 @@ function renderInstallSelection(
 }
 
 export type KimiInstallMethod = 'global-hook' | 'plugin';
-export type CursorInstallMethod = 'hook' | 'plugin';
 
-type MethodRow<T> = readonly [method: T, label: string];
+const KIMI_METHODS: readonly KimiInstallMethod[] = ['global-hook', 'plugin'];
 
-function renderMethodSelection<T>(title: string, rows: readonly MethodRow<T>[], cursor: number) {
+function renderKimiMethodSelection(
+  cursor: number,
+  globalHookInstalled: boolean,
+  options: { color?: boolean } = {},
+): string {
+  const formatFocus = options.color !== false ? colors.bold : (value: string) => value;
+  const rows = [
+    `Global hook — ${
+      globalHookInstalled
+        ? 'already installed; selecting it reports the current state'
+        : 'write the hook into ~/.kimi-code/config.toml now'
+    }`,
+    'Native Kimi plugin — print the steps to run inside Kimi Code',
+  ];
+
   return [
     '',
-    title,
+    'Install the Kimi Code integration as:',
     '',
-    ...rows.map(([, row], index) => {
+    ...rows.map((row, index) => {
       const focused = index === cursor;
       const rowBody = `${focused ? CHECKBOX_ON : CHECKBOX_OFF} ${row}`;
-      return `${focused ? CURSOR_ON : CURSOR_OFF} ${focused ? colors.bold(rowBody) : rowBody}`;
+      return `${focused ? CURSOR_ON : CURSOR_OFF} ${focused ? formatFocus(rowBody) : rowBody}`;
     }),
     '',
     'Enter: confirm  Up/Down: move  q/Esc: cancel',
@@ -222,20 +235,15 @@ function promptFramedSelection<T>(config: {
   });
 }
 
-function promptInstallMethod<T>(
-  title: string,
-  rows: readonly MethodRow<T>[],
-  options: InstallPromptOptions & { initial?: T },
-): Promise<T | null> {
-  let cursor = Math.max(
-    0,
-    rows.findIndex(([method]) => method === options.initial),
-  );
+export function promptKimiInstallMethod(
+  options: InstallPromptOptions & { globalHookInstalled?: boolean } = {},
+): Promise<KimiInstallMethod | null> {
+  let cursor = 0;
 
-  return promptFramedSelection<T | null>({
+  return promptFramedSelection<KimiInstallMethod | null>({
     input: options.input ?? process.stdin,
     output: options.output ?? process.stdout,
-    render: () => renderMethodSelection(title, rows, cursor),
+    render: () => renderKimiMethodSelection(cursor, options.globalHookInstalled === true),
     onKey: (inputValue, key, controls) => {
       if (key.ctrl && key.name === 'c') {
         controls.finish(null);
@@ -244,50 +252,14 @@ function promptInstallMethod<T>(
       }
       if (key.name === 'escape' || inputValue === 'q') return controls.finish(null);
       if (key.name === 'return' || key.name === 'enter') {
-        return controls.finish((rows[cursor] as MethodRow<T>)[0]);
+        return controls.finish(KIMI_METHODS[cursor] as KimiInstallMethod);
       }
       if (key.name === 'up' || key.name === 'down' || inputValue === 'k' || inputValue === 'j') {
-        cursor = (cursor + 1) % rows.length;
+        cursor = (cursor + 1) % KIMI_METHODS.length;
         controls.draw();
       }
     },
   });
-}
-
-export function promptKimiInstallMethod(
-  options: InstallPromptOptions & { globalHookInstalled?: boolean } = {},
-): Promise<KimiInstallMethod | null> {
-  return promptInstallMethod<KimiInstallMethod>(
-    'Install the Kimi Code integration as:',
-    [
-      [
-        'global-hook',
-        `Global hook — ${
-          options.globalHookInstalled === true
-            ? 'already installed; selecting it reports the current state'
-            : 'write the hook into ~/.kimi-code/config.toml now'
-        }`,
-      ],
-      ['plugin', 'Native Kimi plugin — print the steps to run inside Kimi Code'],
-    ],
-    options,
-  );
-}
-
-export function promptCursorInstallMethod(
-  options: InstallPromptOptions & { defaultMethod: CursorInstallMethod },
-): Promise<CursorInstallMethod | null> {
-  return promptInstallMethod<CursorInstallMethod>(
-    'Install the Cursor integration as:',
-    [
-      ['hook', 'Hook — write the hook into ~/.cursor/hooks.json now'],
-      [
-        'plugin',
-        'Native Cursor plugin — add the marketplace with cursor-agent, then enable it in /plugins',
-      ],
-    ],
-    { ...options, initial: options.defaultMethod },
-  );
 }
 
 export function canPromptInstallTargets(
