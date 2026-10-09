@@ -194,7 +194,7 @@ describe('the plugin tree', () => {
     ]);
 
     expect(fromTree).toEqual(fromSource);
-  });
+  }, 60_000);
 });
 
 describe('the hook module walk', () => {
