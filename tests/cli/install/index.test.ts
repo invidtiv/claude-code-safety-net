@@ -175,6 +175,192 @@ test('the plugin instructions warn while the global Kimi Code hook is still conf
   expect(filesUnder(caution.tree, '.kimi-code/')).toEqual(seed);
 });
 
+const CURSOR_AGENT_VERSION = {
+  command: 'cursor-agent',
+  args: ['--version'],
+  stdout: '2026.10.01\n',
+};
+const CURSOR_MARKETPLACE_ADD =
+  'cursor-agent plugin marketplace add https://github.com/kenryu42/cc-safety-net --git-ref plugin';
+const CURSOR_PLUGIN_CACHE = '.cursor/plugins/cache/cc-safety-net';
+const CURSOR_PLUGIN_VERSION = `${CURSOR_PLUGIN_CACHE}/cc-safety-net/cd9c9d896cf070aa3ae463c1da180a4839a7b21a`;
+const CURSOR_MARKETPLACE_CLONE = '.cursor/plugins/marketplaces/github.com/kenryu42/cc-safety-net';
+const CURSOR_PLUGIN_SEED = {
+  [`${CURSOR_PLUGIN_VERSION}/.cache-complete`]: '',
+  [`${CURSOR_PLUGIN_VERSION}/.cursor-plugin/plugin.json`]: '{"name":"cc-safety-net"}\n',
+  [`${CURSOR_MARKETPLACE_CLONE}/cd9c9d896cf070aa3ae463c1da180a4839a7b21a/.cursor-plugin/marketplace.json`]:
+    '{"name":"cc-safety-net"}\n',
+};
+const CURSOR_PLUGIN_INSTRUCTIONS = [
+  'Added the cc-safety-net marketplace to your Cursor account. To enable the plugin:',
+  '',
+  '  1. Run cursor-agent and open /plugins.',
+  '  2. Press Tab to open Marketplace, select CC Safety Net (cc-safety-net), and choose',
+  '     Install for you (user scope).',
+];
+
+test('Cursor defaults to the native plugin when cursor-agent is on PATH', async () => {
+  const defaults: string[] = [];
+  const result = await flow({
+    invoke: 'install',
+    args: ['--cursor'],
+    script: [
+      CURSOR_AGENT_VERSION,
+      { command: 'cursor-agent', args: ['plugin', 'marketplace', 'add'] },
+    ],
+    options: () => ({
+      selectCursorInstallMethod: async (defaultMethod) => {
+        defaults.push(defaultMethod);
+        return defaultMethod;
+      },
+    }),
+  });
+
+  expect(defaults).toEqual(['plugin']);
+  expect(result).toMatchObject({
+    exitCode: 0,
+    lines: [...CURSOR_PLUGIN_INSTRUCTIONS, ''],
+    errors: [],
+    log: ['cursor-agent --version\t<root>', `${CURSOR_MARKETPLACE_ADD}\t<root>`],
+  });
+  expect(fileAt(result.tree, '.cursor/hooks.json')).toBeUndefined();
+});
+
+test('Cursor defaults to the hook without cursor-agent and can be cancelled', async () => {
+  const defaults: string[] = [];
+  const hook = await flow({
+    invoke: 'install',
+    args: ['--cursor'],
+    options: () => ({
+      selectCursorInstallMethod: async (defaultMethod) => {
+        defaults.push(defaultMethod);
+        return defaultMethod;
+      },
+    }),
+  });
+
+  expect(defaults).toEqual(['hook']);
+  expect(hook.lines).toEqual(['Installed Cursor hook in <home>/.cursor/hooks.json', '']);
+  expect(hook.log).toEqual([]);
+
+  const cancelled = await flow({
+    invoke: 'install',
+    args: ['--cursor'],
+    script: [CURSOR_AGENT_VERSION],
+    options: () => ({ selectCursorInstallMethod: async () => null }),
+  });
+
+  expect(cancelled.lines).toEqual(['Cancelled: Cursor integration was not installed.', '']);
+  expect(cancelled.log).toEqual(['cursor-agent --version\t<root>']);
+  expect(fileAt(cancelled.tree, '.cursor/hooks.json')).toBeUndefined();
+});
+
+test('the Cursor plugin instructions warn while the npx hook is still configured', async () => {
+  const configured = await flow({ invoke: 'install', args: ['--cursor'] });
+  const seed = filesUnder(configured.tree, '.cursor/');
+
+  const caution = await flow({
+    invoke: 'install',
+    args: ['--cursor'],
+    seed,
+    script: [
+      CURSOR_AGENT_VERSION,
+      { command: 'cursor-agent', args: ['plugin', 'marketplace', 'add'] },
+    ],
+    options: () => ({ selectCursorInstallMethod: async () => 'plugin' as const }),
+  });
+
+  expect(caution.lines).toEqual([
+    ...CURSOR_PLUGIN_INSTRUCTIONS,
+    '',
+    'CAUTION: the Cursor hook in <home>/.cursor/hooks.json will run alongside the plugin.',
+    'After the plugin is active, delete its "npx -y cc-safety-net hook --cursor" entry from that file.',
+    '',
+  ]);
+  expect(filesUnder(caution.tree, '.cursor/')).toEqual(seed);
+});
+
+test('Cursor uninstall removes the plugin marketplace it finds on disk', async () => {
+  const removed = await flow({
+    invoke: 'uninstall',
+    args: ['--cursor'],
+    seed: CURSOR_PLUGIN_SEED,
+    script: [
+      { command: 'cursor-agent', args: ['plugin', 'marketplace', 'remove', 'cc-safety-net'] },
+    ],
+  });
+
+  expect(removed).toMatchObject({
+    exitCode: 0,
+    lines: [
+      'Cursor hook not installed in <home>/.cursor/hooks.json',
+      'Removed the cc-safety-net marketplace from your Cursor account.',
+      'If /plugins in cursor-agent still lists CC Safety Net as installed, uninstall it there.',
+      '',
+    ],
+    errors: [],
+    log: ['cursor-agent plugin marketplace remove cc-safety-net\t<root>'],
+  });
+  expect(removed.tree.map((entry) => entry.path)).not.toContain(CURSOR_PLUGIN_CACHE);
+  expect(removed.tree.map((entry) => entry.path)).not.toContain(CURSOR_MARKETPLACE_CLONE);
+
+  const alreadyGone = await flow({
+    invoke: 'uninstall',
+    args: ['--cursor'],
+    seed: CURSOR_PLUGIN_SEED,
+    script: [
+      {
+        command: 'cursor-agent',
+        args: ['plugin', 'marketplace', 'remove'],
+        stderr: 'No marketplace matches "cc-safety-net". Available: cursor-public\n',
+        exit: 1,
+      },
+    ],
+  });
+  expect(alreadyGone.exitCode).toBe(0);
+  expect(alreadyGone.tree.map((entry) => entry.path)).not.toContain(CURSOR_PLUGIN_CACHE);
+
+  const loggedOut = await flow({
+    invoke: 'uninstall',
+    args: ['--cursor'],
+    seed: CURSOR_PLUGIN_SEED,
+    script: [
+      {
+        command: 'cursor-agent',
+        args: ['plugin', 'marketplace', 'remove'],
+        stderr: 'Not logged in. Run `cursor-agent login` first.\n',
+        exit: 1,
+      },
+    ],
+  });
+  expect(loggedOut).toMatchObject({
+    exitCode: 1,
+    errors: [
+      'Failed to run cursor-agent plugin marketplace remove cc-safety-net (exit 1).\nNot logged in. Run `cursor-agent login` first.',
+    ],
+  });
+  expect(fileAt(loggedOut.tree, `${CURSOR_PLUGIN_VERSION}/.cache-complete`)).toBe('');
+});
+
+test('a Cursor protected only by the native plugin gets no npx hook on update', async () => {
+  const result = await flow({
+    invoke: 'update',
+    seed: CURSOR_PLUGIN_SEED,
+    options: () => ({
+      fetchVersion: async () => null,
+      checkLatestVersion: async () => ({
+        currentVersion: 'dev',
+        latestVersion: 'dev',
+        updateAvailable: false,
+      }),
+    }),
+  });
+
+  expect(result.exitCode).toBe(0);
+  expect(result.lines.join('\n')).not.toContain('Cursor');
+  expect(fileAt(result.tree, '.cursor/hooks.json')).toBeUndefined();
+});
+
 const HERMES_DIR = '.hermes/plugins/cc-safety-net';
 const HERMES_ENABLE = 'hermes plugins enable cc-safety-net --no-allow-tool-override\t<root>';
 

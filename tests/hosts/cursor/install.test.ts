@@ -210,3 +210,50 @@ describe('Cursor protected through the Claude Code plugin', () => {
     ).toEqual(absent);
   });
 });
+
+const CURSOR_PLUGIN_VERSION =
+  '.cursor/plugins/cache/cc-safety-net/cc-safety-net/cd9c9d896cf070aa3ae463c1da180a4839a7b21a';
+const CURSOR_PLUGIN_FILES = {
+  [`${CURSOR_PLUGIN_VERSION}/.cursor-plugin/plugin.json`]:
+    '{"name":"cc-safety-net","hooks":"./hooks/cursor.json"}',
+  [`${CURSOR_PLUGIN_VERSION}/hooks/cursor.json`]: '{}',
+};
+const CURSOR_PLUGIN = { ...CURSOR_PLUGIN_FILES, [`${CURSOR_PLUGIN_VERSION}/.cache-complete`]: '' };
+const ACCOUNT_CAVEAT =
+  "Cursor records enabled plugins on your Cursor account, which doctor cannot check, and keeps a plugin's files after it is uninstalled.";
+
+describe('Cursor protected through its native plugin', () => {
+  test('counts as configured when the plugin cache Cursor completed is on disk', async () => {
+    expect(await detection(CURSOR_PLUGIN)).toEqual({
+      kind: 'returned',
+      value: {
+        platform: 'cursor',
+        status: 'configured',
+        method: 'Cursor plugin',
+        configPath: `<home>/${CURSOR_PLUGIN_VERSION}`,
+        errors: [
+          `${ACCOUNT_CAVEAT} If /plugins in cursor-agent does not list CC Safety Net as installed, run \`cc-safety-net install --cursor\`.`,
+        ],
+      },
+    });
+  });
+
+  test('warns that the npx hook duplicates the native plugin', async () => {
+    expect(await detection({ ...CURSOR_PLUGIN, [CONFIG]: cursorConfig([CANONICAL]) })).toEqual({
+      kind: 'returned',
+      value: {
+        ...CONFIGURED,
+        errors: [
+          `The Cursor plugin also runs this check, so every tool call is checked twice. ${ACCOUNT_CAVEAT} If the plugin is installed, delete the "${MANAGED}" entry from ${CONFIG_PATH}.`,
+        ],
+      },
+    });
+  });
+
+  test('ignores a plugin download Cursor never completed', async () => {
+    expect(await detection(CURSOR_PLUGIN_FILES)).toEqual({
+      kind: 'returned',
+      value: { platform: 'cursor', status: 'n/a', configPath: CONFIG_PATH },
+    });
+  });
+});

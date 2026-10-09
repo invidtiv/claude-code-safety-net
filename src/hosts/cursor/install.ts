@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Environment } from '@/core/environment';
 import { atomicWriteFile } from '@/core/io/atomic-write';
+import { runNativeCommand } from '@/hosts/install/native';
 import type { InstallResult } from '@/hosts/install/types';
 import { managedHookCommands } from '@/hosts/managed-command';
 
@@ -13,6 +14,49 @@ type CursorHooksConfig = { version?: unknown; hooks?: unknown; [key: string]: un
 
 export function getCursorHooksPath(environment: Environment): string {
   return join(environment.home, '.cursor', 'hooks.json');
+}
+
+export const CURSOR_MARKETPLACE_NAME = 'cc-safety-net';
+
+export function getCursorPluginDirs(environment: Environment) {
+  const plugins = join(environment.home, '.cursor', 'plugins');
+  return {
+    cache: join(plugins, 'cache', CURSOR_MARKETPLACE_NAME),
+    marketplaceClone: join(plugins, 'marketplaces', 'github.com', 'kenryu42', 'cc-safety-net'),
+  };
+}
+
+export async function addCursorPluginMarketplace(): Promise<void> {
+  await runNativeCommand([
+    'cursor-agent',
+    'plugin',
+    'marketplace',
+    'add',
+    'https://github.com/kenryu42/cc-safety-net',
+    '--git-ref',
+    'plugin',
+  ]);
+}
+
+export async function uninstallCursorPlugin(environment: Environment): Promise<string | undefined> {
+  const dirs = Object.values(getCursorPluginDirs(environment));
+  if (!dirs.some((dir) => existsSync(dir))) return undefined;
+
+  const marketplaceAlreadyRemoved = 'No marketplace matches';
+  await runNativeCommand([
+    'cursor-agent',
+    'plugin',
+    'marketplace',
+    'remove',
+    CURSOR_MARKETPLACE_NAME,
+  ]).catch((error: unknown) => {
+    if (!(error instanceof Error && error.message.includes(marketplaceAlreadyRemoved))) throw error;
+  });
+  dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true }));
+  return [
+    `Removed the ${CURSOR_MARKETPLACE_NAME} marketplace from your Cursor account.`,
+    'If /plugins in cursor-agent still lists CC Safety Net as installed, uninstall it there.',
+  ].join('\n');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

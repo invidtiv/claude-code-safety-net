@@ -1,6 +1,13 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Environment } from '@/core/environment';
 import { findClaudeCursorPluginManifest } from '@/hosts/claude-code/detect';
-import { CURSOR_HOOK_COMMAND, getCursorHooksPath } from '@/hosts/cursor/install';
+import {
+  CURSOR_HOOK_COMMAND,
+  CURSOR_MARKETPLACE_NAME,
+  getCursorHooksPath,
+  getCursorPluginDirs,
+} from '@/hosts/cursor/install';
 import type { DetectContext, HookDetection } from '@/hosts/detect/context';
 
 function _findCursorManagedEntries(config: unknown): Array<Record<string, unknown>> {
@@ -35,30 +42,54 @@ function _cursorDriftErrors(entries: Array<Record<string, unknown>>): string[] {
 }
 
 export const CURSOR_CLAUDE_PLUGIN_METHOD = 'Claude Code plugin';
+export const CURSOR_NATIVE_PLUGIN_METHOD = 'Cursor plugin';
+export const CURSOR_HOOK_METHOD = 'hook config';
+
+function findCursorPluginVersion(environment: Environment): string | undefined {
+  const versions = join(getCursorPluginDirs(environment).cache, CURSOR_MARKETPLACE_NAME);
+  return existsSync(versions)
+    ? readdirSync(versions)
+        .map((version) => join(versions, version))
+        .find((dir) => existsSync(join(dir, '.cache-complete')))
+    : undefined;
+}
+
+function findCursorPluginRoute(environment: Environment) {
+  const nativeVersion = findCursorPluginVersion(environment);
+  if (nativeVersion) {
+    const caveat =
+      "Cursor records enabled plugins on your Cursor account, which doctor cannot check, and keeps a plugin's files after it is uninstalled.";
+    return {
+      method: CURSOR_NATIVE_PLUGIN_METHOD,
+      configPath: nativeVersion,
+      duplicate: `The Cursor plugin also runs this check, so every tool call is checked twice. ${caveat} If the plugin is installed, delete the "${CURSOR_HOOK_COMMAND}" entry from ${getCursorHooksPath(environment)}.`,
+      alone: `${caveat} If /plugins in cursor-agent does not list CC Safety Net as installed, run \`cc-safety-net install --cursor\`.`,
+    };
+  }
+  const claudeManifest = findClaudeCursorPluginManifest(environment);
+  if (!claudeManifest) return undefined;
+  const caveat =
+    'Cursor runs the Claude Code plugin only while it imports Claude Code plugins, which doctor cannot check.';
+  return {
+    method: CURSOR_CLAUDE_PLUGIN_METHOD,
+    configPath: claudeManifest,
+    duplicate: `The Claude Code plugin also runs this check in Cursor, so every tool call is checked twice. ${caveat} If Cursor runs it, run \`cc-safety-net uninstall --cursor\` to remove this hook.`,
+    alone: `${caveat} If it stops, run \`cc-safety-net install --cursor\`.`,
+  };
+}
 
 export function detect(context: DetectContext): HookDetection {
   const hookConfig = detectHookConfig(context);
-  const claudeManifest = findClaudeCursorPluginManifest(context.environment);
-  if (!claudeManifest) return hookConfig;
-  const importCaveat =
-    'Cursor runs the Claude Code plugin only while it imports Claude Code plugins, which doctor cannot check.';
+  const plugin = findCursorPluginRoute(context.environment);
+  if (!plugin) return hookConfig;
   if (hookConfig.status === 'configured')
-    return {
-      ...hookConfig,
-      errors: [
-        ...(hookConfig.errors ?? []),
-        `The Claude Code plugin also runs this check in Cursor, so every tool call is checked twice. ${importCaveat} If Cursor runs it, run \`cc-safety-net uninstall --cursor\` to remove this hook.`,
-      ],
-    };
+    return { ...hookConfig, errors: [...(hookConfig.errors ?? []), plugin.duplicate] };
   return {
     platform: 'cursor',
     status: 'configured',
-    method: CURSOR_CLAUDE_PLUGIN_METHOD,
-    configPath: claudeManifest,
-    errors: [
-      ...(hookConfig.errors ?? []),
-      `${importCaveat} If it stops, run \`cc-safety-net install --cursor\`.`,
-    ],
+    method: plugin.method,
+    configPath: plugin.configPath,
+    errors: [...(hookConfig.errors ?? []), plugin.alone],
   };
 }
 
@@ -92,7 +123,7 @@ function detectHookConfig(context: DetectContext): HookDetection {
   return {
     platform: 'cursor',
     status: 'configured',
-    method: 'hook config',
+    method: CURSOR_HOOK_METHOD,
     configPath,
     errors: errors.length > 0 ? errors : undefined,
   };
