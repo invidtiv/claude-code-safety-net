@@ -232,7 +232,7 @@ function removeMaskingLocalDirectory(environment: Environment, onUnmanaged: 'fai
 
 function holdsOnlyManagedEntry(directory: string): boolean {
   const entryName = basename(AMP_PLUGIN_ENTRY);
-  if (readdirSync(directory).join(' ') !== entryName) return false;
+  if (readdirSync(directory).join('\0') !== entryName) return false;
   const entry = join(directory, entryName);
   const info = lstatOrUndefined(entry);
   return (

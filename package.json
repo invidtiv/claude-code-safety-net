@@ -60,6 +60,7 @@
   "scripts": {
     "audit:dependencies": "bun audit --ignore=GHSA-ch52-4w7c-c8xp",
     "build": "bun run clean && bun scripts/project-bun.ts scripts/build.ts",
+    "build:plugin": "bun scripts/project-bun.ts scripts/build-plugin-tree.ts",
     "build:types": "tsc --project tsconfig.build.json --emitDeclarationOnly --declaration",
     "verify:package": "bun run scripts/verify-package.ts",
     "verify:repository-plugin": "bun run scripts/verify-repository-plugin.ts",
