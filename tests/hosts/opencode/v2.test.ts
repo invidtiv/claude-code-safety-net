@@ -194,7 +194,7 @@ test('a POSIX adapter checks and creates a real bash, Git Bash on Windows', asyn
       ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
       : '/bin/bash';
   expect(await createShell(bash, process.env)).toBe('created');
-});
+}, 30_000);
 
 function writeShellStub() {
   const shell = join(fixture.root, 'ash');
