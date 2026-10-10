@@ -120,6 +120,8 @@ Use normal GitHub issues for:
 - Installation problems without a security impact
 - Questions about custom rules or configuration
 
+Findings from Anthropic's OSS Scanner, including bypasses, are confidential under that service's terms. The maintainer fixes them privately and opens a public issue only after the fix is released.
+
 ## Response Expectations
 
 You should receive an initial response within 7 days.
