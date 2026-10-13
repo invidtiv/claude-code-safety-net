@@ -292,15 +292,42 @@ describe('disableAllHooks', () => {
     ).toEqual(viaHooks([at(REPO_HOOK)]));
   });
 
-  test('reads the user settings as JSONC, so a commented false still ends the search', async () => {
+  test('in the JSONC user settings skips only the inline hooks of that file', async () => {
     expect(
       await detection(
         {
-          [USER_SETTINGS]: '{\n  // note\n  "disableAllHooks": false\n}\n',
-          [USER_CONFIG]: JSON.stringify({ disableAllHooks: true }),
+          [USER_SETTINGS]: `{\n  // note\n  "disableAllHooks": true,\n  ${HOOK_FILE.slice(1, -1)}\n}\n`,
+          [USER_HOOK]: HOOK_FILE,
           [REPO_HOOK]: HOOK_FILE,
         },
         '1.0.8',
+      ),
+    ).toEqual(viaHooks([at(REPO_HOOK), at(USER_HOOK)]));
+  });
+
+  test.each([
+    [REPO_HOOK, USER_HOOK],
+    [USER_HOOK, REPO_HOOK],
+  ])('in the hook file %s skips only that file', async (disabledFile, otherFile) => {
+    expect(
+      await detection(
+        { [disabledFile]: inline({ disableAllHooks: true }), [otherFile]: HOOK_FILE },
+        '1.0.8',
+      ),
+    ).toEqual(viaHooks([at(otherFile)]));
+  });
+});
+
+describe('the config.json Copilot 1.0.93 stopped reading for hooks', () => {
+  test('does not count an inline hook there', async () => {
+    expect(await detection({ [USER_CONFIG]: HOOK_FILE }, '1.0.96')).toEqual(absent());
+  });
+
+  test('does not apply a disableAllHooks there', async () => {
+    expect(
+      await detection(
+        { [USER_CONFIG]: JSON.stringify({ disableAllHooks: true }), [REPO_HOOK]: HOOK_FILE },
+        '1.0.96',
       ),
     ).toEqual(viaHooks([at(REPO_HOOK)]));
   });
@@ -411,6 +438,15 @@ describe('the plugin checkout under the Copilot home', () => {
         '1.0.8',
       ),
     ).toEqual(pluginOffBy(at(USER_SETTINGS)));
+  });
+
+  test('keeps the plugin on when the user settings disable all hooks', async () => {
+    expect(
+      await detection(
+        { ...INSTALLED, [USER_SETTINGS]: JSON.stringify({ disableAllHooks: true }) },
+        '1.0.96',
+      ),
+    ).toEqual(pluginOn);
   });
 
   test('treats an absent enabledPlugins entry as on', async () => {
