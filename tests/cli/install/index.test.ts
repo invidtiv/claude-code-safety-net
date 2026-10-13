@@ -175,6 +175,43 @@ test('the plugin instructions warn while the global Kimi Code hook is still conf
   expect(filesUnder(caution.tree, '.kimi-code/')).toEqual(seed);
 });
 
+test('a Kimi Code plugin install is not taken for the global hook', async () => {
+  const seed = {
+    '.kimi-code/plugins/installed.json':
+      '{"version":1,"plugins":[{"id":"cc-safety-net","enabled":true}]}\n',
+  };
+  const offered = (action: 'install' | 'uninstall') => async () => {
+    const choices: InstallTargetChoice[] = [];
+    await flow({
+      invoke: action,
+      seed,
+      options: () => ({
+        probeTargets: () => true,
+        fetchVersion: async () => null,
+        selectTargets: async (_action: string, offeredChoices: readonly InstallTargetChoice[]) => {
+          choices.push(...offeredChoices);
+          return null;
+        },
+      }),
+    });
+    return choices.find((choice) => choice.target === 'kimi-code');
+  };
+
+  expect(await offered('install')()).toMatchObject({ label: 'Kimi Code', available: true });
+  expect(await offered('uninstall')()).toMatchObject({
+    available: false,
+    unavailableReason: 'not installed',
+  });
+
+  const instructions = await flow({
+    invoke: 'install',
+    args: ['--kimi-code'],
+    seed,
+    options: () => ({ selectKimiInstallMethod: async () => 'plugin' as const }),
+  });
+  expect(instructions.lines.join('\n')).not.toContain('CAUTION');
+});
+
 const CURSOR_AGENT_VERSION = {
   command: 'cursor-agent',
   args: ['--version'],

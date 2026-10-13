@@ -8,6 +8,8 @@ import {
   readStateFile,
 } from '@/hosts/detect/context';
 
+const PI_EXTENSION_PATH = 'dist/pi/index.js';
+
 export function getPiSettingsPath(environment: Environment): string {
   const agentDir = environment.env.get('PI_CODING_AGENT_DIR');
   return join(
@@ -39,8 +41,15 @@ export function detect(context: DetectContext): HookDetection {
 
   const extensions = readRecord(entry, 'extensions');
   const disabled =
-    Array.isArray(extensions) &&
-    extensions.some((resource) => typeof resource === 'string' && resource.startsWith('-'));
+    extensions !== undefined &&
+    !(
+      Array.isArray(extensions) &&
+      extensions.includes(PI_EXTENSION_PATH) &&
+      !extensions.some(
+        (resource) =>
+          typeof resource === 'string' && (resource.startsWith('-') || resource.startsWith('!')),
+      )
+    );
 
   if (disabled) {
     return {

@@ -34,7 +34,7 @@ test.each([
   ['an entry with no resource filter', settings({ source: 'npm:cc-safety-net' })],
   [
     'a filter that keeps the extension',
-    settings({ source: 'npm:cc-safety-net', extensions: ['cc-safety-net'] }),
+    settings({ source: 'npm:cc-safety-net', extensions: ['dist/pi/index.js'] }),
   ],
 ])('reports the package configured for %s', async (_case, seed) => {
   expect(await detection(seed)).toEqual(
@@ -47,10 +47,14 @@ test.each([
   );
 });
 
-test('reports a `-`-prefixed resource filter as disabled', async () => {
-  expect(
-    await detection(settings({ source: 'npm:cc-safety-net', extensions: ['-cc-safety-net'] })),
-  ).toEqual(
+test.each([
+  ['a `-`-prefixed entry', ['-cc-safety-net']],
+  ['an empty filter', []],
+  ['a `!` exclusion of the extension', ['!dist/pi/index.js']],
+  ['a pattern that matches no extension path', ['cc-safety-net']],
+  ['the extension path beside an exclusion', ['dist/pi/index.js', '!other.js']],
+])('reports the extension disabled for %s', async (_case, extensions) => {
+  expect(await detection(settings({ source: 'npm:cc-safety-net', extensions }))).toEqual(
     status({
       platform: 'pi',
       status: 'disabled',

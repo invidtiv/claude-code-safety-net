@@ -117,6 +117,44 @@ describe('the Grok Build detector differential', () => {
     });
   });
 
+  test.each([
+    ['alone', [CANONICAL_ENTRY], 'global/cc-safety-net:pre_tool_use[0].hooks[0]'],
+    [
+      'after a foreign entry and handler',
+      [FOREIGN_ENTRY, { hooks: [FOREIGN_ENTRY.hooks[0], CANONICAL_ENTRY.hooks[0]] }],
+      'global/cc-safety-net:pre_tool_use[1].hooks[1]',
+    ],
+  ])('reports the hook disabled when disabled-hooks names it %s', async (_case, entries, name) => {
+    expect(
+      await detection({
+        [HOOKS]: grokConfig(entries),
+        '.grok/disabled-hooks': `# skipped by /hooks\nglobal/other:pre_tool_use[0].hooks[0]\n  ${name}  \n`,
+      }),
+    ).toEqual({
+      kind: 'returned',
+      value: {
+        ...CONFIGURED,
+        status: 'disabled',
+        errors: [
+          `Grok Build skips the hook: ${name} is listed in <home>/.grok/disabled-hooks; enable it in /hooks`,
+        ],
+      },
+    });
+  });
+
+  test.each([
+    ['names another hook', 'global/cc-safety-net:pre_tool_use[1].hooks[0]\n'],
+    ['comments the hook out', '# global/cc-safety-net:pre_tool_use[0].hooks[0]\n'],
+    ['is a directory', null],
+  ])('keeps the hook configured when disabled-hooks %s', async (_case, disabledHooks) => {
+    expect(
+      await detection({
+        [HOOKS]: grokConfig([CANONICAL_ENTRY]),
+        '.grok/disabled-hooks': disabledHooks,
+      }),
+    ).toEqual({ kind: 'returned', value: CONFIGURED });
+  });
+
   test('says nothing is installed for a foreign or absent file', async () => {
     const absent = {
       kind: 'returned',

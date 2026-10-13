@@ -19,6 +19,23 @@ const CONFIGURED = {
   configPath: `<home>/${TOML}`,
 } as const;
 
+const INSTALLED = '.kimi-code/plugins/installed.json';
+const PLUGIN = {
+  platform: 'kimi-code',
+  method: 'plugin config',
+  configPath: `<home>/${INSTALLED}`,
+} as const;
+const installedPlugins = (...plugins: readonly { id: string; enabled: boolean }[]) =>
+  JSON.stringify({
+    version: 1,
+    plugins: plugins.map((plugin) => ({
+      ...plugin,
+      root: '/plugins/root',
+      source: { kind: 'github', ref: { kind: 'branch' } },
+      installedAt: '2026-10-13T00:00:00.000Z',
+    })),
+  });
+
 const { row, detection } = hostRunner((environment) => ({
   install: () => installKimiCode(environment),
   detect: () => detectKimi({ environment, cwd: environment.home }),
@@ -241,6 +258,118 @@ describe('the Kimi Code detector differential', () => {
 
     expect(await detection({ [TOML]: COMMENTED })).toEqual(absent);
     expect(await detection({})).toEqual(absent);
+  });
+
+  test.each([
+    [
+      'an unknown key in a foreign table',
+      `[[hooks]]\nevent = "PostToolUse"\ncommand = "echo"\ncwd = "/tmp"\n\n${HOOK_BLOCK}\n`,
+      'hooks entry 1 is invalid (unknown key "cwd")',
+    ],
+    [
+      'an unknown key on the managed table',
+      `${HOOK_BLOCK}\nenv = { A = "1" }\n`,
+      'hooks entry 1 is invalid (unknown key "env")',
+    ],
+    [
+      'an event Kimi does not know in an inline array',
+      `hooks = [\n  { event = "AfterTool", command = "echo" }, # foreign\n  ${INLINE_HOOK},\n]\n`,
+      'hooks entry 1 is invalid ("event" is not a Kimi Code hook event)',
+    ],
+    [
+      'a missing event',
+      `${HOOK_BLOCK}\n\n[[hooks]]\ncommand = "echo"\n`,
+      'hooks entry 2 is invalid ("event" is not a Kimi Code hook event)',
+    ],
+    [
+      'an empty command',
+      `[[hooks]]\nevent = "Stop"\ncommand = ""\n\n${HOOK_BLOCK}\n`,
+      'hooks entry 1 is invalid ("command" is missing or empty)',
+    ],
+    [
+      'a matcher that is not a string',
+      `[[hooks]]\nevent = "Stop"\nmatcher = 5\ncommand = "echo"\n\n${HOOK_BLOCK}\n`,
+      'hooks entry 1 is invalid ("matcher" is not a string)',
+    ],
+    ...['0', '601', '1.5', '"30"'].map(
+      (timeout) =>
+        [
+          `a timeout of ${timeout}`,
+          `${HOOK_BLOCK}\ntimeout = ${timeout}\n`,
+          'hooks entry 1 is invalid ("timeout" is not an integer from 1 to 600)',
+        ] as const,
+    ),
+  ])('reports every hook dropped for %s', async (_case, config, problem) => {
+    expect(await detection({ [TOML]: config })).toEqual({
+      kind: 'returned',
+      value: {
+        ...CONFIGURED,
+        status: 'disabled',
+        errors: [`Kimi Code ignores every hook because ${problem}; fix it in <home>/${TOML}`],
+      },
+    });
+  });
+
+  test('keeps the hook configured beside foreign entries that use every allowed key', async () => {
+    const foreign =
+      '[[hooks]]\nevent = \'PostToolUse\' # trailing\nmatcher = "Bash"\ncommand = "echo \'# not a comment\', \\"x\\""\ntimeout = 600\n';
+    expect(
+      await detection({ [TOML]: `model = "x"\n\n${foreign}\n${HOOK_BLOCK}\ntimeout = 1\n` }),
+    ).toEqual({ kind: 'returned', value: CONFIGURED });
+    expect(
+      await detection({ [TOML]: INLINE_SEED.replace('hooks = [', `hooks = [\n  ${INLINE_HOOK},`) }),
+    ).toEqual({
+      kind: 'returned',
+      value: CONFIGURED,
+    });
+  });
+
+  test.each([
+    [true, { ...PLUGIN, status: 'configured' as const }],
+    [
+      false,
+      {
+        ...PLUGIN,
+        status: 'disabled' as const,
+        errors: [
+          'cc-safety-net is installed but not enabled in Kimi Code; run /plugins enable cc-safety-net',
+        ],
+      },
+    ],
+  ])('reports a plugin install with enabled %p', async (enabled, expected) => {
+    expect(
+      await detection({ [INSTALLED]: installedPlugins({ id: 'cc-safety-net', enabled }) }),
+    ).toEqual({
+      kind: 'returned',
+      value: expected,
+    });
+  });
+
+  test('follows KIMI_CODE_HOME to the plugin record and ignores other plugins', async () => {
+    expect(
+      await detection(
+        {
+          'kimi-home/plugins/installed.json': installedPlugins({
+            id: 'cc-safety-net',
+            enabled: true,
+          }),
+        },
+        { KIMI_CODE_HOME: '<home>/kimi-home' },
+      ),
+    ).toEqual({
+      kind: 'returned',
+      value: {
+        ...PLUGIN,
+        status: 'configured',
+        configPath: '<home>/kimi-home/plugins/installed.json',
+      },
+    });
+    expect(
+      await detection({ [INSTALLED]: installedPlugins({ id: 'other', enabled: true }) }),
+    ).toEqual({
+      kind: 'returned',
+      value: { platform: 'kimi-code', status: 'n/a', configPath: `<home>/${TOML}` },
+    });
   });
 
   test('reports a config it cannot read instead of guessing', async () => {
