@@ -12,6 +12,16 @@ function _isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+function _readOptionalFile(path: string): string | undefined {
+  try {
+    return statSync(path, { throwIfNoEntry: false })?.isFile() === true
+      ? readFileSync(path, 'utf-8')
+      : '';
+  } catch {
+    return undefined;
+  }
+}
+
 export function detect(context: DetectContext): HookDetection {
   const configPath = getGrokBuildHooksPath(context.environment);
 
@@ -47,12 +57,14 @@ export function detect(context: DetectContext): HookDetection {
     : -1;
   const hookName = `global/cc-safety-net:pre_tool_use[${preToolUse.indexOf(entry)}].hooks[${handlerIndex}]`;
   const disabledHooksPath = join(dirname(dirname(configPath)), 'disabled-hooks');
-  const disabled =
-    statSync(disabledHooksPath, { throwIfNoEntry: false })?.isFile() === true &&
-    readFileSync(disabledHooksPath, 'utf-8')
-      .split('\n')
-      .some((line) => line.trim() === hookName);
+  const disabledHooks = _readOptionalFile(disabledHooksPath);
+  const disabled = disabledHooks?.split('\n').some((line) => line.trim() === hookName) === true;
   const errors = [
+    ...(disabledHooks === undefined
+      ? [
+          `Cannot read ${disabledHooksPath}, so doctor cannot tell whether Grok Build skips the hook`,
+        ]
+      : []),
     ...(disabled
       ? [
           `Grok Build skips the hook: ${hookName} is listed in ${disabledHooksPath}; enable it in /hooks`,

@@ -98,13 +98,18 @@ function _kimiHookEntryProblem(entry: readonly string[]) {
   const pairs = entry.map(_parseTomlPair);
   const unparsed = entry.find((_pair, index) => pairs[index] === undefined);
   const unknown = pairs.find((pair) => pair !== undefined && !KIMI_HOOK_KEYS.has(pair.key))?.key;
+  const duplicate = pairs.find(
+    (pair, index) =>
+      pair !== undefined && pairs.findIndex((other) => other?.key === pair.key) < index,
+  )?.key;
   const field = (key: string) => pairs.find((pair) => pair?.key === key)?.value;
   const matcher = field('matcher');
   const timeout = field('timeout');
-  const timeoutValue = Number(timeout);
+  const timeoutValue = Number(timeout?.replace(/(?<=[\da-f])_(?=[\da-f])/gi, ''));
   const problems: [boolean, string][] = [
     [unparsed !== undefined, `"${unparsed}" is not a key = value pair`],
     [unknown !== undefined, `unknown key "${unknown}"`],
+    [duplicate !== undefined, `duplicate key "${duplicate}"`],
     [
       !KIMI_HOOK_EVENTS.has(_tomlString(field('event')) ?? ''),
       '"event" is not a Kimi Code hook event',
@@ -123,10 +128,19 @@ function _kimiHookEntryProblem(entry: readonly string[]) {
 function _detectKimiPlugin(environment: Environment): HookDetection | undefined {
   const installedPath = join(_getKimiHome(environment), 'plugins', 'installed.json');
   const installed = readStateFile(installedPath);
+  if (installed.kind === 'missing') return undefined;
   const plugins = installed.kind === 'ok' ? readRecord(installed.value, 'plugins') : undefined;
-  const record = Array.isArray(plugins)
-    ? plugins.find((plugin) => readRecord(plugin, 'id') === KIMI_PLUGIN_ID)
-    : undefined;
+  if (!Array.isArray(plugins)) {
+    return {
+      platform: 'kimi-code',
+      status: 'n/a',
+      configPath: installedPath,
+      errors: [
+        `Cannot read ${installedPath}, so doctor cannot tell whether the Kimi Code plugin is installed`,
+      ],
+    };
+  }
+  const record = plugins.find((plugin) => readRecord(plugin, 'id') === KIMI_PLUGIN_ID);
   if (record === undefined) return undefined;
   if (readRecord(record, 'enabled') !== true) {
     return {
@@ -167,7 +181,8 @@ export function detect(context: DetectContext): HookDetection {
   }
   if (!KIMI_HOOK_COMMAND_PATTERN.test(content)) return notInstalled();
 
-  const errors = _kimiHookEntries(content).flatMap((entry, index) => {
+  const entries = /"""|'''/.test(content) ? [] : _kimiHookEntries(content);
+  const errors = entries.flatMap((entry, index) => {
     const problem = _kimiHookEntryProblem(entry);
     return problem === undefined
       ? []

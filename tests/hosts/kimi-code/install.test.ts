@@ -31,7 +31,7 @@ const installedPlugins = (...plugins: readonly { id: string; enabled: boolean }[
     plugins: plugins.map((plugin) => ({
       ...plugin,
       root: '/plugins/root',
-      source: { kind: 'github', ref: { kind: 'branch' } },
+      source: 'github',
       installedAt: '2026-10-13T00:00:00.000Z',
     })),
   });
@@ -291,7 +291,17 @@ describe('the Kimi Code detector differential', () => {
       `[[hooks]]\nevent = "Stop"\nmatcher = 5\ncommand = "echo"\n\n${HOOK_BLOCK}\n`,
       'hooks entry 1 is invalid ("matcher" is not a string)',
     ],
-    ...['0', '601', '1.5', '"30"'].map(
+    [
+      'a key given twice',
+      `${HOOK_BLOCK}\ncommand = "echo"\n`,
+      'hooks entry 1 is invalid (duplicate key "command")',
+    ],
+    [
+      'a key given twice under another spelling',
+      `[[hooks]]\nevent = "Stop"\n"event" = "Stop"\ncommand = "echo"\n\n${HOOK_BLOCK}\n`,
+      'hooks entry 1 is invalid (duplicate key "event")',
+    ],
+    ...['0', '601', '1.5', '"30"', '1__0', '_10'].map(
       (timeout) =>
         [
           `a timeout of ${timeout}`,
@@ -308,6 +318,26 @@ describe('the Kimi Code detector differential', () => {
         errors: [`Kimi Code ignores every hook because ${problem}; fix it in <home>/${TOML}`],
       },
     });
+  });
+
+  test.each(['1_0', '+6_00', '1.0', '6e2'])(
+    'keeps the hook configured for a timeout of %s, which TOML reads as a whole number',
+    async (timeout) => {
+      expect(await detection({ [TOML]: `${HOOK_BLOCK}\ntimeout = ${timeout}\n` })).toEqual({
+        kind: 'returned',
+        value: CONFIGURED,
+      });
+    },
+  );
+
+  test.each([
+    ['a literal multiline command', "command = '''\necho it's here\n'''"],
+    ['a basic multiline command', 'command = """\necho start\n[ -f ~/.x ] && echo\n"""'],
+    ['a multiline string beside an invalid key', 'command = """\necho\n"""\ncwd = "/tmp"'],
+  ])('refuses to judge the entries beside %s', async (_case, command) => {
+    expect(
+      await detection({ [TOML]: `[[hooks]]\nevent = "Stop"\n${command}\n\n${HOOK_BLOCK}\n` }),
+    ).toEqual({ kind: 'returned', value: CONFIGURED });
   });
 
   test('keeps the hook configured beside foreign entries that use every allowed key', async () => {
@@ -342,6 +372,24 @@ describe('the Kimi Code detector differential', () => {
     ).toEqual({
       kind: 'returned',
       value: expected,
+    });
+  });
+
+  test.each([
+    ['is not JSON', '{'],
+    ['is a directory', null],
+    ['holds no plugin list', '{"version":1}'],
+  ])('names the plugin list when it %s', async (_case, installed) => {
+    expect(await detection({ [INSTALLED]: installed })).toEqual({
+      kind: 'returned',
+      value: {
+        platform: 'kimi-code',
+        status: 'n/a',
+        configPath: `<home>/${INSTALLED}`,
+        errors: [
+          `Cannot read <home>/${INSTALLED}, so doctor cannot tell whether the Kimi Code plugin is installed`,
+        ],
+      },
     });
   });
 

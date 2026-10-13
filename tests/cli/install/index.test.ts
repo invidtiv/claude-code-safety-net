@@ -718,7 +718,7 @@ test('Pi drops the extensions filter its settings carried', async () => {
     script: [{ command: 'pi' }],
     seed: {
       '.pi/agent/settings.json':
-        '{"packages":[{"source":"npm:cc-safety-net","extensions":["-cc-safety-net"]}]}',
+        '{"packages":[{"source":"npm:cc-safety-net","extensions":["-dist/pi/index.js"]}]}',
     },
   });
 
@@ -744,7 +744,7 @@ test('Pi drops the extensions filter from the settings under PI_CODING_AGENT_DIR
     env: { PI_CODING_AGENT_DIR: '<home>/pi-agent' },
     seed: {
       'pi-agent/settings.json':
-        '{"packages":[{"source":"npm:cc-safety-net","extensions":["-cc-safety-net"]}]}',
+        '{"packages":[{"source":"npm:cc-safety-net","extensions":["-dist/pi/index.js"]}]}',
     },
   });
 
