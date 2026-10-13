@@ -184,12 +184,10 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   'a line written to a process as both text and key input': MALFORMED,
   'a line erased by a key before a destructive line': MALFORMED,
   'a line edited by backspace': MALFORMED,
-  'an editor command after escape': { document: 'none', audit: 'allow' },
-  'an aborted line before a destructive line': {
-    document: 'deny',
-    audit: 'deny',
-    ruleId: 'git.reset-hard',
-  },
+  'an editor command after escape': MALFORMED,
+  'an aborted line before a destructive line': MALFORMED,
+  'a destructive line split by Ctrl-D': MALFORMED,
+  'text written to a process followed by an editing key': MALFORMED,
   'text written to a process followed by Enter': { document: 'none', audit: 'allow' },
   'a recursive delete whose workdir is the home directory': {
     document: 'deny',
@@ -1004,6 +1002,21 @@ const HOST_SPECS: readonly HostSpec[] = [
         stdin: devinPayload('write_to_process', {
           shell_id: 'a8be43',
           bytes_input: 'echo ok<C-c>git reset --hard<CR>',
+        }),
+      },
+      {
+        name: 'a destructive line split by Ctrl-D',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          bytes_input: 'git reset<C-d> --hard<CR>',
+        }),
+      },
+      {
+        name: 'text written to a process followed by an editing key',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          text_input: 'git reset --hardx',
+          bytes_input: '<BS><CR>',
         }),
       },
       {
