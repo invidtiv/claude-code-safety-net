@@ -287,6 +287,16 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   'a blank bash workdir': MALFORMED,
   'a Shell working_directory inside the workspace root': { document: 'allow', audit: 'allow' },
   'a Shell working_directory outside the workspace root': REQUESTED_OUTSIDE,
+  'a bash delete of its own workdir': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'rm.recursive-force-cwd-self',
+  },
+  'a Shell delete of its own working_directory': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'rm.recursive-force-cwd-self',
+  },
   'a workdir that exists': { document: 'none', audit: 'allow' },
   'a workdir that does not exist': REQUESTED_UNUSABLE,
   'a blank workdir': MALFORMED,
@@ -971,6 +981,22 @@ const HOST_SPECS: readonly HostSpec[] = [
           workspaceRoot: fixture.project,
           toolName: 'Shell',
           toolInput: { command: 'git status', working_directory: fixture.outside },
+        }),
+      },
+      {
+        name: 'a bash delete of its own workdir',
+        stdin: grokPayload(fixture, {
+          workspaceRoot: fixture.project,
+          toolName: 'bash',
+          toolInput: { command: 'rm -rf ../sub', workdir: 'sub' },
+        }),
+      },
+      {
+        name: 'a Shell delete of its own working_directory',
+        stdin: grokPayload(fixture, {
+          workspaceRoot: fixture.project,
+          toolName: 'Shell',
+          toolInput: { command: 'rm -rf ../sub', working_directory: join(fixture.project, 'sub') },
         }),
       },
     ],
