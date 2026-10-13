@@ -21,6 +21,7 @@ describe('built-in shell tools', () => {
     ['terminal', 'Hermes Agent'],
     ['Bash', 'Kimi Code'],
     ['run_command', 'Antigravity CLI'],
+    ['manage_task', 'Antigravity CLI'],
     ['powershell', 'Pi'],
     ['pwsh', 'DeepSeek Harness'],
     ['bash', 'OpenCode'],

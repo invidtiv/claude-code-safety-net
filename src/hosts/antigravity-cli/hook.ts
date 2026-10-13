@@ -47,6 +47,7 @@ interface AntigravityCliHookOutput {
 export const ANTIGRAVITY_CLI_COMMAND_TOOLS = new Map<string, CommandToolKind>([
   ['run_command', 'auto'],
 ]);
+export const ANTIGRAVITY_TASK_TOOL = 'manage_task';
 const ANTIGRAVITY_PATH_KEYS = new Set([
   'absolutepath',
   'directorypath',
@@ -74,11 +75,17 @@ export async function runAntigravityCliHook(): Promise<void> {
     }),
     isSupported: () => true,
     getToolName: (input) => input.toolCall?.name,
-    getToolInput: (input, toolName) => ({
-      ok: true,
-      input: normalizeAntigravityToolArgs(input.toolCall?.args, toolName),
-      route: getAntigravityCliToolRoute(toolName),
-    }),
+    getToolInput: (input, toolName) => {
+      const sent = inputSentToTask(input.toolCall?.args, toolName);
+      if (sent === undefined) {
+        return {
+          ok: true,
+          input: normalizeAntigravityToolArgs(input.toolCall?.args, toolName),
+          route: getAntigravityCliToolRoute(toolName),
+        };
+      }
+      return { ok: true, input: { command: sent }, route: { kind: 'command', shell: 'auto' } };
+    },
     getContext: resolveAntigravityContext,
     getSessionId: (input) => input.conversationId,
   });
@@ -213,6 +220,14 @@ function requestedWorkspacePaths(input: AntigravityCliHookInput): string[] {
   return Array.isArray(input.workspacePaths)
     ? input.workspacePaths.filter((path) => typeof path === 'string' && path.trim() !== '')
     : [];
+}
+
+function inputSentToTask(
+  args: Record<string, unknown> | undefined,
+  toolName: string,
+): string | undefined {
+  if (toolName !== ANTIGRAVITY_TASK_TOOL || args?.Action !== 'send_input') return undefined;
+  return typeof args.Input === 'string' && args.Input !== '' ? args.Input : undefined;
 }
 
 function normalizeAntigravityToolArgs(

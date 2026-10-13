@@ -1,19 +1,25 @@
-import { getToolRoute } from '@/gate/intake';
+import { getToolRoute, outputFailedClosed } from '@/gate/intake';
 import type { CommandToolKind } from '@/gate/invocation';
-import { getStandardHookContext, runConfiguredHookAdapter } from '@/hosts/hook/common';
+import { getToolCwdHookContext, runConfiguredHookAdapter } from '@/hosts/hook/common';
 import { PRE_TOOL_USE_HOOK_EVENT } from '@/hosts/hook/constants';
 
 type DevinHookInput = {
   hook_event_name?: unknown;
   tool_name?: unknown;
-  tool_input?: unknown;
+  tool_input?: Record<string, unknown>;
   session_id?: unknown;
 };
 
 export const DEVIN_COMMAND_TOOLS = new Map<string, CommandToolKind>([['exec', 'auto']]);
 export const DEVIN_PROCESS_INPUT_TOOL = 'write_to_process';
 
-function textTypedIntoProcess(toolName: string, toolInput: unknown): string | undefined {
+const DOCUMENTED_KEY = /<(CR|LF|ESC|BS|UP|DOWN|LEFT|RIGHT|C-[a-z])>/g;
+const KEY_TOKEN = /<[A-Za-z][A-Za-z0-9-]*>/;
+
+function textTypedIntoProcess(
+  toolName: string,
+  toolInput: Record<string, unknown> | undefined,
+): string | null | undefined {
   if (
     toolName !== DEVIN_PROCESS_INPUT_TOOL ||
     typeof toolInput !== 'object' ||
@@ -21,8 +27,15 @@ function textTypedIntoProcess(toolName: string, toolInput: unknown): string | un
   ) {
     return undefined;
   }
-  const text = (toolInput as Record<string, unknown>).text_input;
-  return typeof text === 'string' && text !== '' ? text : undefined;
+  const text = toolInput.text_input;
+  if (typeof text === 'string' && text !== '') return text;
+  const keys = toolInput.bytes_input;
+  if (typeof keys !== 'string') return undefined;
+  const typed = keys.replace(DOCUMENTED_KEY, (_token, name: string) =>
+    name === 'CR' || name === 'LF' ? '\n' : '',
+  );
+  if (KEY_TOKEN.test(typed)) return null;
+  return typed.trim() === '' ? undefined : typed;
 }
 
 export async function runDevinHook(): Promise<void> {
@@ -31,8 +44,12 @@ export async function runDevinHook(): Promise<void> {
     createDenyOutput: (message) => ({ decision: 'block', reason: message }),
     isSupported: (input) => input.hook_event_name === PRE_TOOL_USE_HOOK_EVENT,
     getToolName: (input) => input.tool_name,
-    getToolInput: (input, toolName) => {
+    getToolInput: (input, toolName, outputDeny) => {
       const typed = textTypedIntoProcess(toolName, input.tool_input);
+      if (typed === null) {
+        outputFailedClosed(outputDeny, input.tool_input, toolName);
+        return { ok: false };
+      }
       if (typed === undefined) {
         return {
           ok: true,
@@ -42,7 +59,10 @@ export async function runDevinHook(): Promise<void> {
       }
       return { ok: true, input: { command: typed }, route: { kind: 'command', shell: 'auto' } };
     },
-    getContext: (_input, ...call) => getStandardHookContext({}, ...call),
+    getContext: getToolCwdHookContext('workdir', DEVIN_COMMAND_TOOLS, {
+      emptyMeansSessionCwd: false,
+      allowOutsideSessionCwd: true,
+    }),
     getSessionId: (input) =>
       typeof input.session_id === 'string' && input.session_id !== ''
         ? input.session_id

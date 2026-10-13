@@ -174,6 +174,18 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
     ruleId: 'git.reset-hard',
   },
   'a keypress written to a process': { document: 'none', audit: 'none' },
+  'a destructive line written to a process as key input': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'git.reset-hard',
+  },
+  'a prompt answer written to a process as key input': { document: 'none', audit: 'allow' },
+  'an undocumented key token written to a process': MALFORMED,
+  'a recursive delete whose workdir is the home directory': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'rm.recursive-force-root-or-home',
+  },
   'a transcript under the Codex home': { document: 'none', audit: 'allow' },
   'a transcript under the Copilot home': { document: 'none', audit: 'allow' },
   'a transcript under the Claude config directory': {
@@ -234,6 +246,12 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   },
   'no workspace paths': MALFORMED,
   'a blank Cwd': MALFORMED,
+  'a destructive line sent to a background task': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'git.reset-hard',
+  },
+  'a background task status check': { document: 'none', audit: 'none' },
   'view targets past the path-canonicalization budget': {
     document: 'deny',
     audit: 'deny',
@@ -396,6 +414,13 @@ const antigravityPayload = (fixture: HookFixture, args: Record<string, unknown>)
       name: 'run_command',
       args: { CommandLine: 'git status', ...args },
     },
+  });
+
+const antigravityTaskPayload = (fixture: HookFixture, args: Record<string, unknown>) =>
+  JSON.stringify({
+    conversationId: SESSION,
+    workspacePaths: [fixture.project],
+    toolCall: { name: 'manage_task', args: { TaskId: 'task-1', ...args } },
   });
 
 const grokPayload = (fixture: HookFixture, overrides: Record<string, unknown>) =>
@@ -783,6 +808,17 @@ const HOST_SPECS: readonly HostSpec[] = [
       },
       { name: 'a blank Cwd', stdin: antigravityPayload(fixture, { Cwd: '' }) },
       {
+        name: 'a destructive line sent to a background task',
+        stdin: antigravityTaskPayload(fixture, {
+          Action: 'send_input',
+          Input: 'git reset --hard\n',
+        }),
+      },
+      {
+        name: 'a background task status check',
+        stdin: antigravityTaskPayload(fixture, { Action: 'status' }),
+      },
+      {
         name: 'no workspace paths',
         stdin: JSON.stringify({
           conversationId: SESSION,
@@ -902,6 +938,36 @@ const HOST_SPECS: readonly HostSpec[] = [
           shell_id: 'a8be43',
           bytes_input: '<CR>',
         }),
+      },
+      {
+        name: 'a destructive line written to a process as key input',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          bytes_input: 'git reset --hard<CR>',
+        }),
+      },
+      {
+        name: 'a prompt answer written to a process as key input',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          bytes_input: 'y<CR>',
+        }),
+      },
+      {
+        name: 'an undocumented key token written to a process',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          bytes_input: 'git st<TAB><CR>',
+        }),
+      },
+      {
+        name: 'a recursive delete whose workdir is the home directory',
+        stdin: devinPayload('exec', { command: 'rm -rf *', workdir: fixture.home }),
+        processCwd: fixture.project,
+      },
+      {
+        name: 'a blank workdir',
+        stdin: devinPayload('exec', { command: 'git status', workdir: '' }),
       },
     ],
   },
