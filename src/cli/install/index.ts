@@ -712,8 +712,7 @@ function isKimiPlugin(hook: HookStatus): boolean {
 }
 
 function hasKimiGlobalHook(environment: Environment): boolean {
-  const detection = detectKimiCodeHook({ environment, cwd: process.cwd() });
-  return detection.status === 'configured' && detection.method !== KIMI_PLUGIN_METHOD;
+  return detectKimiCodeHook({ environment, cwd: process.cwd() }).method === 'hook config';
 }
 
 function formatKimiPluginInstructions(environment: Environment): string {

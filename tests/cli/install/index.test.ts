@@ -158,9 +158,20 @@ test('Kimi Code offers the native plugin instead of the global hook', async () =
   expect(cancelled.tree.map((entry) => entry.path)).not.toContain('.kimi-code');
 });
 
-test('the plugin instructions warn while the global Kimi Code hook is still configured', async () => {
+test.each([
+  ['still configured', ''],
+  [
+    'disabled by an invalid sibling entry',
+    '\n[[hooks]]\nevent = "Stop"\ncommand = "echo"\ncwd = "/tmp"\n',
+  ],
+])('the plugin instructions warn while the global Kimi Code hook is %s', async (_case, sibling) => {
   const configured = await flow({ invoke: 'install', args: ['--kimi-code'] });
-  const seed = filesUnder(configured.tree, '.kimi-code/');
+  const seed = Object.fromEntries(
+    Object.entries(filesUnder(configured.tree, '.kimi-code/')).map(([path, content]) => [
+      path,
+      `${content}${sibling}`,
+    ]),
+  );
 
   const caution = await flow({
     invoke: 'install',
