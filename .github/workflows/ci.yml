@@ -4,15 +4,27 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - '.github/assets/**'
+    paths:
+      - '**'
+      - '!**.md'
+      - '!.github/**'
+      - '.github/workflows/ci.yml'
+      - '!.agents/**'
+      - '!.claude/**'
+      - '!evals/**'
+      - '!.oss-scanner/**'
   # No branch filter: a stacked PR is opened against its parent branch and only
   # joins the stack afterwards, so filtering on main would skip its first run.
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - '.github/assets/**'
+    paths:
+      - '**'
+      - '!**.md'
+      - '!.github/**'
+      - '.github/workflows/ci.yml'
+      - '!.agents/**'
+      - '!.claude/**'
+      - '!evals/**'
+      - '!.oss-scanner/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
