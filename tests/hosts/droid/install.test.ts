@@ -101,6 +101,35 @@ describe('the Factory Droid hook config differential', () => {
     expect(fileAt(steps?.uninstall.tree, LEGACY_HOOKS)).toBe(legacy);
   });
 
+  test.each([
+    [
+      'a legacy file without PreToolUse keeps the settings.json PreToolUse',
+      { SessionStart: SESSION_START },
+      { PreToolUse: [FOREIGN_ENTRY], SessionStart: SESSION_START },
+    ],
+    [
+      'a legacy PreToolUse wins over the settings.json one',
+      { PreToolUse: [{ hooks: [SIBLING] }] },
+      { PreToolUse: [{ hooks: [SIBLING] }] },
+    ],
+    [
+      'an empty legacy PreToolUse wins over the settings.json one',
+      { PreToolUse: [] },
+      { PreToolUse: [] },
+    ],
+  ])('seeds from both files when %s', async (_name, legacyEvents, seeded) => {
+    const settings = `${JSON.stringify({ hooks: { PreToolUse: [FOREIGN_ENTRY] } })}\n`;
+    const { steps } = await row({ [LEGACY_HOOKS]: droidHooks(legacyEvents), [SETTINGS]: settings });
+
+    expectRow(steps, {
+      file: HOOKS,
+      alreadyInstalled: false,
+      wrote: droidHooks({ ...seeded, PreToolUse: [...seeded.PreToolUse, CANONICAL_ENTRY] }),
+      detected: CONFIGURED,
+      left: droidHooks(seeded),
+    });
+  });
+
   test('reads a hooks file with comments', async () => {
     const { steps } = await row({
       [HOOKS]: `{\n  // audit hook\n  "PreToolUse": [${JSON.stringify(FOREIGN_ENTRY)}]\n}\n`,
