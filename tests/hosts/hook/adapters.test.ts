@@ -228,7 +228,7 @@ describe('an unverifiable command asks the user where the host can prompt', () =
   };
 
   test('claude-code asks in an interactive permission mode', async () => {
-    for (const mode of ['default', 'acceptEdits', 'plan']) {
+    for (const mode of ['default', 'acceptEdits', 'plan', 'auto']) {
       const output = await decisionOf('claude-code', 'bash -c "$CMD"', { permission_mode: mode });
       expect(output.permissionDecision, mode).toBe('ask');
       expect(output.permissionDecisionReason, mode).toContain(
@@ -241,7 +241,6 @@ describe('an unverifiable command asks the user where the host can prompt', () =
     for (const extra of [
       { permission_mode: 'bypassPermissions' },
       { permission_mode: 'dontAsk' },
-      { permission_mode: 'auto' },
       {},
     ]) {
       const output = await decisionOf('claude-code', 'bash -c "$CMD"', extra);

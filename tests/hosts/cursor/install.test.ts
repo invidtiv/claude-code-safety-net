@@ -211,6 +211,45 @@ describe('Cursor protected through the Claude Code plugin', () => {
       }),
     ).toEqual(absent);
   });
+
+  test('ignores a Claude Code plugin in CLAUDE_CONFIG_DIR, which Cursor never reads', async () => {
+    const relocatedInstall = 'relocated/plugins/cache/cc-marketplace/cc-safety-net/2.6.1';
+    expect(
+      await detection(
+        {
+          'relocated/plugins/installed_plugins.json': JSON.stringify({
+            plugins: {
+              'cc-safety-net@cc-marketplace': [
+                { scope: 'user', installPath: `<home>/${relocatedInstall}`, version: '2.6.1' },
+              ],
+            },
+          }),
+          'relocated/settings.json': JSON.stringify({
+            enabledPlugins: { 'cc-safety-net@cc-marketplace': true },
+          }),
+          [`${relocatedInstall}/.cursor-plugin/plugin.json`]:
+            CURSOR_MANIFEST_FILES[CLAUDE_CURSOR_MANIFEST],
+          [`${relocatedInstall}/hooks/cursor.json`]: '{}',
+        },
+        { CLAUDE_CONFIG_DIR: '<home>/relocated' },
+      ),
+    ).toEqual({
+      kind: 'returned',
+      value: { platform: 'cursor', status: 'n/a', configPath: CONFIG_PATH },
+    });
+  });
+
+  test('reads the Claude Code plugin from ~/.claude whatever Claude Code itself is pointed at', async () => {
+    expect(
+      await detection(CLAUDE_CURSOR_PLUGIN, {
+        CLAUDE_CONFIG_DIR: '<home>/relocated',
+        CLAUDE_CODE_PLUGIN_CACHE_DIR: '<home>/plugin-cache',
+      }),
+    ).toMatchObject({
+      kind: 'returned',
+      value: { status: 'configured', method: 'Claude Code plugin' },
+    });
+  });
 });
 
 const CURSOR_PLUGIN_VERSIONS = '.cursor/plugins/cache/cc-safety-net/cc-safety-net';

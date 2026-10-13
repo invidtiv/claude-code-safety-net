@@ -10,6 +10,8 @@ export const CLAUDE_CODE_COMMAND_TOOLS = new Map<string, CommandToolKind>([
   ['Monitor', 'posix'],
 ]);
 
+const PERMISSION_MODES_THAT_PROMPT_ON_ASK = ['default', 'acceptEdits', 'plan', 'auto'];
+
 function getClaudeCodeToolRoute(
   toolName: string,
   toolInput: PreToolUseHookInput['tool_input'],
@@ -27,9 +29,8 @@ export async function runClaudeCodeHook(): Promise<void> {
   await runPreToolUseHook({
     agent: 'claude-code',
     getAgent: (input, environment) => detectClaudeShapeAgent(input.transcript_path, environment),
-    // Modes where an ask reaches a person; bypass, dontAsk and auto may resolve it unattended.
     canPromptPerson: (input) =>
-      ['default', 'acceptEdits', 'plan'].includes(input.permission_mode ?? ''),
+      PERMISSION_MODES_THAT_PROMPT_ON_ASK.includes(input.permission_mode ?? ''),
     getToolRoute: getClaudeCodeToolRoute,
   });
 }

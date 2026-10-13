@@ -123,3 +123,38 @@ describe('with CLAUDE_CONFIG_DIR naming another directory', () => {
     });
   });
 });
+
+describe('with CLAUDE_CODE_PLUGIN_CACHE_DIR naming another plugins root', () => {
+  const PLUGIN_CACHE = { CLAUDE_CODE_PLUGIN_CACHE_DIR: '<home>/plugin-cache' };
+  const CACHED_INSTALLED = 'plugin-cache/installed_plugins.json';
+
+  test('reads the install record from there and the settings from the config dir', async () => {
+    expect(
+      await detection(
+        { [CACHED_INSTALLED]: installedPlugins(PLUGIN_ID), [SETTINGS]: enabledPlugins(true) },
+        PLUGIN_CACHE,
+      ),
+    ).toEqual({
+      kind: 'returned',
+      value: { ...CONFIGURED, configPath: `<home>/${CACHED_INSTALLED}` },
+    });
+  });
+
+  test('ignores an install record left in the config dir plugins folder', async () => {
+    expect(await detection({ ...OURS, [SETTINGS]: enabledPlugins(true) }, PLUGIN_CACHE)).toEqual({
+      kind: 'returned',
+      value: ABSENT,
+    });
+  });
+
+  test('answers that the plugin is installed for update', async () => {
+    expect(
+      (
+        await differential(
+          { seed: { [CACHED_INSTALLED]: installedPlugins(PLUGIN_ID) }, env: PLUGIN_CACHE },
+          (environment) => hasClaudeInstalledPlugin(environment, PLUGIN_ID),
+        )
+      ).outcome,
+    ).toEqual({ kind: 'returned', value: true });
+  });
+});
