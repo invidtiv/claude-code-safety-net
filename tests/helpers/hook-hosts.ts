@@ -286,6 +286,7 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   'a bash workdir relative to the session cwd': { document: 'allow', audit: 'allow' },
   'a blank bash workdir': MALFORMED,
   'a Shell working_directory inside the workspace root': { document: 'allow', audit: 'allow' },
+  'a Shell working_directory outside the workspace root': REQUESTED_OUTSIDE,
   'a workdir that exists': { document: 'none', audit: 'allow' },
   'a workdir that does not exist': REQUESTED_UNUSABLE,
   'a blank workdir': MALFORMED,
@@ -962,6 +963,14 @@ const HOST_SPECS: readonly HostSpec[] = [
           workspaceRoot: fixture.project,
           toolName: 'Shell',
           toolInput: { command: 'git status', working_directory: join(fixture.project, 'sub') },
+        }),
+      },
+      {
+        name: 'a Shell working_directory outside the workspace root',
+        stdin: grokPayload(fixture, {
+          workspaceRoot: fixture.project,
+          toolName: 'Shell',
+          toolInput: { command: 'git status', working_directory: fixture.outside },
         }),
       },
     ],
