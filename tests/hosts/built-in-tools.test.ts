@@ -18,6 +18,9 @@ describe('built-in shell tools', () => {
     ['Execute', 'Factory Droid'],
     ['run_shell_command', 'Gemini CLI'],
     ['run_terminal_command', 'Grok Build'],
+    ['run_terminal_cmd', 'Grok Build'],
+    ['bash', 'Grok Build'],
+    ['Shell', 'Grok Build'],
     ['terminal', 'Hermes Agent'],
     ['Bash', 'Kimi Code'],
     ['run_command', 'Antigravity CLI'],
@@ -36,7 +39,7 @@ describe('built-in shell tools', () => {
     expect(getBuiltInToolRefusal('bash')).toBe(
       shellRefusal(
         'bash',
-        'Claude Code, Codex, DeepSeek Harness, GitHub Copilot CLI, Kimi Code, OpenCode and Pi',
+        'Claude Code, Codex, DeepSeek Harness, GitHub Copilot CLI, Grok Build, Kimi Code, OpenCode and Pi',
       ),
     );
   });

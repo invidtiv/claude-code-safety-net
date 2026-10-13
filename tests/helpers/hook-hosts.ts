@@ -267,6 +267,25 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   'tool input the host truncated': { document: 'deny', audit: 'deny' },
   'a cwd inside the workspace root': { document: 'allow', audit: 'allow' },
   'a cwd outside the workspace root': SESSION_OUTSIDE,
+  'a destructive run_terminal_cmd command': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'git.reset-hard',
+  },
+  'a destructive bash command': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'git.reset-hard',
+  },
+  'a destructive Shell command': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'git.reset-hard',
+  },
+  'a bash workdir outside the workspace root': REQUESTED_OUTSIDE,
+  'a bash workdir relative to the session cwd': { document: 'allow', audit: 'allow' },
+  'a blank bash workdir': MALFORMED,
+  'a Shell working_directory inside the workspace root': { document: 'allow', audit: 'allow' },
   'a workdir that exists': { document: 'none', audit: 'allow' },
   'a workdir that does not exist': REQUESTED_UNUSABLE,
   'a blank workdir': MALFORMED,
@@ -890,6 +909,59 @@ const HOST_SPECS: readonly HostSpec[] = [
         stdin: grokPayload(fixture, {
           workspaceRoot: fixture.project,
           cwd: fixture.outside,
+        }),
+      },
+      {
+        name: 'a destructive run_terminal_cmd command',
+        stdin: grokPayload(fixture, {
+          toolName: 'run_terminal_cmd',
+          toolInput: { command: 'git reset --hard' },
+        }),
+      },
+      {
+        name: 'a destructive bash command',
+        stdin: grokPayload(fixture, {
+          toolName: 'bash',
+          toolInput: { command: 'git reset --hard', workdir: fixture.project },
+        }),
+      },
+      {
+        name: 'a destructive Shell command',
+        stdin: grokPayload(fixture, {
+          toolName: 'Shell',
+          toolInput: { command: 'git reset --hard', working_directory: fixture.project },
+        }),
+      },
+      {
+        name: 'a bash workdir outside the workspace root',
+        stdin: grokPayload(fixture, {
+          workspaceRoot: fixture.project,
+          toolName: 'bash',
+          toolInput: { command: 'git status', workdir: fixture.outside },
+        }),
+      },
+      {
+        name: 'a bash workdir relative to the session cwd',
+        stdin: grokPayload(fixture, {
+          workspaceRoot: fixture.project,
+          cwd: join(fixture.project, 'sub'),
+          toolName: 'bash',
+          toolInput: { command: 'git status', workdir: '..' },
+        }),
+      },
+      {
+        name: 'a blank bash workdir',
+        stdin: grokPayload(fixture, {
+          toolName: 'bash',
+          toolInput: { command: 'git status', workdir: ' ' },
+        }),
+      },
+      {
+        name: 'a Shell working_directory inside the workspace root',
+        stdin: grokPayload(fixture, {
+          workspaceRoot: fixture.project,
+          toolName: 'Shell',
+          toolInput: { command: 'git status', working_directory: join(fixture.project, 'sub') },
         }),
       },
     ],

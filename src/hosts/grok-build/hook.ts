@@ -29,7 +29,15 @@ type GrokBuildHookOutput = { decision: 'allow' } | { decision: 'deny'; reason: s
 
 export const GROK_BUILD_COMMAND_TOOLS = new Map<string, CommandToolKind>([
   ['run_terminal_command', 'auto'],
+  ['run_terminal_cmd', 'auto'],
   ['monitor', 'auto'],
+  ['bash', 'auto'],
+  ['Shell', 'auto'],
+]);
+
+const GROK_BUILD_TOOL_CWD_KEYS = new Map([
+  ['bash', 'workdir'],
+  ['Shell', 'working_directory'],
 ]);
 
 function getGrokBuildToolRoute(toolName: string) {
@@ -94,7 +102,24 @@ function resolveGrokBuildContext(
     return null;
   }
 
-  return { configCwd: base, executionCwd: base };
+  const cwdKey = GROK_BUILD_TOOL_CWD_KEYS.get(toolName);
+  const args = input.toolInput;
+  if (!cwdKey || !args || !Object.hasOwn(args, cwdKey)) {
+    return { configCwd: base, executionCwd: base };
+  }
+  const requestedCwd = args[cwdKey];
+  if (typeof requestedCwd !== 'string' || requestedCwd.trim() === '') {
+    outputFailedClosed(outputDeny, toolInput, toolName);
+    return null;
+  }
+  const executionCwd = resolveContainedCwd(requestedCwd, [base, root], environment.paths);
+  if (executionCwd) return { configCwd: base, executionCwd };
+  outputCwdDenial(outputDeny, toolInput, toolName, {
+    directory: 'requested',
+    problem: cwdProblem(requestedCwd, base, environment.paths),
+    cwd: requestedCwd,
+  });
+  return null;
 }
 
 function requestedGrokBuildRoot(input: GrokBuildHookInput): string | undefined {

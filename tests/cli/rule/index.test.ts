@@ -154,7 +154,7 @@ describe('help', () => {
 
 const NOT_DECLARABLE = 'and is already analyzed. Built-in tools cannot be declared.';
 const shellToolRefusal = (name: string) =>
-  `Error: "${name}" is a built-in shell tool of Claude Code, Codex, DeepSeek Harness, GitHub Copilot CLI, Kimi Code, OpenCode and Pi, ${NOT_DECLARABLE}`;
+  `Error: "${name}" is a built-in shell tool of Claude Code, Codex, DeepSeek Harness, GitHub Copilot CLI, Grok Build, Kimi Code, OpenCode and Pi, ${NOT_DECLARABLE}`;
 const fileToolRefusal = (name: string) =>
   `Error: "${name}" is a built-in file tool, ${NOT_DECLARABLE}`;
 const NAME_RULE = 'non-empty, at most 256 characters, no whitespace or control characters';
