@@ -258,6 +258,12 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
     document: 'none',
     audit: 'none',
   },
+  'a read_file under an at-prefixed directory that exists': { document: 'none', audit: 'none' },
+  'a read_file of an at-slash path into the ssh directory': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'secret.home.ssh',
+  },
   'tool args that are not a string': { document: 'deny', audit: 'deny' },
   'tool args that are not JSON': { document: 'deny', audit: 'deny' },
   'a powershell command': {
@@ -370,6 +376,7 @@ const BAD_CONFIG_DIR = 'bad-config';
 const NOT_A_DIRECTORY = 'not-a-directory';
 const DOTTED_DIRECTORY = '..cache';
 const AT_PREFIXED_FILE = '@.netrc';
+const AT_PREFIXED_DIRECTORY = '@.ssh';
 const OVERSIZED_PAYLOAD = `{"pad":"${'x'.repeat(8 * 1024 * 1024 - 9)}"}`;
 
 export function createHookFixture(prefix: string): HookFixture {
@@ -381,6 +388,7 @@ export function createHookFixture(prefix: string): HookFixture {
     join(home, '.copilot'),
     join(home, '.claude', 'projects'),
     join(home, '.ssh'),
+    join(home, AT_PREFIXED_DIRECTORY),
     join(project, 'sub'),
     join(project, DOTTED_DIRECTORY),
     join(root, 'outside'),
@@ -752,6 +760,26 @@ const HOST_SPECS: readonly HostSpec[] = [
       {
         name: 'a read_file of an at-prefixed name that exists as written',
         stdin: geminiToolPayload(fixture, 'read_file', { file_path: AT_PREFIXED_FILE }),
+      },
+      {
+        name: 'a read_file under an at-prefixed directory that exists',
+        stdin: JSON.stringify(
+          claudeShaped('BeforeTool')({
+            tool: 'read_file',
+            args: { file_path: `${AT_PREFIXED_DIRECTORY}/config` },
+            cwd: fixture.home,
+          }),
+        ),
+      },
+      {
+        name: 'a read_file of an at-slash path into the ssh directory',
+        stdin: JSON.stringify(
+          claudeShaped('BeforeTool')({
+            tool: 'read_file',
+            args: { file_path: '@/.ssh/config' },
+            cwd: fixture.home,
+          }),
+        ),
       },
     ],
   },
