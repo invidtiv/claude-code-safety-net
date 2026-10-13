@@ -34,8 +34,14 @@ const PATH_LIKE_KEYS = new Set([
   'targetfile',
   'target_file',
 ]);
-const GREP_KEYS = new Set([...PATH_LIKE_KEYS, 'glob']);
-const GLOB_KEYS = new Set([...GREP_KEYS, 'folder', 'pattern', 'patterns']);
+const GREP_KEYS = new Set([
+  ...PATH_LIKE_KEYS,
+  'dir_path',
+  'glob',
+  'glob_pattern',
+  'include_pattern',
+]);
+const GLOB_KEYS = new Set([...PATH_LIKE_KEYS, 'folder', 'glob', 'pattern', 'patterns']);
 
 export class StructuralShellSyntaxLimitError extends Error {
   override readonly name = 'StructuralShellSyntaxLimitError';

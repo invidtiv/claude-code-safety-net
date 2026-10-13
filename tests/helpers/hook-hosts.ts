@@ -163,6 +163,11 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
     audit: 'deny',
     ruleId: 'secret.basename.env',
   },
+  'a grep over private keys in glob_pattern': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'secret.ext.pem',
+  },
   'a recursive delete from a home process cwd': {
     document: 'deny',
     audit: 'deny',
@@ -227,6 +232,32 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   'an empty dir_path': { document: 'none', audit: 'allow' },
   'a whitespace-only dir_path': MALFORMED,
   'a dir_path that is not a string': MALFORMED,
+  'a grep_search whose dir_path is an npmrc file': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'secret.basename.npmrc',
+  },
+  'a grep_search over private keys in include_pattern': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'secret.basename.id-rsa',
+  },
+  'a list_directory over the ssh directory': { document: 'none', audit: 'none' },
+  'a glob whose dir_path is the ssh directory': { document: 'none', audit: 'none' },
+  'a read_file of an at-prefixed npmrc': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'secret.basename.npmrc',
+  },
+  'a read_file of an npmrc path holding a NUL byte': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'secret.basename.npmrc',
+  },
+  'a read_file of an at-prefixed name that exists as written': {
+    document: 'none',
+    audit: 'none',
+  },
   'tool args that are not a string': { document: 'deny', audit: 'deny' },
   'tool args that are not JSON': { document: 'deny', audit: 'deny' },
   'a powershell command': {
@@ -338,6 +369,7 @@ const MISSING_PREFIX = Array.from({ length: 14 }, (_, index) => `m${index}`).joi
 const BAD_CONFIG_DIR = 'bad-config';
 const NOT_A_DIRECTORY = 'not-a-directory';
 const DOTTED_DIRECTORY = '..cache';
+const AT_PREFIXED_FILE = '@.netrc';
 const OVERSIZED_PAYLOAD = `{"pad":"${'x'.repeat(8 * 1024 * 1024 - 9)}"}`;
 
 export function createHookFixture(prefix: string): HookFixture {
@@ -361,6 +393,7 @@ export function createHookFixture(prefix: string): HookFixture {
   writeFileSync(join(home, '.claude', 'projects', 'p.jsonl'), '');
   writeFileSync(join(home, '.ssh', 'id_rsa'), `${['-----BEGIN', 'KEY-----'].join(' ')}\n`);
   writeFileSync(join(project, 'README.md'), 'a file the read rows point at\n');
+  writeFileSync(join(project, AT_PREFIXED_FILE), '');
   writeFileSync(join(root, NOT_A_DIRECTORY), 'a file where a directory is expected\n');
   writeFileSync(
     withEnv({ CC_SAFETY_NET_HOME: join(root, BAD_CONFIG_DIR) }, () =>
@@ -518,6 +551,9 @@ const geminiPayload = (cwd: string, command: string, dirPath: unknown) =>
     tool_input: { command, dir_path: dirPath },
     cwd,
   });
+
+const geminiToolPayload = (fixture: HookFixture, tool: string, args: Record<string, unknown>) =>
+  JSON.stringify(claudeShaped('BeforeTool')({ tool, args, cwd: fixture.project }));
 
 const HOST_SPECS: readonly HostSpec[] = [
   {
@@ -680,6 +716,42 @@ const HOST_SPECS: readonly HostSpec[] = [
       {
         name: 'a dir_path that is not a string',
         stdin: geminiPayload(fixture.project, 'git status', 5),
+      },
+      {
+        name: 'a grep_search whose dir_path is an npmrc file',
+        stdin: geminiToolPayload(fixture, 'grep_search', { pattern: '.', dir_path: '.npmrc' }),
+      },
+      {
+        name: 'a grep_search over private keys in include_pattern',
+        stdin: geminiToolPayload(fixture, 'grep_search', {
+          pattern: 'KEY',
+          include_pattern: '**/id_rsa',
+        }),
+      },
+      {
+        name: 'a list_directory over the ssh directory',
+        stdin: geminiToolPayload(fixture, 'list_directory', {
+          dir_path: join(fixture.home, '.ssh'),
+        }),
+      },
+      {
+        name: 'a glob whose dir_path is the ssh directory',
+        stdin: geminiToolPayload(fixture, 'glob', {
+          pattern: '*',
+          dir_path: join(fixture.home, '.ssh'),
+        }),
+      },
+      {
+        name: 'a read_file of an at-prefixed npmrc',
+        stdin: geminiToolPayload(fixture, 'read_file', { file_path: '@.npmrc' }),
+      },
+      {
+        name: 'a read_file of an npmrc path holding a NUL byte',
+        stdin: geminiToolPayload(fixture, 'read_file', { file_path: '.npm\u0000rc' }),
+      },
+      {
+        name: 'a read_file of an at-prefixed name that exists as written',
+        stdin: geminiToolPayload(fixture, 'read_file', { file_path: AT_PREFIXED_FILE }),
       },
     ],
   },
@@ -1024,6 +1096,16 @@ const HOST_SPECS: readonly HostSpec[] = [
           }),
         ),
       },
+      {
+        name: 'a grep over private keys in glob_pattern',
+        stdin: JSON.stringify(
+          droidShaped({
+            tool: 'Grep',
+            args: { pattern: 'KEY', glob_pattern: '*.pem' },
+            cwd: fixture.project,
+          }),
+        ),
+      },
     ],
   },
   {
@@ -1142,6 +1224,11 @@ const HOST_SPECS: readonly HostSpec[] = [
       {
         name: 'a blank workdir',
         stdin: devinPayload('exec', { command: 'git status', workdir: '' }),
+      },
+      {
+        name: 'a grep over private keys in glob_pattern',
+        stdin: devinPayload('grep', { pattern: 'KEY', glob_pattern: '*.pem' }),
+        processCwd: fixture.project,
       },
     ],
   },
