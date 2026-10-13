@@ -9,7 +9,7 @@ export async function captureHookRun(
   env: Record<string, string | undefined>,
   run: () => Promise<void>,
   processCwd = process.cwd(),
-): Promise<{ stdout: string[]; stderr: string[] }> {
+): Promise<{ stdout: string[]; stderr: string[]; exitCode: number }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
   const log = spyOn(console, 'log').mockImplementation((...parts: unknown[]) => {
@@ -20,6 +20,8 @@ export async function captureHookRun(
   });
   const stdin = process.stdin;
   const previousCwd = process.cwd();
+  const previousExitCode = process.exitCode;
+  process.exitCode = 0;
   Object.defineProperty(process, 'stdin', {
     value: Readable.from([Buffer.from(input)]),
     configurable: true,
@@ -28,8 +30,9 @@ export async function captureHookRun(
   try {
     process.chdir(processCwd);
     await withEnv(env, run);
-    return { stdout, stderr };
+    return { stdout, stderr, exitCode: Number(process.exitCode) };
   } finally {
+    process.exitCode = previousExitCode;
     process.chdir(previousCwd);
     Object.defineProperty(process, 'stdin', { value: stdin, configurable: true });
     log.mockRestore();

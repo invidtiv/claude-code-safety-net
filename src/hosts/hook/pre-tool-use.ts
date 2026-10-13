@@ -32,6 +32,7 @@ export async function runPreToolUseHook(options: {
   getAgent?: (input: PreToolUseHookInput, environment: Environment) => string;
   // Only a host that prompts on `ask` may use it; Codex rejects it and runs the tool.
   canPromptPerson?: (input: PreToolUseHookInput) => boolean;
+  denyExitCode?: number;
   getToolRoute: (
     toolName: string,
     toolInput: PreToolUseHookInput['tool_input'],
@@ -48,6 +49,7 @@ export async function runPreToolUseHook(options: {
   await runConfiguredHookAdapter<PreToolUseHookInput>({
     agent: options.agent,
     ...(options.getAgent ? { getAgent: options.getAgent } : {}),
+    denyExitCode: options.denyExitCode,
     createDenyOutput: (message): PreToolUseHookOutput => ({
       hookSpecificOutput: {
         hookEventName: PRE_TOOL_USE_HOOK_EVENT,

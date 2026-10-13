@@ -24,6 +24,7 @@ export type HookOutcome = {
   ruleId?: string;
   reason?: string;
   stderr?: number;
+  exitCode?: number;
 };
 
 export type HookRow = {
@@ -439,6 +440,7 @@ type HostSpec = {
   unsupportedEvent?: string;
   cwdFromProcess?: true;
   answersEveryCall?: true;
+  denyExitCode?: number;
   build: (payload: Payload) => unknown;
   extraRows?: (fixture: HookFixture) => readonly Omit<HookRow, 'expected'>[];
 };
@@ -1112,6 +1114,7 @@ const HOST_SPECS: readonly HostSpec[] = [
       riskLevel: 'low',
     }),
     unsupportedEvent: 'PostToolUse',
+    denyExitCode: 2,
     build: droidShaped,
     extraRows: (fixture) => [
       {
@@ -1371,7 +1374,8 @@ function outcomeFor(spec: HostSpec, name: string): HookOutcome {
   const outcome =
     (spec.answersEveryCall === true ? ANSWERED_OUTCOMES[name] : undefined) ?? OUTCOMES[name];
   if (outcome === undefined) throw new Error(`no declared outcome for hook row: ${name}`);
-  return outcome;
+  if (spec.denyExitCode === undefined || outcome.document !== 'deny') return outcome;
+  return { ...outcome, stderr: (outcome.stderr ?? 0) + 1, exitCode: spec.denyExitCode };
 }
 
 export const HOOK_HOSTS: readonly HookHost[] = HOST_SPECS.map((spec) => ({

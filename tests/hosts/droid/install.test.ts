@@ -5,11 +5,14 @@ import { expectRow, fileAt, hostRunner } from '../../helpers/host-differential';
 import { removeTempRoots } from '../../helpers/temp-home';
 
 const HOOKS = '.factory/hooks.json';
+const LEGACY_HOOKS = '.factory/hooks/hooks.json';
+const SETTINGS = '.factory/settings.json';
 const HOOKS_PATH = `<home>/${HOOKS}`;
 const MANAGED = 'npx -y cc-safety-net hook --droid';
 const OURS = { type: 'command', command: MANAGED, timeout: 30 };
 const CANONICAL_ENTRY = { hooks: [OURS] };
 const SESSION_START = [{ hooks: [{ type: 'command', command: 'echo session' }] }];
+const POST_TOOL_USE = [{ hooks: [{ type: 'command', command: 'echo after' }] }];
 const FOREIGN_ENTRY = { matcher: 'Execute', hooks: [{ type: 'command', command: 'echo audit' }] };
 const SIBLING = { type: 'command', command: 'echo sibling' };
 
@@ -21,6 +24,14 @@ const CONFIGURED = {
   method: 'hook config',
   configPath: HOOKS_PATH,
 } as const;
+
+const FOREIGN_ENTRY_INSTALL = {
+  file: HOOKS,
+  alreadyInstalled: false,
+  wrote: droidHooks({ PreToolUse: [FOREIGN_ENTRY, CANONICAL_ENTRY] }),
+  detected: CONFIGURED,
+  left: droidHooks({ PreToolUse: [FOREIGN_ENTRY] }),
+};
 
 const { row, detection } = hostRunner((environment) => ({
   install: () => installDroid(environment),
@@ -62,12 +73,20 @@ describe('the Factory Droid hook config differential', () => {
     });
   });
 
-  test('carries the settings.json fallback hooks into the hooks file it creates', async () => {
+  test('carries only the settings.json PreToolUse hooks into the hooks file it creates', async () => {
     const settings = `${JSON.stringify({
       model: 'custom',
-      hooks: { SessionStart: SESSION_START, PreToolUse: [FOREIGN_ENTRY] },
+      hooks: { PostToolUse: POST_TOOL_USE, PreToolUse: [FOREIGN_ENTRY] },
     })}\n`;
-    const { steps } = await row({ '.factory/settings.json': settings });
+    const { steps } = await row({ [SETTINGS]: settings });
+
+    expectRow(steps, FOREIGN_ENTRY_INSTALL);
+    expect(fileAt(steps?.uninstall.tree, SETTINGS)).toBe(settings);
+  });
+
+  test('carries the legacy hooks file into the hooks file it creates', async () => {
+    const legacy = droidHooks({ SessionStart: SESSION_START, PreToolUse: [FOREIGN_ENTRY] });
+    const { steps } = await row({ [LEGACY_HOOKS]: legacy });
 
     expectRow(steps, {
       file: HOOKS,
@@ -79,12 +98,28 @@ describe('the Factory Droid hook config differential', () => {
       detected: CONFIGURED,
       left: droidHooks({ SessionStart: SESSION_START, PreToolUse: [FOREIGN_ENTRY] }),
     });
-    expect(fileAt(steps?.uninstall.tree, '.factory/settings.json')).toBe(settings);
+    expect(fileAt(steps?.uninstall.tree, LEGACY_HOOKS)).toBe(legacy);
+  });
+
+  test('reads a hooks file with comments', async () => {
+    const { steps } = await row({
+      [HOOKS]: `{\n  // audit hook\n  "PreToolUse": [${JSON.stringify(FOREIGN_ENTRY)}]\n}\n`,
+    });
+
+    expectRow(steps, FOREIGN_ENTRY_INSTALL);
+  });
+
+  test('reads a settings.json with comments', async () => {
+    const settings = `{\n  /* user settings */\n  "hooks": { "PreToolUse": [${JSON.stringify(FOREIGN_ENTRY)}] }\n}\n`;
+    const { steps } = await row({ [SETTINGS]: settings });
+
+    expectRow(steps, FOREIGN_ENTRY_INSTALL);
+    expect(fileAt(steps?.uninstall.tree, SETTINGS)).toBe(settings);
   });
 
   test('keeps the hooks file on uninstall so a settings.json fallback stays inactive', async () => {
     const settings = `${JSON.stringify({ hooks: { PreToolUse: [CANONICAL_ENTRY] } })}\n`;
-    const { steps } = await row({ '.factory/settings.json': settings });
+    const { steps } = await row({ [SETTINGS]: settings });
 
     expectRow(steps, {
       file: HOOKS,
@@ -93,7 +128,7 @@ describe('the Factory Droid hook config differential', () => {
       detected: CONFIGURED,
       left: droidHooks({ PreToolUse: [] }),
     });
-    expect(fileAt(steps?.uninstall.tree, '.factory/settings.json')).toBe(settings);
+    expect(fileAt(steps?.uninstall.tree, SETTINGS)).toBe(settings);
   });
 
   test.each([
@@ -147,6 +182,14 @@ describe('the Factory Droid detector differential', () => {
         errors: ['Managed hook has a "commandRegex" that narrows coverage; reinstall to repair'],
       },
     });
+  });
+
+  test('reads a hooks file with comments', async () => {
+    expect(
+      await detection({
+        [HOOKS]: `// managed by install --droid\n${droidHooks({ PreToolUse: [CANONICAL_ENTRY] })}`,
+      }),
+    ).toEqual({ kind: 'returned', value: CONFIGURED });
   });
 
   test('says nothing is installed for a foreign or absent file', async () => {

@@ -113,7 +113,7 @@ export async function runCommand(
   input: unknown,
   cwd: string,
   home: string,
-  options: { level?: SafetyLevel; env?: Record<string, string> } = {},
+  options: { level?: SafetyLevel; env?: Record<string, string>; denyExitCode?: number } = {},
 ) {
   const proc = Bun.spawn(argv, {
     stdin: 'pipe',
@@ -131,6 +131,7 @@ export async function runCommand(
   ]);
   const result = { command: argv, cwd, input, stdout, stderr, exitCode };
   if (exitCode === 0 && stderr.trim() === '') return result;
+  if (exitCode === options.denyExitCode && stderr.trim() !== '') return result;
   throw new Error(
     `Host subprocess violated the E2E contract:\n${redactSecrets(JSON.stringify(result, null, 2))}`,
   );

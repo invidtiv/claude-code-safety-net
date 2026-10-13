@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { stripJsonComments } from '@/core/io/jsonc';
 import type { DetectContext, HookDetection } from '@/hosts/detect/context';
 import { DROID_HOOK_COMMAND, DROID_HOOK_TIMEOUT, getDroidHooksPath } from '@/hosts/droid/install';
 import { findManagedEntry, managedEntryDriftErrors } from '@/hosts/install/pre-tool-use-entries';
@@ -12,7 +13,7 @@ export function detect(context: DetectContext): HookDetection {
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(configPath, 'utf-8'));
+    parsed = JSON.parse(stripJsonComments(readFileSync(configPath, 'utf-8')));
   } catch (e) {
     return {
       platform: 'droid',
