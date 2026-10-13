@@ -13,7 +13,8 @@ type DevinHookInput = {
 export const DEVIN_COMMAND_TOOLS = new Map<string, CommandToolKind>([['exec', 'auto']]);
 export const DEVIN_PROCESS_INPUT_TOOL = 'write_to_process';
 
-const DOCUMENTED_KEY = /<(CR|LF|ESC|BS|UP|DOWN|LEFT|RIGHT|C-[a-z])>/g;
+const LINE_ENDING_KEY = /<(CR|LF|ESC|C-[cdz])>/g;
+const LINE_EDITING_KEY = /<(BS|UP|DOWN|LEFT|RIGHT|C-[a-z])>/g;
 const KEY_TOKEN = /<[A-Za-z][A-Za-z0-9-]*>/;
 
 function textTypedIntoProcess(
@@ -28,17 +29,14 @@ function textTypedIntoProcess(
     return undefined;
   }
   const keys = toolInput.bytes_input;
-  const typedKeys =
-    typeof keys === 'string'
-      ? keys.replace(DOCUMENTED_KEY, (_token, name: string) =>
-          name === 'CR' || name === 'LF' ? '\n' : '',
-        )
-      : '';
+  const lines = typeof keys === 'string' ? keys.replace(LINE_ENDING_KEY, '\n') : '';
+  const typedKeys = lines.replace(LINE_EDITING_KEY, '');
   if (KEY_TOKEN.test(typedKeys)) return null;
   const text = toolInput.text_input;
   const hasText = typeof text === 'string' && text !== '';
   const hasTypedKeys = typedKeys.trim() !== '';
   if (hasText && hasTypedKeys) return null;
+  if (hasTypedKeys && typedKeys !== lines) return null;
   if (hasText) return text;
   return hasTypedKeys ? typedKeys : undefined;
 }
