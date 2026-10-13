@@ -181,6 +181,8 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   },
   'a prompt answer written to a process as key input': { document: 'none', audit: 'allow' },
   'an undocumented key token written to a process': MALFORMED,
+  'a line written to a process as both text and key input': MALFORMED,
+  'text written to a process followed by Enter': { document: 'none', audit: 'allow' },
   'a recursive delete whose workdir is the home directory': {
     document: 'deny',
     audit: 'deny',
@@ -958,6 +960,22 @@ const HOST_SPECS: readonly HostSpec[] = [
         stdin: devinPayload('write_to_process', {
           shell_id: 'a8be43',
           bytes_input: 'git st<TAB><CR>',
+        }),
+      },
+      {
+        name: 'a line written to a process as both text and key input',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          text_input: 'echo ok',
+          bytes_input: '<C-u>git reset --hard<CR>',
+        }),
+      },
+      {
+        name: 'text written to a process followed by Enter',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          text_input: 'y',
+          bytes_input: '<CR>',
         }),
       },
       {

@@ -27,15 +27,20 @@ function textTypedIntoProcess(
   ) {
     return undefined;
   }
-  const text = toolInput.text_input;
-  if (typeof text === 'string' && text !== '') return text;
   const keys = toolInput.bytes_input;
-  if (typeof keys !== 'string') return undefined;
-  const typed = keys.replace(DOCUMENTED_KEY, (_token, name: string) =>
-    name === 'CR' || name === 'LF' ? '\n' : '',
-  );
-  if (KEY_TOKEN.test(typed)) return null;
-  return typed.trim() === '' ? undefined : typed;
+  const typedKeys =
+    typeof keys === 'string'
+      ? keys.replace(DOCUMENTED_KEY, (_token, name: string) =>
+          name === 'CR' || name === 'LF' ? '\n' : '',
+        )
+      : '';
+  if (KEY_TOKEN.test(typedKeys)) return null;
+  const text = toolInput.text_input;
+  const hasText = typeof text === 'string' && text !== '';
+  const hasTypedKeys = typedKeys.trim() !== '';
+  if (hasText && hasTypedKeys) return null;
+  if (hasText) return text;
+  return hasTypedKeys ? typedKeys : undefined;
 }
 
 export async function runDevinHook(): Promise<void> {
