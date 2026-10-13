@@ -109,6 +109,11 @@ test.each([
     { patchText: '*** Begin Patch\n*** Delete File: .git/hooks/pre-commit\n*** End Patch' },
     'git',
   ],
+  [
+    'opencode_worktree_remove',
+    { directory: '../feature', force: true },
+    'git.worktree-remove-force',
+  ],
 ] as const)(
   'v2 blocks %s with a typed tool error before any side effect',
   async (tool, input, reason) => {
@@ -150,6 +155,14 @@ test.each([
   expect(result.returned).toBe('executed');
   expect(result.entries[0]?.entry).toMatchObject({ cwd: expected(), decision: 'allow' });
 });
+
+test.each([{ directory: '../feature' }, { directory: '../feature', force: false }])(
+  'v2 leaves an unforced worktree removal %p to the host',
+  async (input) => {
+    const result = await callTool(host(), 'opencode_worktree_remove', input);
+    expect(result.returned).toBe('executed');
+  },
+);
 
 test('v2 only grants command capability to the exact shell name', async () => {
   const result = await callTool(host(), 'custom_shell', { command: 'git reset --hard' });

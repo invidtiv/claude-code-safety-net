@@ -883,6 +883,39 @@ test('OpenCode v2 reinstall verifies the plugin row listed after the update', as
   ]);
 });
 
+test('OpenCode v2 reinstall waits for a cold service to list the plugin before updating', async () => {
+  const warmService = openCodeV2Script(
+    undefined,
+    'Plugin "cc-safety-net@latest" is already configured in <home>/.config/opencode/opencode.json\n',
+  );
+  const result = await flow({
+    invoke: 'install',
+    args: ['--opencode'],
+    seedTmp: { 'warm-service/fake-script.json': JSON.stringify(warmService) },
+    script: [
+      { command: 'opencode', args: ['plugin', 'list'], call: 1, stdout: 'No plugins found\n' },
+      {
+        command: 'opencode',
+        args: ['plugin', 'list'],
+        call: 2,
+        stdout: 'ID  VERSION  SOURCE\ncc-safety-net  2.4.2  cc-safety-net@latest\n',
+        seedDir: '<root>/tmp/warm-service',
+        seedInto: '<root>',
+      },
+      {
+        command: 'opencode',
+        args: ['plugin', 'update', 'cc-safety-net@latest'],
+        stderr: 'Plugin is not configured: cc-safety-net@latest\n',
+        exit: 1,
+      },
+      ...warmService,
+    ],
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.errors).toEqual([]);
+  expect(result.log).toContain('opencode plugin update cc-safety-net@latest\t<root>');
+});
+
 test('OpenCode v2 install waits for the plugin row to appear', async () => {
   const result = await flow({
     invoke: 'install',

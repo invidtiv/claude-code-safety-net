@@ -105,6 +105,7 @@ export async function getOpenCodeInstallPlan(environment: Environment) {
           { stdoutOnly: true },
         );
         if (added.includes('is already configured in')) {
+          await waitForOpenCodePluginRow();
           await runNativeCommand(['opencode', 'plugin', 'update', OPENCODE_CACHE_PACKAGE]);
         }
         const output = await waitForOpenCodePluginRow();
