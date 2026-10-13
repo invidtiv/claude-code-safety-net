@@ -4,6 +4,8 @@ import type { ToolHooks } from '@opencode/plugin/effect/tool';
 import { Tool } from '@opencode/schema/tool';
 import { Effect } from 'effect';
 import { getNonCommandToolInputKind } from '@/core/tool-input';
+import { quoteShellWord } from '@/gate/analyzer/shell-execution';
+import type { ToolRoute } from '@/gate/invocation';
 import { loadBuiltinCommands } from './builtin-commands/commands';
 import {
   evaluateOpenCodeTool,
@@ -11,6 +13,7 @@ import {
   resolveOpenCodeShellRoute,
 } from './plugin';
 
+const OPENCODE_WORKTREE_REMOVE_TOOL = 'opencode_worktree_remove';
 const POSIX_SHELL_PROBE = 'x=ccsn; case $x in ccsn) echo $x-posix;; esac';
 const POSIX_SHELL_PROBE_TIMEOUT_MS = 10_000;
 const posixShellChecks = new Map<string, Promise<boolean>>();
@@ -46,11 +49,7 @@ export function createOpenCodeV2Plugin() {
                 expandHomeWorkdir: true,
                 tool: event.tool,
                 sessionID: event.sessionID,
-                toolInput: event.input,
-                route:
-                  event.tool === OPENCODE_V2_COMMAND_TOOL
-                    ? { kind: 'command', shell }
-                    : { kind: getNonCommandToolInputKind(event.tool) },
+                ...getOpenCodeV2ToolCall(event.tool, event.input, shell),
               }),
             catch: (error) =>
               new Tool.Error({ message: error instanceof Error ? error.message : String(error) }),
@@ -97,6 +96,26 @@ export function createOpenCodeV2Plugin() {
         });
       }),
   } satisfies Plugin;
+}
+
+function getOpenCodeV2ToolCall(
+  tool: string,
+  input: unknown,
+  shell: 'posix' | 'powershell',
+): { toolInput: unknown; route: ToolRoute } {
+  if (tool === OPENCODE_V2_COMMAND_TOOL)
+    return { toolInput: input, route: { kind: 'command', shell } };
+  const forced =
+    typeof input === 'object' && input !== null && 'force' in input && input.force === true;
+  if (tool !== OPENCODE_WORKTREE_REMOVE_TOOL || !forced) {
+    return { toolInput: input, route: { kind: getNonCommandToolInputKind(tool) } };
+  }
+  const directory =
+    'directory' in input && typeof input.directory === 'string' ? input.directory : '';
+  return {
+    toolInput: { command: `git worktree remove --force -- ${quoteShellWord(directory)}` },
+    route: { kind: 'command', shell: 'posix' },
+  };
 }
 
 function runsPosixShellSyntax(shell: string, env: NodeJS.ProcessEnv, cwd: string) {

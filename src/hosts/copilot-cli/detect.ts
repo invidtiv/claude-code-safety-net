@@ -73,6 +73,10 @@ export function _getCopilotConfigHome(environment: Environment): string {
   return environment.env.get('COPILOT_HOME') || join(environment.home, '.copilot');
 }
 
+function _hasActiveSafetyNetCopilotHookFile(config: CopilotHookConfig): boolean {
+  return config.disableAllHooks !== true && _hasSafetyNetCopilotHook(config);
+}
+
 function _hasSafetyNetCopilotHook(config: CopilotHookConfig): boolean {
   const preToolUseHooks = config.hooks?.preToolUse ?? [];
   return preToolUseHooks.some((hook) => {
@@ -162,7 +166,7 @@ function _collectSafetyNetCopilotHookFiles(dirPath: string, errors: string[]): s
   for (const filename of _listJsonFiles(dirPath, errors)) {
     const configPath = join(dirPath, filename);
     const config = _readCopilotConfigFile(configPath, errors);
-    if (config && _hasSafetyNetCopilotHook(config)) {
+    if (config && _hasActiveSafetyNetCopilotHookFile(config)) {
       matches.push(configPath);
     }
   }
@@ -231,16 +235,13 @@ function _checkCopilotEnabled(
     _collectCopilotInlineConfig(join(repoClaudeDir, 'settings.local.json'), inlineErrors),
     _collectCopilotInlineConfig(join(repoClaudeDir, 'settings.json'), inlineErrors),
   ];
+  const userSettings = _collectCopilotInlineConfig(join(configHome, 'settings.json'), inlineErrors);
   const userInlineSources = [
-    _collectCopilotInlineConfig(join(configHome, 'settings.json'), inlineErrors),
-    _collectCopilotInlineConfig(join(configHome, 'config.json'), inlineErrors),
+    userSettings?.config.disableAllHooks === true ? undefined : userSettings,
   ];
 
   if (inlineSupport !== false) {
-    const disableSource = _resolveCopilotInlineDisableSource([
-      ...repoInlineSources,
-      ...userInlineSources,
-    ]);
+    const disableSource = _resolveCopilotInlineDisableSource(repoInlineSources);
     if (disableSource) {
       if (inlineSupport === null) {
         errors.push(
@@ -260,7 +261,7 @@ function _checkCopilotEnabled(
   for (const filename of userHookFiles) {
     const configPath = join(userHookDir, filename);
     const config = _readCopilotConfigFile(configPath, userHookErrors);
-    if (config && _hasSafetyNetCopilotHook(config)) {
+    if (config && _hasActiveSafetyNetCopilotHookFile(config)) {
       userHookPaths.push(configPath);
     }
   }

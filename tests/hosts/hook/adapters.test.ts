@@ -92,6 +92,7 @@ for (const host of HOOK_HOSTS) {
       const ported = await runSide(host, row);
       expect(ported.stdout).toHaveLength(row.expected.document === 'none' ? 0 : 1);
       expect(ported.stderr.map(debugStage)).toHaveLength(row.expected.stderr ?? 0);
+      expect(ported.exitCode).toBe(row.expected.exitCode ?? 0);
       expect(ported.audit.map((line) => line.entry.decision)).toEqual(
         row.expected.audit === 'none' ? [] : [row.expected.audit],
       );
@@ -110,6 +111,11 @@ for (const host of HOOK_HOSTS) {
         return;
       }
       expect(JSON.parse(ported.stdout[0] as string)).toStrictEqual(DENY_DOCUMENTS[host.id]);
+      if (row.expected.exitCode !== undefined) {
+        expect(ported.stderr.at(-1)).toBe(
+          JSON.parse(ported.stdout[0] as string).hookSpecificOutput.permissionDecisionReason,
+        );
+      }
       const diagnostic = INPUT_DIAGNOSTICS[row.name];
       if (diagnostic) expect(ported.stdout[0]).toContain(diagnostic);
       expect(ported.stdout[0]).toContain('BLOCKED by CC Safety Net');
@@ -222,7 +228,7 @@ describe('an unverifiable command asks the user where the host can prompt', () =
   };
 
   test('claude-code asks in an interactive permission mode', async () => {
-    for (const mode of ['default', 'acceptEdits', 'plan']) {
+    for (const mode of ['default', 'acceptEdits', 'plan', 'auto']) {
       const output = await decisionOf('claude-code', 'bash -c "$CMD"', { permission_mode: mode });
       expect(output.permissionDecision, mode).toBe('ask');
       expect(output.permissionDecisionReason, mode).toContain(
@@ -235,7 +241,6 @@ describe('an unverifiable command asks the user where the host can prompt', () =
     for (const extra of [
       { permission_mode: 'bypassPermissions' },
       { permission_mode: 'dontAsk' },
-      { permission_mode: 'auto' },
       {},
     ]) {
       const output = await decisionOf('claude-code', 'bash -c "$CMD"', extra);

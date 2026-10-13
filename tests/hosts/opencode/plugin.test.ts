@@ -169,6 +169,11 @@ const WINDOWS_WORKDIRS = [
 const SHELL_ROUTES = [
   [undefined, 'linux', undefined, 'auto'],
   [undefined, 'win32', undefined, 'powershell'],
+  [undefined, 'win32', '/usr/bin/bash', 'posix'],
+  [undefined, 'win32', 'C:\\Program Files\\Git\\bin\\bash.exe', 'posix'],
+  [undefined, 'win32', '/usr/bin/fish', 'powershell'],
+  [undefined, 'win32', 'nu.exe', 'powershell'],
+  [undefined, 'win32', ' ', 'powershell'],
   ['/bin/zsh', 'linux', undefined, 'posix'],
   ['C:\\x\\pwsh.exe', 'win32', undefined, 'powershell'],
   ['C:\\x\\cmd.exe', 'win32', undefined, 'auto'],

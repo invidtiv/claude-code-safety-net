@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Environment } from '@/core/environment';
 import { atomicWriteFile } from '@/core/io/atomic-write';
+import { stripJsonComments } from '@/core/io/jsonc';
 import {
   canonicalPreToolUseEntry,
   isInstalledOnceCanonically,
@@ -21,13 +22,17 @@ function getDroidSettingsPath(environment: Environment): string {
   return join(environment.home, '.factory', 'settings.json');
 }
 
+function getDroidLegacyHooksPath(environment: Environment): string {
+  return join(environment.home, '.factory', 'hooks', 'hooks.json');
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function readDroidJson(configPath: string): unknown {
   try {
-    return JSON.parse(readFileSync(configPath, 'utf-8'));
+    return JSON.parse(stripJsonComments(readFileSync(configPath, 'utf-8')));
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new Error(`Failed to parse Factory Droid hooks config ${configPath}: ${error.message}`);
@@ -44,10 +49,20 @@ function parseDroidHooksConfig(configPath: string) {
   throw new Error(`Factory Droid hooks config ${configPath} "PreToolUse" must be an array`);
 }
 
-function settingsFallbackHooks(settingsPath: string): Record<string, unknown> {
+function settingsPreToolUse(settingsPath: string): Record<string, unknown> {
   if (!existsSync(settingsPath)) return {};
   const settings = readDroidJson(settingsPath);
-  return isRecord(settings) && isRecord(settings.hooks) ? settings.hooks : {};
+  return isRecord(settings) && isRecord(settings.hooks) && settings.hooks.PreToolUse !== undefined
+    ? { PreToolUse: settings.hooks.PreToolUse }
+    : {};
+}
+
+function seedHooksConfig(environment: Environment): Record<string, unknown> {
+  const legacyPath = getDroidLegacyHooksPath(environment);
+  return {
+    ...settingsPreToolUse(getDroidSettingsPath(environment)),
+    ...(existsSync(legacyPath) ? parseDroidHooksConfig(legacyPath) : {}),
+  };
 }
 
 function getPreToolUse(config: Record<string, unknown>): unknown[] {
@@ -68,9 +83,7 @@ function writeDroidHooksConfig(
 export function installDroid(environment: Environment): InstallResult {
   const configPath = getDroidHooksPath(environment);
   const hooksFileExists = existsSync(configPath);
-  const config = hooksFileExists
-    ? parseDroidHooksConfig(configPath)
-    : settingsFallbackHooks(getDroidSettingsPath(environment));
+  const config = hooksFileExists ? parseDroidHooksConfig(configPath) : seedHooksConfig(environment);
   const existing = getPreToolUse(config);
   if (
     hooksFileExists &&

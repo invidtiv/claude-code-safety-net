@@ -73,7 +73,7 @@ const DISABLED: TreeSpec = {
   '.gemini/config/hooks.json':
     '{"cc-safety-net":{"enabled":false,"PreToolUse":[{"hooks":[{"command":"npx -y cc-safety-net hook --agy-cli"}]}]}}',
   '.pi/agent/settings.json':
-    '{"packages":[{"source":"npm:cc-safety-net","extensions":["-cc-safety-net"]}]}',
+    '{"packages":[{"source":"npm:cc-safety-net","extensions":["-dist/pi/index.js"]}]}',
   '.dsh/profiles/web/package.json':
     '{"dependencies":{"cc-safety-net":"^2"},"dsh":{"profile":{"bundles":[]}}}',
 };

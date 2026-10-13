@@ -151,7 +151,7 @@ describe('rule verify', () => {
       [
         `✗ User config: ${posix.join('<root>', 'home', '.cc-safety-net', 'rules', 'rule.json')}`,
         '  Errors:',
-        '    1. "bash" is a built-in shell tool of Claude Code, Codex, DeepSeek Harness, GitHub Copilot CLI, Kimi Code, OpenCode and Pi, and is already analyzed. Built-in tools cannot be declared.',
+        '    1. "bash" is a built-in shell tool of Claude Code, Codex, DeepSeek Harness, GitHub Copilot CLI, Grok Build, Kimi Code, OpenCode and Pi, and is already analyzed. Built-in tools cannot be declared.',
       ].join('\n'),
     );
     expect(outcome.report).toContain(

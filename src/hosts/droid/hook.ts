@@ -7,6 +7,7 @@ export const DROID_COMMAND_TOOLS = new Map<string, CommandToolKind>([['Execute',
 export async function runDroidHook(): Promise<void> {
   await runPreToolUseHook({
     agent: 'droid',
+    denyExitCode: 2,
     getToolRoute: (toolName) => getToolRoute(toolName, DROID_COMMAND_TOOLS),
   });
 }

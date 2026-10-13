@@ -24,6 +24,7 @@ export type HookOutcome = {
   ruleId?: string;
   reason?: string;
   stderr?: number;
+  exitCode?: number;
 };
 
 export type HookRow = {
@@ -163,6 +164,11 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
     audit: 'deny',
     ruleId: 'secret.basename.env',
   },
+  'a grep over private keys in glob_pattern': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'secret.ext.pem',
+  },
   'a recursive delete from a home process cwd': {
     document: 'deny',
     audit: 'deny',
@@ -174,6 +180,26 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
     ruleId: 'git.reset-hard',
   },
   'a keypress written to a process': { document: 'none', audit: 'none' },
+  'a destructive line written to a process as key input': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'git.reset-hard',
+  },
+  'a prompt answer written to a process as key input': { document: 'none', audit: 'allow' },
+  'an undocumented key token written to a process': MALFORMED,
+  'a line written to a process as both text and key input': MALFORMED,
+  'a line erased by a key before a destructive line': MALFORMED,
+  'a line edited by backspace': MALFORMED,
+  'an editor command after escape': MALFORMED,
+  'an aborted line before a destructive line': MALFORMED,
+  'a destructive line split by Ctrl-D': MALFORMED,
+  'text written to a process followed by an editing key': MALFORMED,
+  'text written to a process followed by Enter': { document: 'none', audit: 'allow' },
+  'a recursive delete whose workdir is the home directory': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'rm.recursive-force-root-or-home',
+  },
   'a transcript under the Codex home': { document: 'none', audit: 'allow' },
   'a transcript under the Copilot home': { document: 'none', audit: 'allow' },
   'a transcript under the Claude config directory': {
@@ -207,6 +233,38 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   'an empty dir_path': { document: 'none', audit: 'allow' },
   'a whitespace-only dir_path': MALFORMED,
   'a dir_path that is not a string': MALFORMED,
+  'a grep_search whose dir_path is an npmrc file': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'secret.basename.npmrc',
+  },
+  'a grep_search over private keys in include_pattern': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'secret.basename.id-rsa',
+  },
+  'a list_directory over the ssh directory': { document: 'none', audit: 'none' },
+  'a glob whose dir_path is the ssh directory': { document: 'none', audit: 'none' },
+  'a read_file of an at-prefixed npmrc': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'secret.basename.npmrc',
+  },
+  'a read_file of an npmrc path holding a NUL byte': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'secret.basename.npmrc',
+  },
+  'a read_file of an at-prefixed name that exists as written': {
+    document: 'none',
+    audit: 'none',
+  },
+  'a read_file under an at-prefixed directory that exists': { document: 'none', audit: 'none' },
+  'a read_file of an at-slash path into the ssh directory': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'secret.home.ssh',
+  },
   'tool args that are not a string': { document: 'deny', audit: 'deny' },
   'tool args that are not JSON': { document: 'deny', audit: 'deny' },
   'a powershell command': {
@@ -234,6 +292,12 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   },
   'no workspace paths': MALFORMED,
   'a blank Cwd': MALFORMED,
+  'a destructive line sent to a background task': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'git.reset-hard',
+  },
+  'a background task status check': { document: 'none', audit: 'none' },
   'view targets past the path-canonicalization budget': {
     document: 'deny',
     audit: 'deny',
@@ -241,6 +305,36 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   'tool input the host truncated': { document: 'deny', audit: 'deny' },
   'a cwd inside the workspace root': { document: 'allow', audit: 'allow' },
   'a cwd outside the workspace root': SESSION_OUTSIDE,
+  'a destructive run_terminal_cmd command': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'git.reset-hard',
+  },
+  'a destructive bash command': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'git.reset-hard',
+  },
+  'a destructive Shell command': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'git.reset-hard',
+  },
+  'a bash workdir outside the workspace root': REQUESTED_OUTSIDE,
+  'a bash workdir relative to the session cwd': { document: 'allow', audit: 'allow' },
+  'a blank bash workdir': MALFORMED,
+  'a Shell working_directory inside the workspace root': { document: 'allow', audit: 'allow' },
+  'a Shell working_directory outside the workspace root': REQUESTED_OUTSIDE,
+  'a bash delete of its own workdir': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'rm.recursive-force-cwd-self',
+  },
+  'a Shell delete of its own working_directory': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'rm.recursive-force-cwd-self',
+  },
   'a workdir that exists': { document: 'none', audit: 'allow' },
   'a workdir that does not exist': REQUESTED_UNUSABLE,
   'a blank workdir': MALFORMED,
@@ -282,6 +376,8 @@ const MISSING_PREFIX = Array.from({ length: 14 }, (_, index) => `m${index}`).joi
 const BAD_CONFIG_DIR = 'bad-config';
 const NOT_A_DIRECTORY = 'not-a-directory';
 const DOTTED_DIRECTORY = '..cache';
+const AT_PREFIXED_FILE = '@.netrc';
+const AT_PREFIXED_DIRECTORY = '@.ssh';
 const OVERSIZED_PAYLOAD = `{"pad":"${'x'.repeat(8 * 1024 * 1024 - 9)}"}`;
 
 export function createHookFixture(prefix: string): HookFixture {
@@ -293,6 +389,7 @@ export function createHookFixture(prefix: string): HookFixture {
     join(home, '.copilot'),
     join(home, '.claude', 'projects'),
     join(home, '.ssh'),
+    join(home, AT_PREFIXED_DIRECTORY),
     join(project, 'sub'),
     join(project, DOTTED_DIRECTORY),
     join(root, 'outside'),
@@ -305,6 +402,7 @@ export function createHookFixture(prefix: string): HookFixture {
   writeFileSync(join(home, '.claude', 'projects', 'p.jsonl'), '');
   writeFileSync(join(home, '.ssh', 'id_rsa'), `${['-----BEGIN', 'KEY-----'].join(' ')}\n`);
   writeFileSync(join(project, 'README.md'), 'a file the read rows point at\n');
+  writeFileSync(join(project, AT_PREFIXED_FILE), '');
   writeFileSync(join(root, NOT_A_DIRECTORY), 'a file where a directory is expected\n');
   writeFileSync(
     withEnv({ CC_SAFETY_NET_HOME: join(root, BAD_CONFIG_DIR) }, () =>
@@ -342,6 +440,7 @@ type HostSpec = {
   unsupportedEvent?: string;
   cwdFromProcess?: true;
   answersEveryCall?: true;
+  denyExitCode?: number;
   build: (payload: Payload) => unknown;
   extraRows?: (fixture: HookFixture) => readonly Omit<HookRow, 'expected'>[];
 };
@@ -396,6 +495,13 @@ const antigravityPayload = (fixture: HookFixture, args: Record<string, unknown>)
       name: 'run_command',
       args: { CommandLine: 'git status', ...args },
     },
+  });
+
+const antigravityTaskPayload = (fixture: HookFixture, args: Record<string, unknown>) =>
+  JSON.stringify({
+    conversationId: SESSION,
+    workspacePaths: [fixture.project],
+    toolCall: { name: 'manage_task', args: { TaskId: 'task-1', ...args } },
   });
 
 const grokPayload = (fixture: HookFixture, overrides: Record<string, unknown>) =>
@@ -455,6 +561,9 @@ const geminiPayload = (cwd: string, command: string, dirPath: unknown) =>
     tool_input: { command, dir_path: dirPath },
     cwd,
   });
+
+const geminiToolPayload = (fixture: HookFixture, tool: string, args: Record<string, unknown>) =>
+  JSON.stringify(claudeShaped('BeforeTool')({ tool, args, cwd: fixture.project }));
 
 const HOST_SPECS: readonly HostSpec[] = [
   {
@@ -617,6 +726,62 @@ const HOST_SPECS: readonly HostSpec[] = [
       {
         name: 'a dir_path that is not a string',
         stdin: geminiPayload(fixture.project, 'git status', 5),
+      },
+      {
+        name: 'a grep_search whose dir_path is an npmrc file',
+        stdin: geminiToolPayload(fixture, 'grep_search', { pattern: '.', dir_path: '.npmrc' }),
+      },
+      {
+        name: 'a grep_search over private keys in include_pattern',
+        stdin: geminiToolPayload(fixture, 'grep_search', {
+          pattern: 'KEY',
+          include_pattern: '**/id_rsa',
+        }),
+      },
+      {
+        name: 'a list_directory over the ssh directory',
+        stdin: geminiToolPayload(fixture, 'list_directory', {
+          dir_path: join(fixture.home, '.ssh'),
+        }),
+      },
+      {
+        name: 'a glob whose dir_path is the ssh directory',
+        stdin: geminiToolPayload(fixture, 'glob', {
+          pattern: '*',
+          dir_path: join(fixture.home, '.ssh'),
+        }),
+      },
+      {
+        name: 'a read_file of an at-prefixed npmrc',
+        stdin: geminiToolPayload(fixture, 'read_file', { file_path: '@.npmrc' }),
+      },
+      {
+        name: 'a read_file of an npmrc path holding a NUL byte',
+        stdin: geminiToolPayload(fixture, 'read_file', { file_path: '.npm\u0000rc' }),
+      },
+      {
+        name: 'a read_file of an at-prefixed name that exists as written',
+        stdin: geminiToolPayload(fixture, 'read_file', { file_path: AT_PREFIXED_FILE }),
+      },
+      {
+        name: 'a read_file under an at-prefixed directory that exists',
+        stdin: JSON.stringify(
+          claudeShaped('BeforeTool')({
+            tool: 'read_file',
+            args: { file_path: `${AT_PREFIXED_DIRECTORY}/config` },
+            cwd: fixture.home,
+          }),
+        ),
+      },
+      {
+        name: 'a read_file of an at-slash path into the ssh directory',
+        stdin: JSON.stringify(
+          claudeShaped('BeforeTool')({
+            tool: 'read_file',
+            args: { file_path: '@/.ssh/config' },
+            cwd: fixture.home,
+          }),
+        ),
       },
     ],
   },
@@ -783,6 +948,17 @@ const HOST_SPECS: readonly HostSpec[] = [
       },
       { name: 'a blank Cwd', stdin: antigravityPayload(fixture, { Cwd: '' }) },
       {
+        name: 'a destructive line sent to a background task',
+        stdin: antigravityTaskPayload(fixture, {
+          Action: 'send_input',
+          Input: 'git reset --hard\n',
+        }),
+      },
+      {
+        name: 'a background task status check',
+        stdin: antigravityTaskPayload(fixture, { Action: 'status' }),
+      },
+      {
         name: 'no workspace paths',
         stdin: JSON.stringify({
           conversationId: SESSION,
@@ -848,6 +1024,83 @@ const HOST_SPECS: readonly HostSpec[] = [
           cwd: fixture.outside,
         }),
       },
+      {
+        name: 'a destructive run_terminal_cmd command',
+        stdin: grokPayload(fixture, {
+          toolName: 'run_terminal_cmd',
+          toolInput: { command: 'git reset --hard' },
+        }),
+      },
+      {
+        name: 'a destructive bash command',
+        stdin: grokPayload(fixture, {
+          toolName: 'bash',
+          toolInput: { command: 'git reset --hard', workdir: fixture.project },
+        }),
+      },
+      {
+        name: 'a destructive Shell command',
+        stdin: grokPayload(fixture, {
+          toolName: 'Shell',
+          toolInput: { command: 'git reset --hard', working_directory: fixture.project },
+        }),
+      },
+      {
+        name: 'a bash workdir outside the workspace root',
+        stdin: grokPayload(fixture, {
+          workspaceRoot: fixture.project,
+          toolName: 'bash',
+          toolInput: { command: 'git status', workdir: fixture.outside },
+        }),
+      },
+      {
+        name: 'a bash workdir relative to the session cwd',
+        stdin: grokPayload(fixture, {
+          workspaceRoot: fixture.project,
+          cwd: join(fixture.project, 'sub'),
+          toolName: 'bash',
+          toolInput: { command: 'git status', workdir: '..' },
+        }),
+      },
+      {
+        name: 'a blank bash workdir',
+        stdin: grokPayload(fixture, {
+          toolName: 'bash',
+          toolInput: { command: 'git status', workdir: ' ' },
+        }),
+      },
+      {
+        name: 'a Shell working_directory inside the workspace root',
+        stdin: grokPayload(fixture, {
+          workspaceRoot: fixture.project,
+          toolName: 'Shell',
+          toolInput: { command: 'git status', working_directory: join(fixture.project, 'sub') },
+        }),
+      },
+      {
+        name: 'a Shell working_directory outside the workspace root',
+        stdin: grokPayload(fixture, {
+          workspaceRoot: fixture.project,
+          toolName: 'Shell',
+          toolInput: { command: 'git status', working_directory: fixture.outside },
+        }),
+      },
+      {
+        name: 'a bash delete of its own workdir',
+        stdin: grokPayload(fixture, {
+          workspaceRoot: fixture.project,
+          toolName: 'bash',
+          toolInput: { command: 'rm -rf ../sub', workdir: 'sub' },
+        }),
+      },
+      {
+        name: 'a Shell delete of its own working_directory',
+        stdin: grokPayload(fixture, {
+          workspaceRoot: fixture.project,
+          toolName: 'Shell',
+          toolInput: { command: 'rm -rf ../sub', working_directory: join(fixture.project, 'sub') },
+        }),
+      },
     ],
   },
   {
@@ -861,6 +1114,7 @@ const HOST_SPECS: readonly HostSpec[] = [
       riskLevel: 'low',
     }),
     unsupportedEvent: 'PostToolUse',
+    denyExitCode: 2,
     build: droidShaped,
     extraRows: (fixture) => [
       {
@@ -869,6 +1123,16 @@ const HOST_SPECS: readonly HostSpec[] = [
           droidShaped({
             tool: 'Glob',
             args: { patterns: '**/.env', folder: fixture.project },
+            cwd: fixture.project,
+          }),
+        ),
+      },
+      {
+        name: 'a grep over private keys in glob_pattern',
+        stdin: JSON.stringify(
+          droidShaped({
+            tool: 'Grep',
+            args: { pattern: 'KEY', glob_pattern: '*.pem' },
             cwd: fixture.project,
           }),
         ),
@@ -902,6 +1166,100 @@ const HOST_SPECS: readonly HostSpec[] = [
           shell_id: 'a8be43',
           bytes_input: '<CR>',
         }),
+      },
+      {
+        name: 'a destructive line written to a process as key input',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          bytes_input: 'git reset --hard<CR>',
+        }),
+      },
+      {
+        name: 'a prompt answer written to a process as key input',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          bytes_input: 'y<CR>',
+        }),
+      },
+      {
+        name: 'an undocumented key token written to a process',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          bytes_input: 'git st<TAB><CR>',
+        }),
+      },
+      {
+        name: 'a line written to a process as both text and key input',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          text_input: 'echo ok',
+          bytes_input: '<C-u>git reset --hard<CR>',
+        }),
+      },
+      {
+        name: 'a line erased by a key before a destructive line',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          bytes_input: 'echo ok<C-u>git reset --hard<CR>',
+        }),
+      },
+      {
+        name: 'a line edited by backspace',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          bytes_input: 'git reset --hardx<BS><CR>',
+        }),
+      },
+      {
+        name: 'an editor command after escape',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          bytes_input: 'i hello<ESC>:wq<CR>',
+        }),
+      },
+      {
+        name: 'an aborted line before a destructive line',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          bytes_input: 'echo ok<C-c>git reset --hard<CR>',
+        }),
+      },
+      {
+        name: 'a destructive line split by Ctrl-D',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          bytes_input: 'git reset<C-d> --hard<CR>',
+        }),
+      },
+      {
+        name: 'text written to a process followed by an editing key',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          text_input: 'git reset --hardx',
+          bytes_input: '<BS><CR>',
+        }),
+      },
+      {
+        name: 'text written to a process followed by Enter',
+        stdin: devinPayload('write_to_process', {
+          shell_id: 'a8be43',
+          text_input: 'y',
+          bytes_input: '<CR>',
+        }),
+      },
+      {
+        name: 'a recursive delete whose workdir is the home directory',
+        stdin: devinPayload('exec', { command: 'rm -rf *', workdir: fixture.home }),
+        processCwd: fixture.project,
+      },
+      {
+        name: 'a blank workdir',
+        stdin: devinPayload('exec', { command: 'git status', workdir: '' }),
+      },
+      {
+        name: 'a grep over private keys in glob_pattern',
+        stdin: devinPayload('grep', { pattern: 'KEY', glob_pattern: '*.pem' }),
+        processCwd: fixture.project,
       },
     ],
   },
@@ -1016,7 +1374,8 @@ function outcomeFor(spec: HostSpec, name: string): HookOutcome {
   const outcome =
     (spec.answersEveryCall === true ? ANSWERED_OUTCOMES[name] : undefined) ?? OUTCOMES[name];
   if (outcome === undefined) throw new Error(`no declared outcome for hook row: ${name}`);
-  return outcome;
+  if (spec.denyExitCode === undefined || outcome.document !== 'deny') return outcome;
+  return { ...outcome, stderr: (outcome.stderr ?? 0) + 1, exitCode: spec.denyExitCode };
 }
 
 export const HOOK_HOSTS: readonly HookHost[] = HOST_SPECS.map((spec) => ({

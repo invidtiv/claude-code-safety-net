@@ -37,6 +37,8 @@ type CCSafetyNetPluginInput = PluginInput & {
 
 const POWERSHELL_EXECUTABLES = new Set(['powershell', 'pwsh']);
 
+const OPENCODE_REFUSED_SHELLS = new Set(['fish', 'nu']);
+
 export const OPENCODE_COMMAND_TOOL = 'bash';
 
 export const OPENCODE_V2_COMMAND_TOOL = 'shell';
@@ -179,15 +181,18 @@ export function resolveOpenCodeShellRoute(
   platform = process.platform,
   environmentShell = process.env.SHELL,
 ): CommandToolKind {
-  if (typeof configuredShell !== 'string' && platform === 'win32') return 'powershell';
   const candidate = typeof configuredShell === 'string' ? configuredShell : environmentShell;
-  if (typeof candidate !== 'string') return 'auto';
   const executable = candidate
-    .trim()
+    ?.trim()
     .split(/[\\/]/)
     .at(-1)
     ?.toLowerCase()
     .replace(/\.exe$/, '');
+  const hostFallsBackToPowerShell =
+    typeof configuredShell !== 'string' &&
+    platform === 'win32' &&
+    (!executable || OPENCODE_REFUSED_SHELLS.has(executable));
+  if (hostFallsBackToPowerShell) return 'powershell';
   if (!executable) return 'auto';
   if (POWERSHELL_EXECUTABLES.has(executable)) return 'powershell';
   return executable === 'cmd' ? 'auto' : 'posix';

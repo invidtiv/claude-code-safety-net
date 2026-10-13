@@ -57,6 +57,7 @@ type ConfiguredHookAdapter<T> = Omit<HookAdapter<T>, 'outputDeny' | 'outputAsk' 
   createDenyOutput: (message: string) => object;
   createAskOutput?: (message: string) => object;
   createAllowOutput?: () => object;
+  denyExitCode?: number;
 };
 
 type ToolInputResult = { ok: true; input: unknown; route: ToolRoute } | { ok: false };
@@ -106,11 +107,12 @@ export const getToolCwdHookContext =
     return null;
   };
 
-function outputHookDeny(
-  createDenyOutput: (message: string) => object,
-  denial: IntegrationDenial,
-): void {
-  console.log(JSON.stringify(createDenyOutput(formatDenial(denial))));
+function outputHookDeny<T>(adapter: ConfiguredHookAdapter<T>, denial: IntegrationDenial): void {
+  const message = formatDenial(denial);
+  console.log(JSON.stringify(adapter.createDenyOutput(message)));
+  if (adapter.denyExitCode === undefined) return;
+  console.error(message);
+  process.exitCode = adapter.denyExitCode;
 }
 
 async function readHookInput<T>(outputDeny: HookDenyOutput): Promise<T | undefined> {
@@ -280,7 +282,7 @@ function getHookAuditCwd(input: unknown): string | null {
 export async function runConfiguredHookAdapter<T>(
   adapter: ConfiguredHookAdapter<T>,
 ): Promise<void> {
-  const outputDeny: HookDenyOutput = (denial) => outputHookDeny(adapter.createDenyOutput, denial);
+  const outputDeny: HookDenyOutput = (denial) => outputHookDeny(adapter, denial);
   const createAskOutput = adapter.createAskOutput;
   const outputAsk = createAskOutput
     ? (denial: IntegrationDenial) =>

@@ -32,9 +32,6 @@
     "// `-am` is `-a -m`; only letters that take no value may precede the `m`.",
     "// `-files0-from FILE` reads FILE, which may sit before the start points."
   ],
-  "src/hosts/claude-code/hook.ts": [
-    "// Modes where an ask reaches a person; bypass, dontAsk and auto may resolve it unattended."
-  ],
   "src/hosts/hook/pre-tool-use.ts": [
     "// Only a host that prompts on `ask` may use it; Codex rejects it and runs the tool."
   ],

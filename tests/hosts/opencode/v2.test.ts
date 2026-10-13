@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, expect, jest, test } from 'bun:test';
-import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CommandDefinition } from '@opencode/plugin/effect/command';
 import type { Context } from '@opencode/plugin/effect/plugin';
@@ -109,6 +118,11 @@ test.each([
     { patchText: '*** Begin Patch\n*** Delete File: .git/hooks/pre-commit\n*** End Patch' },
     'git',
   ],
+  [
+    'opencode_worktree_remove',
+    { directory: '../feature', force: true },
+    'git.worktree-remove-force',
+  ],
 ] as const)(
   'v2 blocks %s with a typed tool error before any side effect',
   async (tool, input, reason) => {
@@ -149,6 +163,25 @@ test.each([
   const result = await callTool(host(), 'shell', { command: 'git status', workdir });
   expect(result.returned).toBe('executed');
   expect(result.entries[0]?.entry).toMatchObject({ cwd: expected(), decision: 'allow' });
+});
+
+test.each([{ directory: '../feature' }, { directory: '../feature', force: false }])(
+  'v2 leaves an unforced worktree removal %p to the host',
+  async (input) => {
+    const result = await callTool(host(), 'opencode_worktree_remove', input);
+    expect(result.returned).toBe('executed');
+  },
+);
+
+test('v2 lets a forced removal of a temp-root worktree outside the workspace through, like the shell form', async () => {
+  const worktree = mkdtempSync(join(tmpdir(), 'opencode-v2-worktree-'));
+  const result = await callTool(host(), 'opencode_worktree_remove', {
+    directory: worktree,
+    force: true,
+  });
+  rmSync(worktree, { recursive: true });
+  expect(result.returned).toBe('executed');
+  expect(result.entries[0]?.entry).toMatchObject({ decision: 'allow' });
 });
 
 test('v2 only grants command capability to the exact shell name', async () => {

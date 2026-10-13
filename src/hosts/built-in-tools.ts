@@ -1,5 +1,5 @@
 import { getNonCommandToolInputKind, normalizeToolName } from '@/core/tool-input';
-import { ANTIGRAVITY_CLI_COMMAND_TOOLS } from '@/hosts/antigravity-cli/hook';
+import { ANTIGRAVITY_CLI_COMMAND_TOOLS, ANTIGRAVITY_TASK_TOOL } from '@/hosts/antigravity-cli/hook';
 import { getIntegrationDisplayName, type IntegrationId } from '@/hosts/catalog';
 import { CLAUDE_CODE_COMMAND_TOOLS } from '@/hosts/claude-code/hook';
 import { CODEX_COMMAND_TOOLS } from '@/hosts/codex/hook';
@@ -18,7 +18,7 @@ import { PI_COMMAND_TOOL_ADAPTERS } from '@/hosts/pi/tool-call';
 
 const BUILT_IN_SHELL_TOOLS = (
   [
-    ['antigravity-cli', [...ANTIGRAVITY_CLI_COMMAND_TOOLS.keys()]],
+    ['antigravity-cli', [...ANTIGRAVITY_CLI_COMMAND_TOOLS.keys(), ANTIGRAVITY_TASK_TOOL]],
     ['claude-code', [...CLAUDE_CODE_COMMAND_TOOLS.keys()]],
     ['codex', [...CODEX_COMMAND_TOOLS.keys()]],
     ['copilot-cli', [...COPILOT_CLI_COMMAND_TOOLS.keys()]],

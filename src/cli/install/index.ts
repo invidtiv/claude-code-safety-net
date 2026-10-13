@@ -41,7 +41,7 @@ import {
 import { detectAllHooks } from '@/hosts/detect/index';
 import { installDevin, uninstallDevin } from '@/hosts/devin/install';
 import { installDroid, uninstallDroid } from '@/hosts/droid/install';
-import type { UpdateInfo } from '@/hosts/doctor-types';
+import type { HookStatus, UpdateInfo } from '@/hosts/doctor-types';
 import { detectGeminiCLI } from '@/hosts/gemini-cli/detect';
 import { installGrokBuild, uninstallGrokBuild } from '@/hosts/grok-build/install';
 import { HERMES_AGENT_PLUGIN_NAME } from '@/hosts/hermes-agent/artifact';
@@ -74,7 +74,7 @@ import {
   runInstallTargetsInOrder,
 } from '@/hosts/install/targets';
 import type { InstallResult } from '@/hosts/install/types';
-import { detect as detectKimiCodeHook } from '@/hosts/kimi-code/detect';
+import { detect as detectKimiCodeHook, KIMI_PLUGIN_METHOD } from '@/hosts/kimi-code/detect';
 import { installKimiCode, uninstallKimiCode } from '@/hosts/kimi-code/install';
 import { OPENCLAW_PLUGIN_ENTRY_FILE, OPENCLAW_PLUGIN_ID } from '@/hosts/openclaw/artifact';
 import {
@@ -454,6 +454,7 @@ async function detectConfiguredInstallTargets(
         : (hook.detected && hook.method !== CURSOR_CLAUDE_PLUGIN_METHOD) ||
           hook.inspectionStatus === 'not-inspected',
     )
+    .filter((hook) => !isKimiPlugin(hook))
     .filter(
       (hook) =>
         hook.platform !== 'codex' ||
@@ -706,8 +707,16 @@ const KIMI_PLUGIN_INSTRUCTIONS = [
   'out, Kimi Code allows the tool call.',
 ].join('\n');
 
+function isKimiPlugin(hook: HookStatus): boolean {
+  return hook.platform === 'kimi-code' && hook.method === KIMI_PLUGIN_METHOD;
+}
+
+function hasKimiGlobalHook(environment: Environment): boolean {
+  return detectKimiCodeHook({ environment, cwd: process.cwd() }).method === 'hook config';
+}
+
 function formatKimiPluginInstructions(environment: Environment): string {
-  if (detectKimiCodeHook({ environment, cwd: process.cwd() }).status !== 'configured') {
+  if (!hasKimiGlobalHook(environment)) {
     return KIMI_PLUGIN_INSTRUCTIONS;
   }
 
@@ -753,8 +762,7 @@ function resolveKimiInstallMethod(
   return promptKimiInstallMethod({
     input: options.input,
     output: options.output,
-    globalHookInstalled:
-      detectKimiCodeHook({ environment, cwd: process.cwd() }).status === 'configured',
+    globalHookInstalled: hasKimiGlobalHook(environment),
   });
 }
 
@@ -818,7 +826,11 @@ async function detectUpdateTargets(environment: Environment, fetchVersion = defa
       : []),
     ...(hasCodexLegacyPlugin(state.codexPluginListOutput) ? (['codex'] as const) : []),
   ]);
-  return { targets, codexPluginListOutput: state.codexPluginListOutput };
+  return {
+    targets,
+    codexPluginListOutput: state.codexPluginListOutput,
+    kimiPlugin: state.hooks.some(isKimiPlugin),
+  };
 }
 
 async function updateInstalledIntegrations(options: UpdateCommandOptions): Promise<number> {
@@ -849,6 +861,7 @@ async function updateInstalledIntegrations(options: UpdateCommandOptions): Promi
     return {
       targets: detection.targets,
       codexPluginListOutput: detection.codexPluginListOutput,
+      kimiPlugin: detection.kimiPlugin,
       available: new Map(
         await Promise.all(
           INSTALL_TARGETS.filter(
@@ -894,6 +907,12 @@ async function updateInstalledIntegrations(options: UpdateCommandOptions): Promi
   const reports = await awaitWithSpinner(
     Promise.all(
       detected.targets.map((target) => {
+        if (target === 'kimi-code' && detected.kimiPlugin)
+          return Promise.resolve({
+            message:
+              'Kimi Code plugin skipped: update it in Kimi Code from /plugins (Installed tab, select cc-safety-net, press Enter)',
+            failed: false,
+          });
         if (NATIVE_UPDATE_TARGETS.has(target) && !detected.available.get(target))
           return Promise.resolve({
             message: `${getIntegrationDisplayName(target)} not found; skipped`,

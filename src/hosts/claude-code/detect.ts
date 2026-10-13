@@ -15,7 +15,11 @@ export function getClaudeConfigDir(environment: Environment) {
 }
 
 function getClaudeInstalledPluginsPath(environment: Environment): string {
-  return join(getClaudeConfigDir(environment), 'plugins', 'installed_plugins.json');
+  return join(
+    environment.env.get('CLAUDE_CODE_PLUGIN_CACHE_DIR') ||
+      join(getClaudeConfigDir(environment), 'plugins'),
+    'installed_plugins.json',
+  );
 }
 
 function isInstalledPluginRecord(value: unknown, pluginId: string): boolean {
@@ -29,7 +33,13 @@ export function hasClaudeInstalledPlugin(environment: Environment, pluginId: str
 }
 
 export function detectClaudeCode(environment: Environment): HookDetection {
-  const installedPath = getClaudeInstalledPluginsPath(environment);
+  return detectClaudePlugin(
+    getClaudeInstalledPluginsPath(environment),
+    join(getClaudeConfigDir(environment), 'settings.json'),
+  );
+}
+
+function detectClaudePlugin(installedPath: string, settingsPath: string): HookDetection {
   const installed = readStateFile(installedPath);
   if (installed.kind === 'unreadable') return { platform: 'claude-code', status: 'not-inspected' };
   if (installed.kind === 'missing') return { platform: 'claude-code', status: 'n/a' };
@@ -37,7 +47,6 @@ export function detectClaudeCode(environment: Environment): HookDetection {
     return { platform: 'claude-code', status: 'n/a' };
   }
 
-  const settingsPath = join(getClaudeConfigDir(environment), 'settings.json');
   const settings = readStateFile(settingsPath);
   if (settings.kind === 'unreadable') return { platform: 'claude-code', status: 'not-inspected' };
 
@@ -64,8 +73,14 @@ export function detectClaudeCode(environment: Environment): HookDetection {
 }
 
 export function findClaudeCursorPluginManifest(environment: Environment): string | undefined {
-  if (detectClaudeCode(environment).status !== 'configured') return undefined;
-  const installed = readStateFile(getClaudeInstalledPluginsPath(environment));
+  const cursorClaudeDir = join(environment.home, '.claude');
+  const installedPath = join(cursorClaudeDir, 'plugins', 'installed_plugins.json');
+  if (
+    detectClaudePlugin(installedPath, join(cursorClaudeDir, 'settings.json')).status !==
+    'configured'
+  )
+    return undefined;
+  const installed = readStateFile(installedPath);
   const records =
     installed.kind === 'ok'
       ? readRecord(readRecord(installed.value, 'plugins'), CLAUDE_SAFETY_NET_PLUGIN_ID)

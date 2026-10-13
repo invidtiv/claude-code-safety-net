@@ -53,8 +53,15 @@ const denialRow = (HOOK_HOSTS.find((host) => host.id === 'claude-code') as HookH
   .find((row) => row.name === CLAUDE_DENIAL) as HookRow;
 
 function expectOutcome(ported: ReturnType<typeof runEntry>, expected: HookRow['expected']): void {
-  expect(ported.exitCode).toBe(0);
-  expect(ported.stderr).toHaveLength(expected.stderr ?? 0);
+  expect(ported.exitCode).toBe(expected.exitCode ?? 0);
+  if (expected.exitCode === undefined) expect(ported.stderr).toHaveLength(expected.stderr ?? 0);
+  if (expected.exitCode !== undefined) {
+    expect(ported.stderr).toEqual(
+      JSON.parse(ported.stdout[0] as string)
+        .hookSpecificOutput.permissionDecisionReason.split('\n')
+        .filter((line: string) => line !== ''),
+    );
+  }
   expect(ported.audit.map((line) => line.entry.decision)).toEqual(
     expected.audit === 'none' ? [] : [expected.audit],
   );

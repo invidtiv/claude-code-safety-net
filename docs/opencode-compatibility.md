@@ -15,8 +15,10 @@ npx -y cc-safety-net@latest install --opencode
 
 The installer checks the host version. For v2 it runs `opencode plugin add`, then
 `opencode plugin update` only when `add` reports the plugin already configured (the background
-service does not know a newly added plugin yet). It then waits up to about 15 seconds for the
-service to list the plugin and checks the package ID and source in `opencode plugin list`.
+service does not know a newly added plugin yet). Before that update, and again after it, it waits
+up to about 15 seconds for the service to list the plugin, because a service that was not running
+rejects the update until it has listed the plugin. It then checks the package ID and source in
+`opencode plugin list`.
 That listing confirms discovery, not activation, so the installer then asks the host for
 activation state with the same check as `doctor` below. If OpenCode marks the plugin failed and
 no copy of it is active, the install fails with the first line of OpenCode's error; if the host
@@ -70,7 +72,8 @@ shell creation in the plugin's location, including shell operations outside agen
 
 V1's `bash` and v2's `shell` use the same policy, analyzer, and audit code. The v2 tool-before
 hook returns typed `Tool.Error` denials. It also checks read, edit, write, patch, grep, glob,
-and unknown-tool inputs through the existing input routes. Code Mode's child tool calls cross
+and unknown-tool inputs through the existing input routes. A forced `worktree_remove`
+(`force: true`) is checked as `git worktree remove --force -- <directory>`. Code Mode's child tool calls cross
 the same OpenCode hook; CC Safety Net does not interpret the outer Code Mode JavaScript.
 
 V2 registers `/cc-safety-net` through the command API, preserving a command of that name

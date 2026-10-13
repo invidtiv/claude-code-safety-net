@@ -318,3 +318,27 @@ test('a Cursor protected only through the Claude Code plugin gets no npx hook on
   expect(result.lines.join('\n')).not.toContain('Cursor');
   expect(fileAt(result.tree, CURSOR_HOOKS)).toBeUndefined();
 });
+
+test('a Kimi Code plugin install is named and left to the in-host update', async () => {
+  const result = await flow({
+    invoke: 'update',
+    seed: {
+      '.kimi-code/plugins/installed.json':
+        '{"version":1,"plugins":[{"id":"cc-safety-net","enabled":true}]}\n',
+    },
+    options: () => versions(),
+  });
+
+  expect(result).toMatchObject({
+    exitCode: 0,
+    lines: [
+      'Kimi Code plugin skipped: update it in Kimi Code from /plugins (Installed tab, select cc-safety-net, press Enter)',
+      '',
+      NUDGE,
+      '',
+    ],
+    errors: [],
+    log: [],
+  });
+  expect(fileAt(result.tree, KIMI_CONFIG)).toBeUndefined();
+});

@@ -34,8 +34,21 @@ test.each([
   ['an entry with no resource filter', settings({ source: 'npm:cc-safety-net' })],
   [
     'a filter that keeps the extension',
-    settings({ source: 'npm:cc-safety-net', extensions: ['cc-safety-net'] }),
+    settings({ source: 'npm:cc-safety-net', extensions: ['dist/pi/index.js'] }),
   ],
+  ...(
+    [
+      ['a `-`-prefixed entry naming another path', ['-cc-safety-net']],
+      ['the extension path beside an exclusion of another file', ['dist/pi/index.js', '!other.js']],
+      ['the force-include Pi writes when the extension is enabled', ['+dist/pi/index.js']],
+      ['a force-include with a `./` prefix', ['+./dist/pi/index.js']],
+      ['a force-include that overrides a glob exclusion', ['!*.js', '+dist/pi/index.js']],
+      ['an include of the file name', ['index.js']],
+    ] as const
+  ).map(
+    ([description, extensions]) =>
+      [description, settings({ source: 'npm:cc-safety-net', extensions })] as const,
+  ),
 ])('reports the package configured for %s', async (_case, seed) => {
   expect(await detection(seed)).toEqual(
     status({
@@ -47,10 +60,18 @@ test.each([
   );
 });
 
-test('reports a `-`-prefixed resource filter as disabled', async () => {
-  expect(
-    await detection(settings({ source: 'npm:cc-safety-net', extensions: ['-cc-safety-net'] })),
-  ).toEqual(
+test.each([
+  ['an empty filter', []],
+  ['a `!` exclusion of the extension', ['!dist/pi/index.js']],
+  ['a `!` exclusion of the file name', ['dist/pi/index.js', '!index.js']],
+  ['a pattern that matches no extension path', ['cc-safety-net']],
+  ['an include with a `./` prefix, which Pi matches literally', ['./dist/pi/index.js']],
+  ['the force-exclude Pi writes when the extension is disabled', ['-dist/pi/index.js']],
+  ['a force-exclude beside a force-include', ['+dist/pi/index.js', '-./dist/pi/index.js']],
+  ['a glob exclusion doctor does not evaluate', ['dist/pi/index.js', '!dist/**']],
+  ['an entry that is not a string', ['dist/pi/index.js', 1]],
+])('reports the extension disabled for %s', async (_case, extensions) => {
+  expect(await detection(settings({ source: 'npm:cc-safety-net', extensions }))).toEqual(
     status({
       platform: 'pi',
       status: 'disabled',

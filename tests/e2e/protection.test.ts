@@ -8,9 +8,10 @@ import {
   buildE2EArtifacts,
   expectAllowedAction,
   expectSingleAudit,
+  NODE_EXECUTABLE,
   parseJsonOutput,
   runBuiltHost,
-  runNode,
+  runCommand,
   type SafetyLevel,
   withWorkspace,
 } from './harness';
@@ -70,6 +71,7 @@ const adapters = [
       tool_input: { command, summary: 'Run the command', riskLevel: 'medium' },
     }),
     denyReason: getClaudeStyleDenyReason,
+    denyExitCode: 2,
   },
   {
     agent: 'devin',
@@ -878,13 +880,29 @@ async function runGated(
   action: () => void,
   level?: SafetyLevel,
 ) {
-  const stdout = await runBuiltHook(adapter.flag, input, cwd, home, level);
+  const denyExitCode = 'denyExitCode' in adapter ? adapter.denyExitCode : undefined;
+  const result = await runCommand(
+    [NODE_EXECUTABLE, cliPath, 'hook', adapter.flag],
+    input,
+    cwd,
+    home,
+    {
+      level,
+      denyExitCode,
+    },
+  );
+  const stdout = result.stdout.trim();
   const output = stdout ? parseJsonOutput('CLI hook', stdout) : undefined;
   if (!output || ('isAllowOutput' in adapter && adapter.isAllowOutput(output))) {
     action();
     return { allowed: true } as const;
   }
-  return { allowed: false, reason: adapter.denyReason(output) } as const;
+  const reason = adapter.denyReason(output);
+  expect({ exitCode: result.exitCode, stderr: result.stderr.trim() }).toEqual({
+    exitCode: denyExitCode ?? 0,
+    stderr: denyExitCode === undefined ? '' : reason,
+  });
+  return { allowed: false, reason } as const;
 }
 
 function runCodingCliTool(
@@ -911,16 +929,6 @@ function runCodingCliTool(
     action,
     level,
   );
-}
-
-async function runBuiltHook(
-  flag: string,
-  input: unknown,
-  cwd: string,
-  home: string,
-  level?: SafetyLevel,
-) {
-  return (await runNode([cliPath, 'hook', flag], input, cwd, home, level)).stdout.trim();
 }
 
 type IntegrationGateResult = { allowed: true } | { allowed: false; reason: string };

@@ -158,9 +158,20 @@ test('Kimi Code offers the native plugin instead of the global hook', async () =
   expect(cancelled.tree.map((entry) => entry.path)).not.toContain('.kimi-code');
 });
 
-test('the plugin instructions warn while the global Kimi Code hook is still configured', async () => {
+test.each([
+  ['still configured', ''],
+  [
+    'disabled by an invalid sibling entry',
+    '\n[[hooks]]\nevent = "Stop"\ncommand = "echo"\ncwd = "/tmp"\n',
+  ],
+])('the plugin instructions warn while the global Kimi Code hook is %s', async (_case, sibling) => {
   const configured = await flow({ invoke: 'install', args: ['--kimi-code'] });
-  const seed = filesUnder(configured.tree, '.kimi-code/');
+  const seed = Object.fromEntries(
+    Object.entries(filesUnder(configured.tree, '.kimi-code/')).map(([path, content]) => [
+      path,
+      `${content}${sibling}`,
+    ]),
+  );
 
   const caution = await flow({
     invoke: 'install',
@@ -173,6 +184,43 @@ test('the plugin instructions warn while the global Kimi Code hook is still conf
     'CAUTION: the global Kimi Code hook is installed and will run alongside the plugin.',
   );
   expect(filesUnder(caution.tree, '.kimi-code/')).toEqual(seed);
+});
+
+test('a Kimi Code plugin install is not taken for the global hook', async () => {
+  const seed = {
+    '.kimi-code/plugins/installed.json':
+      '{"version":1,"plugins":[{"id":"cc-safety-net","enabled":true}]}\n',
+  };
+  const offered = (action: 'install' | 'uninstall') => async () => {
+    const choices: InstallTargetChoice[] = [];
+    await flow({
+      invoke: action,
+      seed,
+      options: () => ({
+        probeTargets: () => true,
+        fetchVersion: async () => null,
+        selectTargets: async (_action: string, offeredChoices: readonly InstallTargetChoice[]) => {
+          choices.push(...offeredChoices);
+          return null;
+        },
+      }),
+    });
+    return choices.find((choice) => choice.target === 'kimi-code');
+  };
+
+  expect(await offered('install')()).toMatchObject({ label: 'Kimi Code', available: true });
+  expect(await offered('uninstall')()).toMatchObject({
+    available: false,
+    unavailableReason: 'not installed',
+  });
+
+  const instructions = await flow({
+    invoke: 'install',
+    args: ['--kimi-code'],
+    seed,
+    options: () => ({ selectKimiInstallMethod: async () => 'plugin' as const }),
+  });
+  expect(instructions.lines.join('\n')).not.toContain('CAUTION');
 });
 
 const CURSOR_AGENT_VERSION = {
@@ -670,7 +718,7 @@ test('Pi drops the extensions filter its settings carried', async () => {
     script: [{ command: 'pi' }],
     seed: {
       '.pi/agent/settings.json':
-        '{"packages":[{"source":"npm:cc-safety-net","extensions":["-cc-safety-net"]}]}',
+        '{"packages":[{"source":"npm:cc-safety-net","extensions":["-dist/pi/index.js"]}]}',
     },
   });
 
@@ -696,7 +744,7 @@ test('Pi drops the extensions filter from the settings under PI_CODING_AGENT_DIR
     env: { PI_CODING_AGENT_DIR: '<home>/pi-agent' },
     seed: {
       'pi-agent/settings.json':
-        '{"packages":[{"source":"npm:cc-safety-net","extensions":["-cc-safety-net"]}]}',
+        '{"packages":[{"source":"npm:cc-safety-net","extensions":["-dist/pi/index.js"]}]}',
     },
   });
 
@@ -881,6 +929,39 @@ test('OpenCode v2 reinstall verifies the plugin row listed after the update', as
   expect(result.errors).toEqual([
     'OpenCode did not load cc-safety-net from cc-safety-net@latest. Run `opencode plugin list` for details.',
   ]);
+});
+
+test('OpenCode v2 reinstall waits for a cold service to list the plugin before updating', async () => {
+  const warmService = openCodeV2Script(
+    undefined,
+    'Plugin "cc-safety-net@latest" is already configured in <home>/.config/opencode/opencode.json\n',
+  );
+  const result = await flow({
+    invoke: 'install',
+    args: ['--opencode'],
+    seedTmp: { 'warm-service/fake-script.json': JSON.stringify(warmService) },
+    script: [
+      { command: 'opencode', args: ['plugin', 'list'], call: 1, stdout: 'No plugins found\n' },
+      {
+        command: 'opencode',
+        args: ['plugin', 'list'],
+        call: 2,
+        stdout: 'ID  VERSION  SOURCE\ncc-safety-net  2.4.2  cc-safety-net@latest\n',
+        seedDir: '<root>/tmp/warm-service',
+        seedInto: '<root>',
+      },
+      {
+        command: 'opencode',
+        args: ['plugin', 'update', 'cc-safety-net@latest'],
+        stderr: 'Plugin is not configured: cc-safety-net@latest\n',
+        exit: 1,
+      },
+      ...warmService,
+    ],
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.errors).toEqual([]);
+  expect(result.log).toContain('opencode plugin update cc-safety-net@latest\t<root>');
 });
 
 test('OpenCode v2 install waits for the plugin row to appear', async () => {
