@@ -1,0 +1,32 @@
+name: Close DSH Plugin Hub Issues
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    if: >-
+      startsWith(github.event.issue.title, '[dsh-plugin.org | dsh-plugin-hub] plugin install failed:') ||
+      startsWith(github.event.issue.title, '[dsh-plugin.org | dsh-plugin-hub] build scripts blocked by pnpm allowlist:')
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          BODY: |
+            这个 Issue 由 DSH 插件中心自动生成，不是 CC Safety Net 的问题。
+            dshplugin/dsh-plugin-hub#178
+
+            请完全退出 DeepSeek Harness Desktop，然后运行：
+
+            ```
+            npx -y cc-safety-net@latest install --deepseek-harness
+            ```
+
+            如果这条命令也失败，请在这里回复，我会重新打开这个 Issue
+        run: gh issue close "$NUMBER" --reason "not planned" --comment "$BODY"
