@@ -4,6 +4,7 @@ import type { ToolHooks } from '@opencode/plugin/effect/tool';
 import { Tool } from '@opencode/schema/tool';
 import { Effect } from 'effect';
 import { getNonCommandToolInputKind } from '@/core/tool-input';
+import { quoteShellWord } from '@/gate/analyzer/shell-execution';
 import type { ToolRoute } from '@/gate/invocation';
 import { loadBuiltinCommands } from './builtin-commands/commands';
 import {
@@ -109,8 +110,10 @@ function getOpenCodeV2ToolCall(
   if (tool !== OPENCODE_WORKTREE_REMOVE_TOOL || !forced) {
     return { toolInput: input, route: { kind: getNonCommandToolInputKind(tool) } };
   }
+  const directory =
+    'directory' in input && typeof input.directory === 'string' ? input.directory : '';
   return {
-    toolInput: { command: 'git worktree remove --force' },
+    toolInput: { command: `git worktree remove --force -- ${quoteShellWord(directory)}` },
     route: { kind: 'command', shell: 'posix' },
   };
 }

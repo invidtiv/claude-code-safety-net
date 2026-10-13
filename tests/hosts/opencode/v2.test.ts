@@ -164,6 +164,15 @@ test.each([{ directory: '../feature' }, { directory: '../feature', force: false 
   },
 );
 
+test('v2 lets a forced removal of a temp-root worktree outside the workspace through, like the shell form', async () => {
+  const result = await callTool(host(), 'opencode_worktree_remove', {
+    directory: fixture.outside,
+    force: true,
+  });
+  expect(result.returned).toBe('executed');
+  expect(result.entries[0]?.entry).toMatchObject({ decision: 'allow' });
+});
+
 test('v2 only grants command capability to the exact shell name', async () => {
   const result = await callTool(host(), 'custom_shell', { command: 'git reset --hard' });
   expect(result.returned).toBe('executed');

@@ -73,7 +73,7 @@ shell creation in the plugin's location, including shell operations outside agen
 V1's `bash` and v2's `shell` use the same policy, analyzer, and audit code. The v2 tool-before
 hook returns typed `Tool.Error` denials. It also checks read, edit, write, patch, grep, glob,
 and unknown-tool inputs through the existing input routes. A forced `worktree_remove`
-(`force: true`) is checked as `git worktree remove --force`. Code Mode's child tool calls cross
+(`force: true`) is checked as `git worktree remove --force -- <directory>`. Code Mode's child tool calls cross
 the same OpenCode hook; CC Safety Net does not interpret the outer Code Mode JavaScript.
 
 V2 registers `/cc-safety-net` through the command API, preserving a command of that name
