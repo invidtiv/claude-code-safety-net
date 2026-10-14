@@ -1,6 +1,6 @@
 - Before filing an issue, read `CONTRIBUTING.md` and follow its reporting rules.
 - Run focused tests during development, including the failing and passing tests required by Red-Green TDD.
-- After all implementation changes, run `bun run check`. This is the required final check for lint, code comments, formatting, typecheck, knip, duplication, and tests. Do not run its components separately as additional final checks.
+- After all implementation changes, run `bun run check`. This is the required final check for lint, code comments, formatting, typecheck, knip, duplication, and tests. Do not run its components separately as additional final checks. A change that touches only Markdown skips it, as the pre-push hook and CI do, unless it touches `skills/cc-safety-net/SKILL.md` or `README.md`: the build bundles the skill into `dist/`, and tests read both.
 - Ignore the dist folder; it gets auto-rebuilt by lefthook's pre-commit hook.
 - Keep implementation modular; put tests in `tests/` mirroring `src/`, not colocated in `src/`.
 - Files in `docs/` use lowercase kebab-case names.
@@ -12,6 +12,24 @@
 - `dist/` is committed and CI rejects a stale build, but a rebase replays the old build output.
   When `gh stack rebase` stops, resolve and `git add` the source files, never hand-merge `dist/`:
   run `bun run build && git add -A dist`, then `gh stack rebase --continue`.
+
+## CI failures
+
+Reproduce a failing `ci.yml` step locally before pushing a fix:
+
+- *Check source* → `bun run check`.
+- *Verify E2E stability* → `bun run test:e2e:stability`. A failure here is usually a flaky test: fix
+  the flake, never re-run CI to get green.
+- *Reject stale generated artifacts* → `bun run build && git diff --exit-code -- dist`, then commit
+  the regenerated `dist/`.
+- *Verify package surfaces* → `bun run verify:repository-plugin && bun run verify:package`.
+- *Audit all dependencies* → `bun run audit:dependencies`.
+- *packed-runtime* → `bun run build && bun run verify:package`; the failed log names the Node version.
+- *full-check-windows* has no local repro on macOS: read `gh run view <run-id> --log-failed`, or
+  reproduce on a probe branch as Windows verification describes.
+
+A jscpd duplication failure means dedupe the code; a coverage failure means add real tests. Knip
+failures follow the Knip section.
 
 ## Windows verification
 
@@ -31,11 +49,11 @@ a probe to a PR branch or `main`.
 - Do not bypass hooks. The pre-push hook runs the full `bun run check` (about 45s). Push from the
   main checkout, not the worktree.
 - GitHub sometimes answers ref creation and workflow dispatch with HTTP 500. Retry in a background
-  loop (it succeeded on the fifth attempt once). Only when the hook already passed on that exact
+  loop; success can take several attempts. Only when the hook already passed on that exact
   commit may the retries use `LEFTHOOK=0`.
 - After creating or removing a worktree or pushing from one, check `git config core.bare` in the
-  main checkout. It was once found flipped to `true` (every git command then fails with "must be run
-  in a work tree"); restore it with `git config core.bare false`.
+  main checkout. If it reads `true`, every git command fails with "must be run in a work tree";
+  restore it with `git config core.bare false`.
 - Clean up when done: `git worktree remove <path>` and `git branch -D <branch>`. The safety net
   blocks `git push origin --delete`, so ask the user to delete the remote branch.
 
