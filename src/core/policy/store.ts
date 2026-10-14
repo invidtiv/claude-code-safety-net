@@ -629,7 +629,7 @@ function readPolicyConfig(
   if (!file.exists) {
     const embedded = (globalThis as Record<string, unknown>).__CC_SAFETY_NET_EMBEDDED_POLICY__;
     if (!isRecord(embedded))
-      return { policy: normalizePolicyConfig(DEFAULT_GUI_POLICY), errors: [] };
+      return { policy: normalizePolicyConfig(createDefaultGuiPolicy()), errors: [] };
     const gui = normalizeGuiPolicy(embedded, home);
     return {
       policy: normalizePolicyConfig(gui),
@@ -640,7 +640,7 @@ function readPolicyConfig(
   }
   if (file.parsed === undefined) {
     return {
-      policy: normalizePolicyConfig(DEFAULT_GUI_POLICY),
+      policy: normalizePolicyConfig(createDefaultGuiPolicy()),
       errors: file.errors,
       ...(file.fallback ? { fallback: file.fallback } : {}),
     };
