@@ -16,7 +16,8 @@ Read the index before driving the app, then use the matching feature file as the
 ## Driving conventions
 
 - Start every recipe from the baseline unless its preconditions say otherwise.
-- Run cwd-scoped commands (`logs`, hook payloads whose `cwd` is `$WS`) from `$WS`.
+- Run cwd-scoped commands (`explain`, `rule`, `policy`, hook payloads whose `cwd` is `$WS`) from
+  `$WS`; `rule` and `policy` write project config there.
 - Prefer `--json` output for assertions; keep the human rendering as evidence where it is the
   user-visible surface (`explain`, `status`).
 - GUI: prefer element ids and `data-nav` attributes over coordinates; the URL token changes every
@@ -41,7 +42,10 @@ Read the index before driving the app, then use the matching feature file as the
 - [Hook protection](./hook-protection.md) — the production deny/allow decision path a coding CLI
   drives over stdin, and its audit side effect.
 - [Explain trace](./explain-trace.md) — step-by-step analysis of a command, human and `--json`.
-- [Diagnostics](./diagnostics.md) — `status` summary and `doctor` health report.
+- [Diagnostics](./diagnostics.md) — `status` summary, `doctor` health report, and the Claude
+  Code `statusline`.
 - [Audit logs](./audit-logs.md) — browsing recorded decisions with `logs`.
 - [Policy GUI](./policy-gui.md) — the local web dashboard: activity feed, policy editing, the
   command tester.
+- [Rule config](./rule-config.md) — `rule` declared tools, wrappers, list, and verify.
+- [Policy proposals](./policy-proposals.md) — `policy check` diffs and the TTY-only `apply`.

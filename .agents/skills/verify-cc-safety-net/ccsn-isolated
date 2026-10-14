@@ -15,6 +15,7 @@ mkdir -p "$CCSN_VERIFY_HOME"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
 exec env \
+  -u CC_SAFETY_NET_AUDIT_SCOPE \
   HOME="$CCSN_VERIFY_HOME" \
   USERPROFILE="$CCSN_VERIFY_HOME" \
   CC_SAFETY_NET_HOME="$CCSN_VERIFY_HOME/.cc-safety-net" \

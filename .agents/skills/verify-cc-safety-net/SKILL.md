@@ -1,6 +1,6 @@
 ---
 name: verify-cc-safety-net
-description: Launch and drive the real cc-safety-net CLI — the hook decision path, explain, status/doctor, logs, and the local policy GUI — against an isolated home, capturing evidence. Use when a change needs proof in the running app, not just the test suite.
+description: Launch and drive the real cc-safety-net CLI — the hook decision path, explain, status/doctor/statusline, logs, rule and policy config, and the local policy GUI — against an isolated home, capturing evidence. Use when a change needs proof in the running app, not just the test suite.
 ---
 
 # Verify cc-safety-net
@@ -8,7 +8,8 @@ description: Launch and drive the real cc-safety-net CLI — the hook decision p
 cc-safety-net is a CLI (`cc-safety-net` / `ccsn`) that coding-agent CLIs invoke as a pre-tool-use
 hook: JSON describing a tool call arrives on stdin, an allow/deny decision leaves on stdout, and
 every decision is appended to an audit log under the active home. Users also run diagnostic
-commands (`status`, `doctor`, `explain`, `logs`) and a local web GUI (`gui`).
+commands (`status`, `doctor`, `explain`, `logs`), config commands (`rule`, `policy`), and a
+local web GUI (`gui`).
 
 **Safety invariants for every run:**
 
@@ -20,6 +21,8 @@ commands (`status`, `doctor`, `explain`, `logs`) and a local web GUI (`gui`).
   `~/.cc-safety-net/logs`.
 - Never drive `install`, `update`, or `uninstall` (CLI or GUI Integrations tab) in a verification
   run: install detection and npx-cache clearing reach real machine state beyond `$HOME`.
+- Run `rule` and `policy` commands from `$WS`, never the repo: without `--global` they write the
+  project config under the cwd's `.cc-safety-net/`.
 
 ## Launch
 
@@ -65,11 +68,14 @@ Healthy in `doctor.json` means `engineSelfTest.failed` is 0 and `configState.sta
 Do not gate on doctor's exit code: under a fresh isolated home it exits 1 solely because no
 integration is configured (`integration.none-configured` in `findings`), which is inherent to the
 isolation, not a defect. Any other error-severity finding means the checkout is broken — stop and
-report rather than driving features.
+report rather than driving features — unless your shell exports a host config directory
+(`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `XDG_CONFIG_HOME`, …) that points doctor at real host config;
+see [diagnostics.md](features/diagnostics.md).
 After the first hook drive, additionally confirm isolation held: entries exist under
-`$CCSN_VERIFY_HOME/.cc-safety-net/logs/` and `ls ~/.cc-safety-net/logs/*/*/*ccsn-verify* 2>/dev/null`
-finds nothing (every probe session id starts with `ccsn-verify-`, so a leak is identifiable by
-filename in the real log tree).
+`$CCSN_VERIFY_HOME/.cc-safety-net/logs/` and `find ~/.cc-safety-net/logs -name "*ccsn-verify-$RUN_ID*"`
+finds nothing (every probe session id starts with `ccsn-verify-$RUN_ID`, so a leak is identifiable
+by filename in the real log tree). Match this run's id, not bare `ccsn-verify`: stale files from
+older runs can sit in the real tree and would read as a leak.
 
 ## Drive
 
@@ -80,25 +86,27 @@ stdout and the exit code:
 
 ```bash
 printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"ccsn-verify-'"$RUN_ID"'-reset","cwd":"'"$WS"'","tool_input":{"command":"git reset --hard"}}' \
-  | ./ccsn-isolated hook --claude-code
+  | ./ccsn-isolated hook --coding-cli
 ```
 
 Deny prints `{"hookSpecificOutput":{…,"permissionDecision":"deny","permissionDecisionReason":"…Rule: git.reset-hard…"}}`;
-allow prints nothing. Both exit 0 — the decision is the stdout JSON, never the exit code.
-`hook` also takes `--cursor`, `--gemini-cli`, `--copilot-cli`, `--kimi-code`, `--grok-build`,
-`--hermes-agent`, `--antigravity-cli` (payload shapes differ; see the integration under
+allow prints nothing. Both exit 0 for Claude Code — the decision is the stdout JSON, never the
+exit code. `--claude-code` is the legacy alias of `--coding-cli`; `./ccsn-isolated hook --help`
+lists every accepted integration flag (payload shapes and exit codes differ per host; see
 `src/hosts/<id>/hook.ts`).
 
 **Plain CLI.** `./ccsn-isolated explain --json "<command>"`, `status`, `doctor --json
---skip-update-check`, `logs --json [--all]`. `logs` is scoped to the current working directory —
-run it from the same `$WS` the hook payload's `cwd` named (`ccsn-isolated` runs relative commands
-from your cwd, so `cd "$WS"` first).
+--skip-update-check`, `logs --json [--all]`, `rule …`, `policy check <file>`. `logs` reads every
+project's entries in the active home; narrow with `--session` or `--project`. `explain` reads,
+and `rule` and `policy` write, the project config under the cwd's `.cc-safety-net/`
+(`ccsn-isolated` runs from your cwd), so run `rule` and `policy` from `$WS`.
 
 **GUI.** Drive the API with curl (`GET /api/policy?token=$TOKEN`; POSTs need the
 `x-cc-safety-net-token: $TOKEN` header too), or the page with a browser (playwright-cli or
-claude-in-chrome) at the printed URL. Views are hash-routed: `#overview`, `#activity`, `#policy`,
-`#rules`, `#integrations`, `#settings`; stable handles are element ids (`#tester-input`,
-`#tester-run`, `#tester-result`, `#save`, `#activity-feed`) and `a[data-nav="<view>"]`.
+claude-in-chrome) at the printed URL. Views are hash-routed: `#overview`, `#activity`, `#policy`
+(labelled Protections), `#rules` (Custom rules), `#integrations` (Agents), `#settings`; stable
+handles are element ids (`#activity-feed`, `#save`, `#tester-open` and the dialog's
+`#tester-input`, `#tester-run`, `#tester-result`) and `a[data-nav="<view>"]`.
 
 ## Evidence
 
@@ -140,7 +148,9 @@ CCSN_VERIFY_HOME=/abs/disposable/dir ./ccsn-isolated <command> [args...]
 
 It requires `CCSN_VERIFY_HOME` to be absolute, redirects `HOME`/`USERPROFILE`/
 `CC_SAFETY_NET_HOME`/`CC_SAFETY_NET_AUDIT_HOME` into it, blanks the `CC_SAFETY_NET_LEVEL`/
-`STRICT`/`PARANOID*`/`WORKTREE` overrides a developer shell might export, and execs
-`bun run <repo>/src/entries/bin.ts "$@"` with stdin/stdout/exit code passing through, so
-hook payloads pipe straight in. It runs the CLI from your current cwd — `cd` into `$WS` for
-cwd-scoped commands like `logs`.
+`STRICT`/`PARANOID*`/`WORKTREE` overrides a developer shell might export (a blank value also
+shadows the legacy `SAFETY_NET_*` names), unsets `CC_SAFETY_NET_AUDIT_SCOPE` (`blocked` would
+drop the allow entries every allow proof needs, and a blank value is invalid and does the same),
+and execs `bun run <repo>/src/entries/bin.ts "$@"` with stdin/stdout/exit code passing through,
+so hook payloads pipe straight in. It runs the CLI from your current cwd — `cd` into `$WS` for
+cwd-scoped commands like `explain`, `rule`, and `policy`.
