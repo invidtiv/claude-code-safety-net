@@ -70,11 +70,10 @@ export async function syncRulesConfig(
   environment: Environment,
   options: SyncRulesConfigOptions = {},
 ): Promise<SyncRulesConfigResult> {
-  const projected = projectSyncOptions(options);
   return verifyRuntimeRulesPolicy(
     environment,
-    projected,
-    await syncRulesConfigInternal(environment, projected, createRuleSyncOperation()),
+    options,
+    await syncRulesConfigInternal(environment, options, createRuleSyncOperation()),
   );
 }
 
@@ -84,11 +83,10 @@ export async function syncRulesConfigWithOperation(
   options: SyncRulesConfigOptions,
   operation: RuleSyncOperation,
 ): Promise<SyncRulesConfigResult> {
-  const projected = projectSyncOptions(options);
   return verifyRuntimeRulesPolicy(
     environment,
-    projected,
-    await syncRulesConfigInternal(environment, projected, operation),
+    options,
+    await syncRulesConfigInternal(environment, options, operation),
   );
 }
 
@@ -98,11 +96,10 @@ export async function syncRulesConfigWithHooks(
   options: SyncRulesConfigOptions,
   hooks: RuleSyncTestHooks,
 ): Promise<SyncRulesConfigResult> {
-  const projected = projectSyncOptions(options);
   return verifyRuntimeRulesPolicy(
     environment,
-    projected,
-    await syncRulesConfigInternal(environment, projected, createRuleSyncOperation(), hooks),
+    options,
+    await syncRulesConfigInternal(environment, options, createRuleSyncOperation(), hooks),
   );
 }
 
@@ -306,12 +303,7 @@ export async function addRulebookSource(
   source: string,
   options: AddRulebookSourceOptions = {},
 ): Promise<AddRulebookSourceResult> {
-  return addRulebookSourceInternal(
-    environment,
-    source,
-    projectAddOptions(options),
-    createRuleSyncOperation(),
-  );
+  return addRulebookSourceInternal(environment, source, options, createRuleSyncOperation());
 }
 
 /** @internal */
@@ -321,7 +313,7 @@ export async function addRulebookSourceWithOperation(
   options: AddRulebookSourceOptions,
   operation: RuleSyncOperation,
 ): Promise<AddRulebookSourceResult> {
-  return addRulebookSourceInternal(environment, source, projectAddOptions(options), operation);
+  return addRulebookSourceInternal(environment, source, options, operation);
 }
 
 /** @internal */
@@ -331,13 +323,7 @@ export async function addRulebookSourceWithHooks(
   options: AddRulebookSourceOptions,
   hooks: RuleSyncTestHooks,
 ): Promise<AddRulebookSourceResult> {
-  return addRulebookSourceInternal(
-    environment,
-    source,
-    projectAddOptions(options),
-    createRuleSyncOperation(),
-    hooks,
-  );
+  return addRulebookSourceInternal(environment, source, options, createRuleSyncOperation(), hooks);
 }
 
 async function addRulebookSourceInternal(
@@ -502,42 +488,13 @@ function sourceLimitResult(): SyncRulesConfigResult {
   return { ok: false, errors: [RULE_SOURCE_LIMIT_ERROR], entries: [] };
 }
 
-function projectSyncOptions(options: SyncRulesConfigOptions): SyncRulesConfigOptions {
-  return {
-    cwd: options.cwd,
-    userConfigDir: options.userConfigDir,
-    userConfigPath: options.userConfigPath,
-    projectConfigPath: options.projectConfigPath,
-    global: options.global,
-    only: options.only,
-    refresh: options.refresh,
-  };
-}
-
-function projectAddOptions(options: AddRulebookSourceOptions): AddRulebookSourceOptions {
-  return {
-    ...projectSyncOptions(options),
-    ref: options.ref,
-    rulebooks: options.rulebooks,
-  };
-}
-
-function projectRemoveOptions(options: RemoveRulebookSourceOptions): RemoveRulebookSourceOptions {
-  return { ...projectSyncOptions(options), deleteSource: options.deleteSource };
-}
-
 export async function removeRulebookSource(
   environment: Environment,
   match: string,
   options: RemoveRulebookSourceOptions = {},
 ): Promise<SyncRulesConfigResult> {
   try {
-    return await removeRulebookSourceInternal(
-      environment,
-      match,
-      projectRemoveOptions(options),
-      {},
-    );
+    return await removeRulebookSourceInternal(environment, match, options, {});
   } catch (error) {
     return failWithError(error);
   }
@@ -551,12 +508,7 @@ export async function removeRulebookSourceWithHooks(
   hooks: RuleSyncTestHooks,
 ): Promise<SyncRulesConfigResult> {
   try {
-    return await removeRulebookSourceInternal(
-      environment,
-      match,
-      projectRemoveOptions(options),
-      hooks,
-    );
+    return await removeRulebookSourceInternal(environment, match, options, hooks);
   } catch (error) {
     return failWithError(error);
   }
