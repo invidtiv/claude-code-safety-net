@@ -46,7 +46,7 @@ export function policySnapshot(input: TestPolicyInput = {}): PolicySnapshot {
     rules: input.rules ?? [],
     transparentWrappers: input.transparent_wrappers ?? [],
     commandTools: [...(input.commandTools ?? [])],
-    safety: input.safety ?? {},
+    safety: input.safety ?? { level: 'standard' as const },
     worktreeMode: input.worktreeMode ?? false,
     destructiveCommandProtectionEnabled: input.destructiveCommandProtectionEnabled ?? true,
     destructiveCommandRuleOverrides: { ...input.destructiveCommandRuleOverrides },

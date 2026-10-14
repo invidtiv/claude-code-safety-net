@@ -110,7 +110,7 @@ const BASE_POLICY: EffectivePolicy = {
   rules: [],
   transparentWrappers: [],
   commandTools: [],
-  safety: {},
+  safety: { level: 'standard' },
   worktreeMode: false,
   destructiveCommandProtectionEnabled: true,
   destructiveCommandRuleOverrides: {},

@@ -87,7 +87,7 @@ export function explainCommand(
   });
   const configuration = {
     effectiveLevel: context.effectiveLevel,
-    selectedPreset: snapshot.policy.safety.level ?? 'standard',
+    selectedPreset: snapshot.policy.safety.level,
     ...(snapshot.policyScopes ? { safetyPresetScope: snapshot.policyScopes.levelScope } : {}),
     effectiveCapabilities: context.effectiveCapabilities,
     destructiveCommandRuleOverrides: snapshot.policy.destructiveCommandRuleOverrides,

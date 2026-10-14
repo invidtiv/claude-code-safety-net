@@ -62,11 +62,13 @@ const LEVELS = [
 const PARANOID_LEVELS = [
   {
     level: 'paranoid_rm',
-    snapshot: policySnapshot({ safety: { overrides: { paranoidRm: true } } }),
+    snapshot: policySnapshot({ safety: { level: 'standard', overrides: { paranoidRm: true } } }),
   },
   {
     level: 'paranoid_interpreters',
-    snapshot: policySnapshot({ safety: { overrides: { paranoidInterpreters: true } } }),
+    snapshot: policySnapshot({
+      safety: { level: 'standard', overrides: { paranoidInterpreters: true } },
+    }),
   },
 ] as const;
 

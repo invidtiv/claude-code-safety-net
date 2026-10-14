@@ -21,7 +21,7 @@ export type PolicySafetyLevel = 'standard' | 'strict' | 'paranoid';
 export type EffectiveSafetyLevel = PolicySafetyLevel | 'custom';
 
 export interface PolicySafety {
-  level?: PolicySafetyLevel;
+  level: PolicySafetyLevel;
   overrides?: {
     failClosed?: boolean;
     paranoidRm?: boolean;
@@ -103,7 +103,7 @@ export type EffectivePolicy = {
   readonly transparentWrappers: readonly string[];
   readonly commandTools: readonly { readonly name: string; readonly cwd?: string }[];
   readonly safety: {
-    readonly level?: 'standard' | 'strict' | 'paranoid';
+    readonly level: 'standard' | 'strict' | 'paranoid';
     readonly overrides?: {
       readonly failClosed?: boolean;
       readonly paranoidRm?: boolean;

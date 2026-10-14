@@ -112,7 +112,7 @@ async function collectDoctorReport(
     effectiveRules: configInfo.effectiveRules,
     environment: environmentInfo,
     effectiveSafety: {
-      selectedPreset: policy.safety.level ?? 'standard',
+      selectedPreset: policy.safety.level,
       level: modes.effectiveLevel,
       capabilities: modes.capabilities,
       ruleOverrides: policy.destructiveCommandRuleOverrides,
