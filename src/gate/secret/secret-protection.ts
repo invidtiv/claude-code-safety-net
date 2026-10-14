@@ -35,6 +35,7 @@ import {
   getCommandSyntaxFact,
   projectSensitiveShellText,
   StructuralShellSyntaxLimitError,
+  UnparseableCommandError,
 } from '@/gate/guards/semantic-facts';
 
 export const REASON_SECRET_PROTECTION = 'Access to a sensitive path is not allowed.';
@@ -511,7 +512,7 @@ function extractCommandPathTargets(
 ): SecretCandidate[] {
   if (syntax.status === 'structural-limit') throw new StructuralShellSyntaxLimitError();
   if (syntax.status === 'unclosed-quote') return [];
-  if (syntax.status === 'invalid') throw new Error('Unable to parse command for secret protection');
+  if (syntax.status === 'invalid') throw new UnparseableCommandError();
 
   const targets: SecretCandidate[] = [
     ...syntax.assignmentFallbacks.map((target) => ({ target, cwd })),

@@ -6,6 +6,7 @@ import { createBudget, LIMITS } from '@/core/budget';
 import { createProcessEnvironment, type Environment } from '@/core/environment';
 import type { SecretProtectionConfig } from '@/core/policy/types';
 import { SECRET_DEFAULT_OFF_RULE_ID_SET, SECRET_PROTECTION_RULE_ID_SET } from '@/core/rules/secret';
+import { REASON_STRICT_UNPARSEABLE } from '@/gate/analyzer/reasons';
 import { createSemanticFacts } from '@/gate/guards/semantic-facts';
 import { createToolInvocation, type ToolRoute } from '@/gate/invocation';
 import { findSensitiveTargetInSemanticFacts } from '@/gate/secret/secret-protection';
@@ -3789,7 +3790,7 @@ describe('invariants over the corpus and the seeded fuzz', () => {
     ...corpusCommands(),
     ...fuzzShellSources(400, FUZZ_SEED),
   ];
-  const PARSE_FAILURE = 'Unable to parse command for secret protection';
+  const PARSE_FAILURE = { name: 'UnparseableCommandError', message: REASON_STRICT_UNPARSEABLE };
   const settle = (command: string, mode: Mode, config?: SecretProtectionConfig) =>
     describeOutcome(() => secretIn(command, mode, config));
   const settledByMode = new Map<Mode, Map<string, ReturnType<typeof settle>>>();
@@ -3828,7 +3829,7 @@ describe('invariants over the corpus and the seeded fuzz', () => {
     for (const row of failures) {
       for (const outcome of row.modes) {
         expect(outcome.ok, `${row.command} decided instead of failing closed`).toBeFalse();
-        expect(outcome.ok ? '' : outcome.error.message, row.command).toBe(PARSE_FAILURE);
+        expect(outcome.ok ? undefined : outcome.error, row.command).toEqual(PARSE_FAILURE);
       }
     }
   }, 30_000);

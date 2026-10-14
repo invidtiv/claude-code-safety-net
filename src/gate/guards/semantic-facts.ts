@@ -7,6 +7,7 @@ import {
   extractPathLikeToolValues,
   getCommandFromToolInput,
 } from '@/core/tool-input';
+import { REASON_STRICT_UNPARSEABLE } from '@/gate/analyzer/reasons';
 import type {
   CommandFactUsage,
   CommandSyntaxFacts,
@@ -48,6 +49,14 @@ export class StructuralShellSyntaxLimitError extends Error {
 
   constructor() {
     super('Structural command analysis limit exceeded.');
+  }
+}
+
+export class UnparseableCommandError extends Error {
+  override readonly name = 'UnparseableCommandError';
+
+  constructor() {
+    super(REASON_STRICT_UNPARSEABLE);
   }
 }
 

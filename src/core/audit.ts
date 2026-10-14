@@ -10,7 +10,7 @@ export type AuditFailureStage =
   | 'command-validation'
   | 'command-analysis';
 
-export type AuditErrorCode = AnalysisErrorCode | 'unexpected-error';
+export type AuditErrorCode = AnalysisErrorCode | 'unparseable-command' | 'unexpected-error';
 
 type AuditLogDecision = 'allow' | 'deny';
 
