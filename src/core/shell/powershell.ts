@@ -10,9 +10,8 @@ import {
   type CommandWordPart,
   createCommandAccumulator,
   createCommandWordParts,
-  freezeCommandProgram,
-  freezeCommandWord,
-  freezeParsedCommandWord,
+  createCommandWord,
+  createParsedCommandWord,
   type WordProvenance,
 } from './model';
 
@@ -115,7 +114,7 @@ export function parsePowerShellCommand(
 ): CommandProgram {
   const span = { start: 0, end: source.length };
   if (source.length > limits.maxInputLength) {
-    return freezeCommandProgram({
+    return {
       kind: 'program',
       dialect: 'powershell',
       source,
@@ -128,11 +127,11 @@ export function parsePowerShellCommand(
         },
       ],
       nodes: [],
-    });
+    };
   }
 
   const result = scanPowerShellSequence(source, 0, source.length, limits, 0);
-  return freezeCommandProgram({
+  return {
     kind: 'program',
     dialect: 'powershell',
     source,
@@ -140,7 +139,7 @@ export function parsePowerShellCommand(
     status: getPowerShellParseStatus(result.issues, result.limited),
     issues: result.issues,
     nodes: result.nodes,
-  });
+  };
 }
 
 function scanPowerShellSequence(
@@ -223,7 +222,7 @@ function scanPowerShellSequence(
       }
       const inner = scanPowerShellSequence(source, i + 1, end, limits, depth + 1, true);
       const bodyEnd = inner.closed ? inner.next - 1 : inner.next;
-      const body = freezeCommandProgram({
+      const body: CommandProgram = {
         kind: 'program',
         dialect: 'powershell',
         source: source.slice(i + 1, bodyEnd),
@@ -231,15 +230,13 @@ function scanPowerShellSequence(
         status: inner.limited ? 'limited' : inner.issues.length > 0 ? 'partial' : 'complete',
         issues: inner.issues,
         nodes: inner.nodes,
-      });
-      nodes.push(
-        Object.freeze({
-          kind: 'group',
-          style: 'brace',
-          span: Object.freeze({ start: i, end: inner.next }),
-          body,
-        } satisfies CommandGroup),
-      );
+      };
+      nodes.push({
+        kind: 'group',
+        style: 'brace',
+        span: { start: i, end: inner.next },
+        body,
+      } satisfies CommandGroup);
       issues.push(...inner.issues);
       if (!inner.closed) {
         issues.push({
@@ -266,14 +263,12 @@ function scanPowerShellSequence(
       const target =
         targetStart < end ? readPowerShellWord(source, targetStart, end, limits, depth) : undefined;
       const redirectEnd = target?.next ?? operatorEnd;
-      accumulator.redirections.push(
-        Object.freeze({
-          kind: 'redirection',
-          operator: source.slice(i, operatorEnd),
-          span: Object.freeze({ start: i, end: redirectEnd }),
-          ...(target ? { target: target.word } : {}),
-        }),
-      );
+      accumulator.redirections.push({
+        kind: 'redirection',
+        operator: source.slice(i, operatorEnd),
+        span: { start: i, end: redirectEnd },
+        ...(target ? { target: target.word } : {}),
+      });
       if (target) {
         issues.push(...target.issues);
         accumulator.nested.push(...target.nested);
@@ -287,7 +282,7 @@ function scanPowerShellSequence(
     if (char === ',') {
       accumulator.start = accumulator.start === -1 ? i : accumulator.start;
       accumulator.words.push(
-        freezeCommandWord({
+        createCommandWord({
           text: ',',
           raw: ',',
           span: { start: i, end: i + 1 },
@@ -445,7 +440,7 @@ function readPowerShellWord(
     i++;
   }
   return {
-    word: freezeParsedCommandWord(
+    word: createParsedCommandWord(
       source,
       start,
       i,
@@ -468,13 +463,13 @@ function readPowerShellSubexpression(
   end: number,
   limits: CommandParserLimits,
   depth: number,
-) {
+): { program: CommandProgram; next: number } {
   const close = findPowerShellSubexpressionEnd(source, start + 2, end);
   const innerEnd = close === -1 ? end : close;
   const next = close === -1 ? end : close + 1;
   if (depth >= limits.maxDepth) {
     return {
-      program: freezeCommandProgram({
+      program: {
         kind: 'program',
         dialect: 'powershell',
         source: source.slice(start + 2, innerEnd),
@@ -482,7 +477,7 @@ function readPowerShellSubexpression(
         status: 'limited',
         issues: [depthLimitIssue(limits.maxDepth)],
         nodes: [],
-      }),
+      },
       next,
     };
   }
@@ -498,7 +493,7 @@ function readPowerShellSubexpression(
         ]
       : [];
   return {
-    program: freezeCommandProgram({
+    program: {
       kind: 'program',
       dialect: 'powershell',
       source: source.slice(start + 2, innerEnd),
@@ -510,7 +505,7 @@ function readPowerShellSubexpression(
           : 'complete',
       issues: [...inner.issues, ...unclosedIssue],
       nodes: inner.nodes,
-    }),
+    },
     next,
   };
 }
@@ -713,9 +708,9 @@ function getPowerShellParseStatus(
 }
 
 function connector(source: string, start: number, end: number): CommandNode {
-  return Object.freeze({
+  return {
     kind: 'connector',
     operator: source.slice(start, end),
-    span: Object.freeze({ start, end }),
-  });
+    span: { start, end },
+  };
 }

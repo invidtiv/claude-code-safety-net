@@ -179,32 +179,6 @@ export function createCommandAccumulator() {
   };
 }
 
-function freezeCommandView(command: CommandView): CommandView {
-  return Object.freeze({
-    ...command,
-    span: Object.freeze(command.span),
-    words: Object.freeze(command.words),
-    redirections: Object.freeze(
-      command.redirections.map((redirection) =>
-        Object.freeze({
-          ...redirection,
-          span: Object.freeze(redirection.span),
-          ...(redirection.heredoc
-            ? {
-                heredoc: Object.freeze({
-                  ...redirection.heredoc,
-                  bodySpan: Object.freeze(redirection.heredoc.bodySpan),
-                  terminatorSpan: Object.freeze(redirection.heredoc.terminatorSpan),
-                }),
-              }
-            : {}),
-        }),
-      ),
-    ),
-    nested: Object.freeze(command.nested.map((program) => freezeCommandProgram(program))),
-  });
-}
-
 export function appendAccumulatedCommand(
   nodes: CommandNode[],
   accumulator: ReturnType<typeof createCommandAccumulator>,
@@ -225,7 +199,7 @@ export function createCommandWordParts(source: string) {
   };
 }
 
-export function freezeCommandWord(
+export function createCommandWord(
   word: Omit<CommandWord, 'kind' | 'parts'> & Pick<Partial<CommandWord>, 'parts'>,
 ): CommandWord {
   const parts = word.parts ?? [
@@ -235,17 +209,10 @@ export function freezeCommandWord(
       provenance: word.provenance,
     },
   ];
-  return Object.freeze({
-    kind: 'word',
-    ...word,
-    span: Object.freeze(word.span),
-    parts: Object.freeze(
-      parts.map((part) => Object.freeze({ ...part, span: Object.freeze(part.span) })),
-    ),
-  });
+  return { kind: 'word', ...word, parts };
 }
 
-export function freezeParsedCommandWord(
+export function createParsedCommandWord(
   source: string,
   start: number,
   end: number,
@@ -254,33 +221,12 @@ export function freezeParsedCommandWord(
   quoted: boolean,
   parts?: CommandWordPart[],
 ) {
-  return freezeCommandWord({
+  return createCommandWord({
     text,
     raw: source.slice(start, end),
     span: { start, end },
     provenance,
     quoted,
     ...(parts ? { parts } : {}),
-  });
-}
-
-export function freezeCommandProgram(program: CommandProgram): CommandProgram {
-  return Object.freeze({
-    ...program,
-    span: Object.freeze(program.span),
-    issues: Object.freeze(program.issues.map((issue) => Object.freeze({ ...issue }))),
-    nodes: Object.freeze(
-      program.nodes.map((node) => {
-        if (node.kind === 'command') return freezeCommandView(node);
-        if (node.kind === 'group' || node.kind === 'function') {
-          return Object.freeze({
-            ...node,
-            span: Object.freeze(node.span),
-            body: freezeCommandProgram(node.body),
-          });
-        }
-        return Object.freeze({ ...node, span: Object.freeze(node.span) });
-      }),
-    ),
   });
 }

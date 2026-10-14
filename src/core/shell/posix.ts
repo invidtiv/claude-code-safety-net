@@ -15,8 +15,7 @@ import {
   type CommandWordPart,
   createCommandAccumulator,
   createCommandWordParts,
-  freezeCommandProgram,
-  freezeParsedCommandWord,
+  createParsedCommandWord,
   type WordProvenance,
 } from './model';
 
@@ -74,7 +73,7 @@ const RESERVED_COMMAND_PREFIXES = new Set([
 export function parsePosixCommand(source: string, limits: CommandParserLimits): CommandProgram {
   const span = { start: 0, end: source.length };
   if (source.length > limits.maxInputLength) {
-    return freezeCommandProgram({
+    return {
       kind: 'program',
       dialect: 'posix',
       source,
@@ -87,7 +86,7 @@ export function parsePosixCommand(source: string, limits: CommandParserLimits): 
         },
       ],
       nodes: [],
-    });
+    };
   }
 
   const parseState = { wordsUsed: 0, maxWords: limits.maxWords, quotedExpansionEnd: Infinity };
@@ -99,7 +98,7 @@ export function parsePosixCommand(source: string, limits: CommandParserLimits): 
   )
     ? [...result.issues, QUOTED_PARAMETER_EXPANSION_ISSUE]
     : result.issues;
-  return freezeCommandProgram({
+  return {
     kind: 'program',
     dialect: 'posix',
     source,
@@ -107,7 +106,7 @@ export function parsePosixCommand(source: string, limits: CommandParserLimits): 
     status: getParseStatus(issues, result.limited),
     issues,
     nodes: result.nodes,
-  });
+  };
 }
 
 function scanSequence(
@@ -165,13 +164,11 @@ function scanSequence(
         const connectorEnd = char === '\r' && source[i + 1] === '\n' ? i + 2 : i + 1;
         const previous = nodes.at(-1);
         if (previous?.kind !== 'connector' || !CONTINUATION_CONNECTORS.has(previous.operator)) {
-          nodes.push(
-            Object.freeze({
-              kind: 'connector',
-              operator: source.slice(i, connectorEnd),
-              span: Object.freeze({ start: i, end: connectorEnd }),
-            }),
-          );
+          nodes.push({
+            kind: 'connector',
+            operator: source.slice(i, connectorEnd),
+            span: { start: i, end: connectorEnd },
+          });
         }
         if (pendingHeredocs.length > 0) {
           const bodies = consumeHeredocBodies(source, connectorEnd, end, pendingHeredocs.splice(0));
@@ -250,13 +247,11 @@ function scanSequence(
           message: `connector ${connector} has no preceding command`,
         });
       }
-      nodes.push(
-        Object.freeze({
-          kind: 'connector',
-          operator: connector,
-          span: Object.freeze({ start: i, end: i + connector.length }),
-        }),
-      );
+      nodes.push({
+        kind: 'connector',
+        operator: connector,
+        span: { start: i, end: i + connector.length },
+      });
       i += connector.length;
       continue;
     }
@@ -337,7 +332,7 @@ function scanSequence(
         : undefined;
       const targetResult = delimiter
         ? {
-            word: freezeParsedCommandWord(
+            word: createParsedCommandWord(
               source,
               targetStart,
               delimiter.next,
@@ -624,7 +619,7 @@ function readWord(
   }
 
   return {
-    word: freezeParsedCommandWord(
+    word: createParsedCommandWord(
       source,
       start,
       i,
@@ -761,7 +756,7 @@ function readSubstitution(
       });
     }
     return {
-      program: freezeCommandProgram({
+      program: {
         kind: 'program',
         dialect: 'posix',
         source: source.slice(start + openLength, innerEnd),
@@ -769,7 +764,7 @@ function readSubstitution(
         status: getParseStatus(arithmeticIssues, arithmeticLimited),
         issues: arithmeticIssues,
         nodes: arithmeticNodes,
-      }),
+      },
       next,
       provenance: 'arithmetic',
     };
@@ -799,7 +794,7 @@ function readSubstitution(
       : [];
   const issues = [...inner.issues, ...substitutionIssue, ...contextIssue, ...escapeIssue];
   return {
-    program: freezeCommandProgram({
+    program: {
       kind: 'program',
       dialect: 'posix',
       source: source.slice(start + openLength, innerEnd),
@@ -807,7 +802,7 @@ function readSubstitution(
       status: getParseStatus(issues, inner.limited),
       issues,
       nodes: inner.nodes,
-    }),
+    },
     next,
     provenance: 'command-substitution',
   };
@@ -1539,7 +1534,7 @@ function expandLiteralCommandWord(
     words: texts
       .filter((text): text is string => text !== null && text !== '')
       .map((text) =>
-        freezeParsedCommandWord(source, word.span.start, word.span.end, text, 'literal', false),
+        createParsedCommandWord(source, word.span.start, word.span.end, text, 'literal', false),
       ),
   };
 }
@@ -1689,7 +1684,7 @@ function decodePosixLiteralWord(value: string, maxDepth: number): string | null 
 }
 
 function limitedProgram(source: string, start: number, end: number, code: string): CommandProgram {
-  return freezeCommandProgram({
+  return {
     kind: 'program',
     dialect: 'posix',
     source: source.slice(start, end),
@@ -1697,7 +1692,7 @@ function limitedProgram(source: string, start: number, end: number, code: string
     status: 'limited',
     issues: [{ code, message: 'command structure exceeds parser limit' }],
     nodes: [],
-  });
+  };
 }
 
 function limitedResult(
