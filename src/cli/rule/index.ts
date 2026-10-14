@@ -27,6 +27,7 @@ import {
   COMMAND_TOOL_NAME_PATTERN,
   COMMAND_TOOL_NAME_RULE,
   type CommandToolEntry,
+  DEFAULT_CONFIG,
   readRulesConfig,
 } from '@/core/policy/rules-config';
 import { getRulesConfigRuntimeErrorsForConfig, loadRulesPolicy } from '@/core/policy/scope-policy';
@@ -432,12 +433,7 @@ async function runRuleWrapperCommand(environment: Environment, flags: RuleFlags)
     for (const error of loaded.errors) console.error(error);
     return 1;
   }
-  const config = loaded.config ?? {
-    version: 1 as const,
-    rules: [],
-    overrides: {},
-    transparent_wrappers: [],
-  };
+  const config = loaded.config ?? DEFAULT_CONFIG;
   const wrappers =
     action === 'add'
       ? [...new Set([...(config.transparent_wrappers ?? []), command])]

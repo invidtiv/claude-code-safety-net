@@ -14,7 +14,7 @@ export function readScopeRulesConfig(
 }
 
 export function writeDefaultRulesConfig(path: string | PolicyFilesystemTarget): void {
-  writeJsonAtomic(path, { version: 1, rules: [], overrides: {}, transparent_wrappers: [] });
+  writeJsonAtomic(path, DEFAULT_CONFIG);
 }
 
 export function writeStarterRulebook(path: string | PolicyFilesystemTarget): void {

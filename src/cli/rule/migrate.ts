@@ -9,6 +9,7 @@ import {
   writePolicyFileAtomic,
 } from '@/core/io/safe-read';
 import {
+  getLegacyProjectConfigPath,
   getLegacyUserRulesConfigPath,
   validateConfig,
   writeJsonAtomic,
@@ -18,9 +19,9 @@ import {
   getUserRulesConfigPath,
   projectPolicyIsUserPolicy,
 } from '@/core/policy/paths';
-import { type RulesConfig, readRulesConfig } from '@/core/policy/rules-config';
+import { DEFAULT_CONFIG, type RulesConfig, readRulesConfig } from '@/core/policy/rules-config';
 import type { CustomRule } from '@/core/policy/types';
-import { getLegacyProjectRulesConfigPath, getScopePaths } from '@/rules-manager/paths';
+import { getScopePaths } from '@/rules-manager/paths';
 import { syncRulesConfig } from '@/rules-manager/sync';
 import type { SyncRulesConfigOptions } from '@/rules-manager/types';
 
@@ -61,7 +62,7 @@ export async function runRulesMigrate(
   const results = [
     projectIsUser ||
       (await migrateRulesScope(environment, {
-        legacyPath: getLegacyProjectRulesConfigPath({ cwd: options.cwd }),
+        legacyPath: getLegacyProjectConfigPath(options.cwd),
         configPath: getProjectRulesConfigPath(options.cwd),
         defaultRulebookName: 'project-rules',
         migratedFrom: PROJECT_MIGRATED_FROM,
@@ -104,12 +105,7 @@ async function migrateRulesScope(
     return false;
   }
 
-  const config = loaded.config ?? {
-    version: 1 as const,
-    rules: [],
-    overrides: {},
-    transparent_wrappers: [],
-  };
+  const config = loaded.config ?? DEFAULT_CONFIG;
   const rulebookName = getMigratedRulebookName(
     dirname(options.configPath),
     config.rules,

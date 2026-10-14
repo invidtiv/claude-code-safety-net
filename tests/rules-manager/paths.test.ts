@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { join } from 'node:path';
-import { getLegacyProjectRulesConfigPath, getScopePaths } from '@/rules-manager/paths';
+import { getScopePaths } from '@/rules-manager/paths';
 import type { SyncRulesConfigOptions } from '@/rules-manager/types';
 import {
   createTempRoot,
@@ -141,22 +141,6 @@ describe('getScopePaths resolves the scope the shipped module resolves', () => {
       ),
     ).toEqual(
       scopeIn(join(ported.project, '.cc-safety-net', 'rules'), ported.project, 'project policy'),
-    );
-  });
-});
-
-describe('the retired lock and legacy paths resolve where the shipped ones resolve', () => {
-  test('the legacy project config sits at the working directory root', () => {
-    const root = createTempRoot('legacy-project-');
-    expect(getLegacyProjectRulesConfigPath({ cwd: join(root, 'project') })).toBe(
-      join(root, 'project', '.safety-net.json'),
-    );
-  });
-
-  test('an omitted working directory falls back to the process one for the legacy config', () => {
-    const root = createTempRoot('legacy-project-cwd-');
-    expect(withCwd(join(root, 'project'), () => getLegacyProjectRulesConfigPath())).toBe(
-      join(root, 'project', '.safety-net.json'),
     );
   });
 });
