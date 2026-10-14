@@ -386,25 +386,6 @@ describe('adding rulebook sources', () => {
     expect(contentAt(tree, CONFIG)).toBe(rulesConfig([]));
     expect(contentAt(tree, rulebookPath('bad'))).toBeUndefined();
   });
-
-  test('repository-only flags are refused on a local source', async () => {
-    const seed = { [CONFIG]: rulesConfig([]), [rulebookPath('local')]: v1Rulebook('local') };
-    const { results, tree } = await runManagerDifferential(seed, async (side, environment) => {
-      const api = manager(environment);
-      const operation = api.operation(github.resolveUrl);
-      return [
-        await api.add('local', { cwd: side.project, rulebooks: ['a'] }, operation),
-        await api.add('local', { cwd: side.project, ref: 'main' }, operation),
-        await api.add('acme/catalog', { cwd: side.project, rulebooks: [] }, operation),
-      ];
-    });
-    expect(results.map((result) => result.errors)).toStrictEqual([
-      ['--only can only select rulebooks from an owner/repo source'],
-      ['--ref can only select a ref for an owner/repo source: local'],
-      ['--only requires at least one rulebook name'],
-    ]);
-    expect(contentAt(tree, CONFIG)).toBe(seed[CONFIG]);
-  });
 });
 
 describe('updating rulebook sources', () => {

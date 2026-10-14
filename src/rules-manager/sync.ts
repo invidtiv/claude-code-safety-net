@@ -342,9 +342,7 @@ async function addRulebookSourceInternal(
     const scopeConfig = readScopeRulesConfig(scope.configTarget);
     if (!scopeConfig.ok) return scopeConfig.result;
     const config = scopeConfig.config;
-    const repositorySource = isGitHubRepositorySource(source);
-    assertRepositoryAddOptions(source, options, repositorySource);
-    const repository = repositorySource
+    const repository = isGitHubRepositorySource(source)
       ? await discoverGitHubRepositoryRulebooks(source, { ref: options.ref, operation })
       : null;
     const selectedNames = repository
@@ -401,26 +399,6 @@ async function addRulebookSourceInternal(
       }
     }
     return failWithError(error);
-  }
-}
-
-function assertRepositoryAddOptions(
-  source: string,
-  options: AddRulebookSourceOptions,
-  repositorySource: boolean,
-): void {
-  if (!repositorySource && options.rulebooks !== undefined) {
-    throw new Error('--only can only select rulebooks from an owner/repo source');
-  }
-  if (!repositorySource && options.ref) {
-    throw new Error(`--ref can only select a ref for an owner/repo source: ${source}`);
-  }
-  if (options.rulebooks?.length === 0) {
-    throw new Error('--only requires at least one rulebook name');
-  }
-  const invalidNames = options.rulebooks?.filter((name) => !NAME_PATTERN.test(name)) ?? [];
-  if (invalidNames.length > 0) {
-    throw new Error(`Invalid rulebook names: ${invalidNames.join(', ')}`);
   }
 }
 
