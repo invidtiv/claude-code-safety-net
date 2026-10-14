@@ -55,7 +55,6 @@ describe('the analyzer steps reach a sink handed to evaluateGuard', () => {
     const sunk = evaluateWithSink(command);
     expect(sunk.evaluation.errorCode).toBe('structural-shell-syntax-limit');
     expect(sunk.trace.events.at(-1)).toStrictEqual({
-      kind: 'step',
       scope: 'global',
       step: { type: 'error', message: REASON_DERIVED_COMMAND_WORK_LIMIT },
     });

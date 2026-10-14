@@ -328,12 +328,10 @@ function sanitizeCustomRule(rule: ExplainResult['customRule']): ExplainResult['c
 }
 
 function projectExplainTrace(trace: CommandTrace): ExplainTrace {
-  const steps = trace.events.flatMap((event) =>
-    event.kind === 'step' && event.scope === 'global' ? [event.step] : [],
-  );
+  const steps = trace.events.flatMap((event) => (event.scope === 'global' ? [event.step] : []));
   const segments = new Map<number, ExplainTrace['segments'][number]>();
   for (const event of trace.events) {
-    if (event.kind !== 'step' || event.scope !== 'segment') continue;
+    if (event.scope !== 'segment') continue;
     const segment = segments.get(event.segmentIndex) ?? { index: event.segmentIndex, steps: [] };
     segment.steps.push(event.step);
     segments.set(event.segmentIndex, segment);

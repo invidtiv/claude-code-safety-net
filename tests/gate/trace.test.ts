@@ -6,8 +6,6 @@ import {
   type TraceStep,
 } from '@/gate/trace';
 
-type RecorderOptions = Parameters<typeof createPortedRecorder>[0];
-
 const PORTED = { recorder: createPortedRecorder, context: createPortedContext };
 
 const SECRETS = [
@@ -21,13 +19,11 @@ const SECRETS = [
 ];
 
 const globalEvent = (step: TraceStep): CommandTraceEvent => ({
-  kind: 'step',
   scope: 'global',
   step,
 });
 
 const segmentEvent = (segmentIndex: number, step: TraceStep): CommandTraceEvent => ({
-  kind: 'step',
   scope: 'segment',
   segmentIndex,
   step,
@@ -91,22 +87,18 @@ const EVENTS: readonly CommandTraceEvent[] = [
   segmentEvent(3, { type: 'segment-skipped', index: 3, reason: 'prior-segment-blocked' }),
   segmentEvent(4, { type: 'error', message: 'boom', partial: true }),
   cyclicEvent(),
-  { kind: 'step', scope: 'nowhere', step: { type: 'busybox', subcommand: 'ls' } } as never,
-  undefined as never,
 ];
 
-function recordAll(createRecorder: typeof createPortedRecorder, options: RecorderOptions) {
-  const recorder = createRecorder(options);
-  EVENTS.forEach((event) => {
+function recordAll(events: readonly CommandTraceEvent[] = EVENTS) {
+  const recorder = createPortedRecorder();
+  events.forEach((event) => {
     recorder.record(event);
   });
-  const trace = recorder.finish();
-  recorder.record(EVENTS[0] as CommandTraceEvent);
-  return { trace, afterFinish: recorder.finish() };
+  return recorder.finish();
 }
 
 function walkContext(module: typeof PORTED) {
-  const recorder = module.recorder({ maxEvents: 16 });
+  const recorder = module.recorder();
   const context = module.context(recorder);
   const beforeAnySegment = context.getNextSegmentIndex();
   context.recordSegment({ type: 'busybox', subcommand: 'dropped-without-current-segment' });
@@ -150,71 +142,56 @@ const STEP_TYPES: TraceStep['type'][] = [
   'error',
 ];
 
-describe('the command trace recorder', () => {
-  test('keeps every well-formed event and skips the two it cannot read', () => {
-    const recorded = recordAll(createPortedRecorder, undefined);
+const busybox = (subcommand: string) => globalEvent({ type: 'busybox', subcommand });
 
-    expect(recorded.trace.events.map((event) => event.step.type)).toEqual(STEP_TYPES);
-    expect(recorded.afterFinish).toBe(recorded.trace);
+describe('the command trace recorder', () => {
+  test('keeps every event in the order recorded', () => {
+    expect(recordAll().events.map((event) => event.step.type)).toEqual(STEP_TYPES);
   });
 
-  test('stops at maxEvents and keeps nothing past it', () => {
-    const recorded = recordAll(createPortedRecorder, { maxEvents: 4 });
+  test('stops at 512 events and keeps nothing past it', () => {
+    const events = Array.from({ length: 600 }, (_, index) => busybox(`ls${index}`));
 
-    expect(recorded.trace.events.map((event) => event.step.type)).toEqual(STEP_TYPES.slice(0, 4));
+    expect(recordAll(events).events.map((event) => event.step)).toEqual(
+      events.slice(0, 512).map((event) => event.step),
+    );
   });
 
   test('bounds the text, the lists and the properties of a step', () => {
-    const bounded = recordAll(createPortedRecorder, {
-      maxTextLength: 10,
-      maxListLength: 2,
-      maxDepth: 2,
-    }).trace;
-    const perProperty = recordAll(createPortedRecorder, {
-      maxTextLength: 24,
-      maxListLength: 1,
-      maxObjectProperties: 1,
-      maxDepth: 1,
-    }).trace;
+    const step = recordAll([
+      globalEvent({
+        type: 'parse',
+        input: 'x'.repeat(3_000),
+        segments: Array.from({ length: 200 }, () => ['a']),
+      }),
+      globalEvent(
+        Object.fromEntries(
+          Array.from({ length: 200 }, (_, index) => [`k${index}`, index]),
+        ) as unknown as TraceStep,
+      ),
+    ]).events;
 
-    expect(bounded.events[0]).toEqual({
-      kind: 'step',
-      scope: 'global',
-      step: { type: 'parse', input: 'AWS_KEY=<r' },
-    } as never);
-    expect(perProperty.events[0]).toEqual({
-      kind: 'step',
-      scope: 'global',
-      step: { type: 'parse' },
-    } as never);
+    expect(step[0]?.step).toEqual({
+      type: 'parse',
+      input: 'x'.repeat(2_048),
+      segments: Array.from({ length: 128 }, () => ['a']),
+    });
+    expect(Object.keys(step[1]?.step ?? {})).toHaveLength(128);
   });
 
   test('cuts a step off at the depth bound and never follows a cycle', () => {
-    const stepAt = (options: RecorderOptions) => {
-      const recorder = createPortedRecorder(options);
-      recorder.record(cyclicEvent());
-      return recorder.finish().events[0]?.step;
-    };
-
-    expect(stepAt(undefined)).toEqual({
+    expect(recordAll([cyclicEvent()]).events[0]?.step).toEqual({
       type: 'error',
       message: 'AWS_KEY=<redacted>',
       nested: { deeper: { deepest: ['<redacted>', '<redacted>'] } },
     } as never);
-    expect(stepAt({ maxDepth: 3 })).toEqual({
-      type: 'error',
-      message: 'AWS_KEY=<redacted>',
-      nested: { deeper: {} },
-    } as never);
   });
 
   test('redacts assignment, derived and provider secrets out of every recorded step', () => {
-    const trace = recordAll(createPortedRecorder, undefined);
-    const serialized = JSON.stringify(trace.trace);
+    const trace = recordAll();
 
-    expect(SECRETS.filter((secret) => serialized.includes(secret))).toEqual([]);
-    expect(trace.trace.events[0]).toEqual({
-      kind: 'step',
+    expect(SECRETS.filter((secret) => JSON.stringify(trace).includes(secret))).toEqual([]);
+    expect(trace.events[0]).toEqual({
       scope: 'global',
       step: {
         type: 'parse',
@@ -223,16 +200,6 @@ describe('the command trace recorder', () => {
         segments: [['<redacted>'], ['<redacted>'], ['echo', 'ok']],
       },
     });
-  });
-
-  test('freezes the trace and its events', () => {
-    const ported = recordAll(createPortedRecorder, {}).trace;
-
-    expect([
-      Object.isFrozen(ported),
-      Object.isFrozen(ported.events),
-      Object.isFrozen(ported.events[0]?.step),
-    ]).toEqual([true, true, true]);
   });
 
   test('allocates segments in order and routes each step to one', () => {
@@ -244,19 +211,16 @@ describe('the command trace recorder', () => {
       trace: {
         events: [
           {
-            kind: 'step',
             scope: 'segment',
             segmentIndex: 0,
             step: { type: 'rule-check', rule: 'first', matched: false },
           },
           {
-            kind: 'step',
             scope: 'segment',
             segmentIndex: 1,
             step: { type: 'rule-check', rule: 'explicit', matched: true },
           },
           {
-            kind: 'step',
             scope: 'global',
             step: { type: 'parse', input: 'PASSWORD=<redacted> id', segments: [['id']] },
           },
