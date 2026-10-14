@@ -128,13 +128,27 @@ describe('behavioral contract through the ported gate', () => {
           ),
           options.policySnapshot,
           {
-            getModes: (policy, env) => ({
-              ...getCCSafetyNetEnvModes(policy, env),
-              strict: options.strict ?? false,
-              paranoidRm: options.paranoidRm ?? false,
-              paranoidInterpreters: options.paranoidInterpreters ?? false,
-              worktreeMode: options.worktreeMode ?? false,
-            }),
+            getModes: (policy, env) => {
+              const modes = getCCSafetyNetEnvModes(policy, env);
+              const strict = options.strict ?? false;
+              const paranoidRm = options.paranoidRm ?? false;
+              const paranoidInterpreters = options.paranoidInterpreters ?? false;
+              return {
+                ...modes,
+                strict,
+                paranoidRm,
+                paranoidInterpreters,
+                worktreeMode: options.worktreeMode ?? false,
+                capabilities: {
+                  fail_closed: { ...modes.capabilities.fail_closed, enabled: strict },
+                  paranoid_rm: { ...modes.capabilities.paranoid_rm, enabled: paranoidRm },
+                  paranoid_interpreters: {
+                    ...modes.capabilities.paranoid_interpreters,
+                    enabled: paranoidInterpreters,
+                  },
+                },
+              };
+            },
             resolveGitMetadata: () => null,
           },
         ),

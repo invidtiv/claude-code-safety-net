@@ -69,7 +69,7 @@ export type GuiPolicy = {
 
 export type EffectiveCapabilitySource = 'preset' | 'capability_override' | 'environment';
 
-export type EffectiveCapabilityState = Readonly<{
+type EffectiveCapabilityState = Readonly<{
   enabled: boolean;
   source: EffectiveCapabilitySource;
   sources: readonly string[];

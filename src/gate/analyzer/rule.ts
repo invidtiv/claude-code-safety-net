@@ -3,8 +3,10 @@ import { hasUnsafeTmpdirWordSplitting, isTmpdirValueTrusted } from '@/core/paths
 import type { CommandAnalysisPolicy } from '@/core/policy/types';
 import type { CommandProgram, CommandView, CommandWord } from '@/core/shell/model';
 import type {
+  AnalysisModeFlag,
   AnalyzeInput,
   AnalyzeNestedOverrides,
+  AnalyzeOptions,
   AnalyzeResult,
   DestructiveCommandRuleMatch,
 } from '@/gate/analysis';
@@ -17,24 +19,25 @@ import { analyzePowerShellWrapperMatch } from './powershell-wrapper';
 import { analyzeRmMatch } from './rm';
 import { analyzeXargs } from './xargs';
 
-export type InternalOptions = AnalyzeInput & {
-  policy: CommandAnalysisPolicy;
-  effectiveCwd: string | null | undefined;
-  analyzeNested: (
-    command: string,
-    overrides?: AnalyzeNestedOverrides,
-  ) => Omit<AnalyzeResult, 'segment'> | null;
-  commandView?: CommandView;
-  budget: Budget;
-  hasPipelineInput?: boolean;
-  literalShellInput?: string;
-  literalHeredocFiles?: ReadonlyMap<string, string>;
-  functionDefinitions?: ReadonlyMap<string, CommandProgram>;
-  wrapperNormalizationBudget?: { iterations: number };
-  shellAssignments?: ReadonlyMap<string, string>;
+export type InternalOptions = AnalyzeInput &
+  Pick<AnalyzeOptions, AnalysisModeFlag> & {
+    policy: CommandAnalysisPolicy;
+    effectiveCwd: string | null | undefined;
+    analyzeNested: (
+      command: string,
+      overrides?: AnalyzeNestedOverrides,
+    ) => Omit<AnalyzeResult, 'segment'> | null;
+    commandView?: CommandView;
+    budget: Budget;
+    hasPipelineInput?: boolean;
+    literalShellInput?: string;
+    literalHeredocFiles?: ReadonlyMap<string, string>;
+    functionDefinitions?: ReadonlyMap<string, CommandProgram>;
+    wrapperNormalizationBudget?: { iterations: number };
+    shellAssignments?: ReadonlyMap<string, string>;
 
-  child?: ChildProvenance;
-};
+    child?: ChildProvenance;
+  };
 
 export type AnalyzerRuleContext = {
   readonly words: readonly CommandWord[];

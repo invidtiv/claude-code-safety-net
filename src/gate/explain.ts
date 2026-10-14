@@ -80,9 +80,6 @@ export function explainCommand(
   const context = resolveCommandAnalysisContext({
     policySnapshot: snapshot,
     effectiveCapabilities: modes.capabilities,
-    strict: modes.strict,
-    paranoidRm: modes.paranoidRm,
-    paranoidInterpreters: modes.paranoidInterpreters,
     worktreeMode: modes.worktreeMode,
   });
   const configuration = {
@@ -296,7 +293,17 @@ function identifyModeGatedCandidate(
     environment,
     dependencies: {
       loadPolicySnapshot: () => candidateSnapshot,
-      getModes: () => ({ ...modes, strict: true, paranoidRm: true, paranoidInterpreters: true }),
+      getModes: () => ({
+        ...modes,
+        strict: true,
+        paranoidRm: true,
+        paranoidInterpreters: true,
+        capabilities: {
+          fail_closed: { ...modes.capabilities.fail_closed, enabled: true },
+          paranoid_rm: { ...modes.capabilities.paranoid_rm, enabled: true },
+          paranoid_interpreters: { ...modes.capabilities.paranoid_interpreters, enabled: true },
+        },
+      }),
       findSensitiveTarget: () => null,
     },
   });

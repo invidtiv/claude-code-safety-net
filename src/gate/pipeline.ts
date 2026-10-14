@@ -298,9 +298,6 @@ export function evaluateGuard(
             environment: options.environment,
             protectedGitMetadata,
             effectiveCapabilities: modes.capabilities,
-            strict: modes.strict,
-            paranoidRm: modes.paranoidRm,
-            paranoidInterpreters: modes.paranoidInterpreters,
             worktreeMode: modes.worktreeMode,
             budget,
 

@@ -21,8 +21,10 @@ import {
 import { parseCommand } from '@/core/shell/parse';
 import { getBasename, normalizeCommandToken } from '@/core/shell/tokens';
 import type {
+  AnalysisModeFlag,
   AnalyzeInput,
   AnalyzeNestedOverrides,
+  AnalyzeOptions,
   AnalyzeResult,
   DestructiveCommandRuleMatch,
   EnvironmentContext,
@@ -60,14 +62,15 @@ import {
 import { isShellSyntaxCheck } from './shell-wrappers';
 import { stripWrapperWords } from './wrapper-prelude';
 
-export type InternalOptions = AnalyzeInput & {
-  policy: CommandAnalysisPolicy;
-  factStore?: SemanticFactStore;
-  budget: Budget;
-  literalHeredocFiles?: ReadonlyMap<string, string>;
-  functionDefinitions?: ReadonlyMap<string, CommandProgram>;
-  rootProgram?: CommandProgram;
-};
+export type InternalOptions = AnalyzeInput &
+  Pick<AnalyzeOptions, AnalysisModeFlag> & {
+    policy: CommandAnalysisPolicy;
+    factStore?: SemanticFactStore;
+    budget: Budget;
+    literalHeredocFiles?: ReadonlyMap<string, string>;
+    functionDefinitions?: ReadonlyMap<string, CommandProgram>;
+    rootProgram?: CommandProgram;
+  };
 
 const REASON_UNQUOTED_HEREDOC =
   'Unquoted heredoc input is not supported safely. Quote the delimiter or ask the user to verify.';
