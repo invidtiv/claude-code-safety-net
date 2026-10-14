@@ -24,7 +24,7 @@ Preconditions:
   recorded for `$WS`. Other recipes may have added more rows; assert on your session ids.
 - `cd "$WS"`.
 
-- **Denials.** Run `"$REPO/.agents/skills/verify-cc-safety-net/ccsn-isolated" logs | tee "$EVIDENCE/logs-deny.txt"`.
+- **Denials.** Run `"$REPO/.agents/skills/verify-ccsn/ccsn-isolated" logs | tee "$EVIDENCE/logs-deny.txt"`.
   Each row is `<16-hex id>  <YYYY-MM-DD HH:MM>  deny   claude-code      git.reset-hard        git reset --hard  [$WS]`;
   no `allow` row appears.
 - **All decisions.** Run `… logs --all | tee "$EVIDENCE/logs-all.txt"`. The deny rows plus an

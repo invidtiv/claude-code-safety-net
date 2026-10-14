@@ -25,7 +25,7 @@ Preconditions:
 - Baseline, plus `cd "$WS"`.
 
 - **Deny.** Send a `git reset --hard` payload. Run
-  `printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"ccsn-verify-'"$RUN_ID"'-reset","cwd":"'"$WS"'","tool_input":{"command":"git reset --hard"}}' | "$REPO/.agents/skills/verify-cc-safety-net/ccsn-isolated" hook --coding-cli | tee "$EVIDENCE/hook-deny.json"`.
+  `printf '%s' '{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"ccsn-verify-'"$RUN_ID"'-reset","cwd":"'"$WS"'","tool_input":{"command":"git reset --hard"}}' | "$REPO/.agents/skills/verify-ccsn/ccsn-isolated" hook --coding-cli | tee "$EVIDENCE/hook-deny.json"`.
   Stdout is one JSON object with `permissionDecision: "deny"` and a reason containing
   `Rule: git.reset-hard`; exit code 0; stderr empty. Assert the rule id, not just the deny: a
   malformed payload is also denied ("Failed to parse hook input JSON."), so a deny alone does not

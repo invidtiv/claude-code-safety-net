@@ -1,5 +1,5 @@
 ---
-name: verify-cc-safety-net
+name: verify-ccsn
 description: Launch and drive the real cc-safety-net CLI — the hook decision path, explain, status/doctor/statusline, logs, rule and policy config, and the local policy GUI — against an isolated home, capturing evidence. Use when a change needs proof in the running app, not just the test suite.
 ---
 
@@ -38,12 +38,12 @@ mkdir -p "$CCSN_VERIFY_HOME" "$EVIDENCE" "$WS"
 ```
 
 One-shot commands (hook, explain, status, logs, doctor) need no server — each drive is one
-`./ccsn-isolated …` invocation from `$REPO/.agents/skills/verify-cc-safety-net/`.
+`./ccsn-isolated …` invocation from `$REPO/.agents/skills/verify-ccsn/`.
 
 The only long-lived instance is the GUI:
 
 ```bash
-cd "$WS" && "$REPO/.agents/skills/verify-cc-safety-net/ccsn-isolated" gui --no-open > "$EVIDENCE/gui.log" 2>&1 &
+cd "$WS" && "$REPO/.agents/skills/verify-ccsn/ccsn-isolated" gui --no-open > "$EVIDENCE/gui.log" 2>&1 &
 GUI_PID=$!
 ```
 

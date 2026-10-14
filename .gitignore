@@ -6,7 +6,7 @@
 !.claude/skills/ccsn-find-simplifications
 !.claude/skills/ccsn-no-comments
 !.claude/skills/release-notes
-!.claude/skills/verify-cc-safety-net
+!.claude/skills/verify-ccsn
 .agents/*
 !.agents/setup
 !.agents/resume
@@ -14,7 +14,7 @@
 .agents/skills/*
 !.agents/skills/ccsn-find-simplifications
 !.agents/skills/ccsn-no-comments
-!.agents/skills/verify-cc-safety-net
+!.agents/skills/verify-ccsn
 .safety-net.json
 .opencode
 .gemini
