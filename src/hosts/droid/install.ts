@@ -111,8 +111,10 @@ export function uninstallDroid(environment: Environment): InstallResult {
     return { path: configPath, alreadyInstalled: false };
   }
 
-  const settingsFallbackWouldLoad = existsSync(getDroidSettingsPath(environment));
-  if (stripped.length === 0 && Object.keys(config).length === 1 && !settingsFallbackWouldLoad) {
+  const fallbackWouldLoad =
+    existsSync(getDroidSettingsPath(environment)) ||
+    existsSync(getDroidLegacyHooksPath(environment));
+  if (stripped.length === 0 && Object.keys(config).length === 1 && !fallbackWouldLoad) {
     rmSync(configPath);
     return { path: configPath, alreadyInstalled: true };
   }
