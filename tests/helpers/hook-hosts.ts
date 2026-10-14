@@ -338,6 +338,7 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   'a workdir that exists': { document: 'none', audit: 'allow' },
   'a workdir that does not exist': REQUESTED_UNUSABLE,
   'a blank workdir': MALFORMED,
+  'a workdir in Windows namespace form': REQUESTED_UNUSABLE,
 };
 
 const ANSWERED_OUTCOMES: Readonly<Record<string, HookOutcome>> = {
@@ -1277,6 +1278,10 @@ const HOST_SPECS: readonly HostSpec[] = [
         stdin: hermesPayload(fixture, 'missing-dir'),
       },
       { name: 'a blank workdir', stdin: hermesPayload(fixture, '') },
+      {
+        name: 'a workdir in Windows namespace form',
+        stdin: hermesPayload(fixture, `\\\\?\\${fixture.project}`),
+      },
     ],
   },
 ];

@@ -1,15 +1,12 @@
-import { resolve } from 'node:path';
-import type { IntegrationDenial } from '@/core/denial';
-import type { Environment } from '@/core/environment';
-import { firstTrustedRoot, getToolRoute, outputCwdDenial, outputFailedClosed } from '@/gate/intake';
-import type { CommandToolKind, ToolCallContext } from '@/gate/invocation';
-import { getStandardHookContext, runConfiguredHookAdapter } from '@/hosts/hook/common';
+import { getToolRoute } from '@/gate/intake';
+import type { CommandToolKind } from '@/gate/invocation';
+import { getToolCwdHookContext, runConfiguredHookAdapter } from '@/hosts/hook/common';
 import { HERMES_AGENT_HOOK_EVENT } from '@/hosts/hook/constants';
 
 interface HermesAgentHookInput {
   hook_event_name: string;
   tool_name?: unknown;
-  tool_input?: unknown;
+  tool_input?: Record<string, unknown>;
   session_id?: string;
   cwd?: string;
 }
@@ -28,37 +25,10 @@ export async function runHermesAgentHook(): Promise<void> {
       input: input.tool_input,
       route: getToolRoute(toolName, HERMES_AGENT_COMMAND_TOOLS),
     }),
-    getContext: resolveHermesAgentContext,
+    getContext: getToolCwdHookContext('workdir', HERMES_AGENT_COMMAND_TOOLS, {
+      emptyMeansSessionCwd: false,
+      allowOutsideSessionCwd: true,
+    }),
     getSessionId: (input) => input.session_id,
   });
-}
-
-function resolveHermesAgentContext(
-  input: HermesAgentHookInput,
-  toolInput: unknown,
-  toolName: string,
-  outputDeny: (denial: IntegrationDenial) => void,
-  environment: Environment,
-): ToolCallContext | null {
-  const context = getStandardHookContext(input, toolInput, toolName, outputDeny, environment);
-  if (!context) return null;
-  if (!toolInput || typeof toolInput !== 'object' || Array.isArray(toolInput)) return context;
-  if (!Object.hasOwn(toolInput, 'workdir')) return context;
-
-  const workdir = (toolInput as Record<string, unknown>).workdir;
-  if (typeof workdir !== 'string' || workdir.trim() === '') {
-    outputFailedClosed(outputDeny, toolInput, toolName);
-    return null;
-  }
-
-  const executionCwd = firstTrustedRoot([resolve(context.configCwd, workdir)], environment.paths);
-  if (!executionCwd) {
-    outputCwdDenial(outputDeny, toolInput, toolName, {
-      directory: 'requested',
-      problem: 'unusable',
-      cwd: workdir,
-    });
-    return null;
-  }
-  return { ...context, executionCwd };
 }
