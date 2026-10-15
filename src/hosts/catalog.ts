@@ -1,5 +1,4 @@
 type RuntimeMetadata = {
-  order: number;
   displayName?: string;
   flags: readonly [string, string];
   legacyFlags?: readonly string[];
@@ -8,7 +7,6 @@ type RuntimeMetadata = {
 };
 
 type InstallMetadata = {
-  order: number;
   flag: string;
   artifactKind: 'plugin' | 'extension' | 'hook config' | 'package';
   probeCommand: readonly [string, ...string[]];
@@ -17,7 +15,6 @@ type InstallMetadata = {
 type IntegrationCatalogEntry = {
   id: string;
   displayName: string;
-  doctorOrder: number;
   runtime?: RuntimeMetadata;
   install: InstallMetadata;
 };
@@ -36,15 +33,12 @@ const catalog = [
   {
     id: 'antigravity-cli',
     displayName: 'Antigravity CLI',
-    doctorOrder: 3,
     runtime: {
-      order: 1,
       flags: ['-ac', '--agy-cli'],
       description: 'Run as Antigravity CLI PreToolUse hook',
       legacyTopLevelFlags: [],
     },
     install: {
-      order: 2,
       flag: '--agy-cli',
       artifactKind: 'hook config',
       probeCommand: ['agy', '--version'],
@@ -53,9 +47,7 @@ const catalog = [
   {
     id: 'claude-code',
     displayName: 'Claude Code',
-    doctorOrder: 1,
     runtime: {
-      order: 2,
       displayName: 'Coding CLI',
       flags: ['-cc', '--coding-cli'],
       legacyFlags: ['--claude-code'],
@@ -63,7 +55,6 @@ const catalog = [
       legacyTopLevelFlags: ['-cc', '--claude-code'],
     },
     install: {
-      order: 3,
       flag: '--claude-code',
       artifactKind: 'plugin',
       probeCommand: ['claude', '--version'],
@@ -72,15 +63,12 @@ const catalog = [
   {
     id: 'codex',
     displayName: 'Codex',
-    doctorOrder: 4,
     runtime: {
-      order: 3,
       flags: ['-cx', '--codex'],
       description: 'Run as a Codex PreToolUse hook',
       legacyTopLevelFlags: [],
     },
     install: {
-      order: 4,
       flag: '--codex',
       artifactKind: 'plugin',
       probeCommand: ['codex', '--version'],
@@ -89,15 +77,12 @@ const catalog = [
   {
     id: 'copilot-cli',
     displayName: 'GitHub Copilot CLI',
-    doctorOrder: 10,
     runtime: {
-      order: 8,
       flags: ['-cp', '--copilot-cli'],
       description: 'Run as GitHub Copilot CLI PreToolUse hook',
       legacyTopLevelFlags: ['-cp', '--copilot-cli'],
     },
     install: {
-      order: 10,
       flag: '--copilot-cli',
       artifactKind: 'plugin',
       probeCommand: ['copilot', '--binary-version'],
@@ -106,15 +91,12 @@ const catalog = [
   {
     id: 'gemini-cli',
     displayName: 'Gemini CLI',
-    doctorOrder: 9,
     runtime: {
-      order: 7,
       flags: ['-gc', '--gemini-cli'],
       description: 'Run as Gemini CLI BeforeTool hook',
       legacyTopLevelFlags: ['-gc', '--gemini-cli'],
     },
     install: {
-      order: 9,
       flag: '--gemini-cli',
       artifactKind: 'extension',
       probeCommand: ['gemini', '--version'],
@@ -123,15 +105,12 @@ const catalog = [
   {
     id: 'grok-build',
     displayName: 'Grok Build',
-    doctorOrder: 11,
     runtime: {
-      order: 9,
       flags: ['-gb', '--grok-build'],
       description: 'Run as Grok Build PreToolUse hook',
       legacyTopLevelFlags: [],
     },
     install: {
-      order: 11,
       flag: '--grok-build',
       artifactKind: 'hook config',
       probeCommand: ['grok', '--version'],
@@ -140,15 +119,12 @@ const catalog = [
   {
     id: 'hermes-agent',
     displayName: 'Hermes Agent',
-    doctorOrder: 12,
     runtime: {
-      order: 10,
       flags: ['-ha', '--hermes-agent'],
       description: 'Run as Hermes Agent pre_tool_call hook',
       legacyTopLevelFlags: [],
     },
     install: {
-      order: 12,
       flag: '--hermes-agent',
       artifactKind: 'plugin',
       probeCommand: ['hermes', '--version'],
@@ -157,15 +133,12 @@ const catalog = [
   {
     id: 'kimi-code',
     displayName: 'Kimi Code',
-    doctorOrder: 13,
     runtime: {
-      order: 11,
       flags: ['-kc', '--kimi-code'],
       description: 'Run as Kimi Code PreToolUse hook',
       legacyTopLevelFlags: [],
     },
     install: {
-      order: 13,
       flag: '--kimi-code',
       artifactKind: 'hook config',
       probeCommand: ['kimi', '--version'],
@@ -174,9 +147,7 @@ const catalog = [
   {
     id: 'openclaw',
     displayName: 'OpenClaw',
-    doctorOrder: 14,
     install: {
-      order: 14,
       flag: '--openclaw',
       artifactKind: 'plugin',
       probeCommand: ['openclaw', '--version'],
@@ -185,9 +156,7 @@ const catalog = [
   {
     id: 'opencode',
     displayName: 'OpenCode',
-    doctorOrder: 15,
     install: {
-      order: 15,
       flag: '--opencode',
       artifactKind: 'plugin',
       probeCommand: ['opencode', '--version'],
@@ -196,9 +165,7 @@ const catalog = [
   {
     id: 'pi',
     displayName: 'Pi',
-    doctorOrder: 16,
     install: {
-      order: 16,
       flag: '--pi',
       artifactKind: 'package',
       probeCommand: ['pi', '--version'],
@@ -207,15 +174,12 @@ const catalog = [
   {
     id: 'cursor',
     displayName: 'Cursor',
-    doctorOrder: 5,
     runtime: {
-      order: 4,
       flags: ['-cu', '--cursor'],
       description: 'Run as Cursor preToolUse hook',
       legacyTopLevelFlags: [],
     },
     install: {
-      order: 5,
       flag: '--cursor',
       artifactKind: 'hook config',
       probeCommand: ['cursor', '--version'],
@@ -224,9 +188,7 @@ const catalog = [
   {
     id: 'deepseek-harness',
     displayName: 'DeepSeek Harness',
-    doctorOrder: 6,
     install: {
-      order: 6,
       flag: '--deepseek-harness',
       artifactKind: 'package',
       probeCommand: DEEPSEEK_HARNESS_NPM_PROBE,
@@ -235,15 +197,12 @@ const catalog = [
   {
     id: 'devin',
     displayName: 'Devin CLI',
-    doctorOrder: 7,
     runtime: {
-      order: 5,
       flags: ['-dv', '--devin'],
       description: 'Run as Devin CLI PreToolUse hook',
       legacyTopLevelFlags: [],
     },
     install: {
-      order: 7,
       flag: '--devin',
       artifactKind: 'hook config',
       probeCommand: ['devin', '--version'],
@@ -252,15 +211,12 @@ const catalog = [
   {
     id: 'droid',
     displayName: 'Factory Droid',
-    doctorOrder: 8,
     runtime: {
-      order: 6,
       flags: ['-fd', '--droid'],
       description: 'Run as Factory Droid PreToolUse hook',
       legacyTopLevelFlags: [],
     },
     install: {
-      order: 8,
       flag: '--droid',
       artifactKind: 'hook config',
       probeCommand: ['droid', '--version'],
@@ -269,9 +225,7 @@ const catalog = [
   {
     id: 'amp',
     displayName: 'Amp Code',
-    doctorOrder: 2,
     install: {
-      order: 1,
       flag: '--amp',
       artifactKind: 'plugin',
       probeCommand: ['amp', '--version'],
@@ -283,15 +237,16 @@ export type IntegrationId = (typeof catalog)[number]['id'];
 type RuntimeEntry = Extract<(typeof catalog)[number], { runtime: RuntimeMetadata }>;
 export type RuntimeHookIntegrationId = RuntimeEntry['id'];
 
-export const doctorIntegrationOrder = catalog
+const catalogByDisplayName = catalog
   .slice()
-  .sort((a, b) => a.doctorOrder - b.doctorOrder)
-  .map((integration) => integration.id);
+  .sort((a, b) => a.displayName.localeCompare(b.displayName, 'en'));
 
-export const runtimeHookIntegrationMetadata = catalog
+export const doctorIntegrationOrder = catalogByDisplayName
+  .map((integration) => integration.id)
+  .sort((a, b) => Number(b === 'claude-code') - Number(a === 'claude-code'));
+
+export const runtimeHookIntegrationMetadata = catalogByDisplayName
   .filter((integration): integration is RuntimeEntry => 'runtime' in integration)
-  .slice()
-  .sort((a, b) => a.runtime.order - b.runtime.order)
   .map((integration) => ({
     id: integration.id,
     displayName:
@@ -304,11 +259,10 @@ export const runtimeHookIntegrationMetadata = catalog
     legacyTopLevelFlags: integration.runtime.legacyTopLevelFlags,
   }));
 
-export const installIntegrationMetadata = catalog
-  .slice()
-  .sort((a, b) => a.install.order - b.install.order)
-  .map((integration) => ({ id: integration.id, ...integration.install }))
-  .map(({ order: _, ...integration }) => integration);
+export const installIntegrationMetadata = catalogByDisplayName.map((integration) => ({
+  id: integration.id,
+  ...integration.install,
+}));
 
 export const integrationDisplayNames = Object.fromEntries(
   catalog.map((integration) => [integration.id, integration.displayName]),

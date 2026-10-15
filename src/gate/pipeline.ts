@@ -16,6 +16,7 @@ import {
   REASON_COMMAND_ANALYSIS_LIMIT,
   REASON_RECURSION_LIMIT,
   REASON_SAFETY_NET_FAILED_CLOSED,
+  REASON_STRICT_UNPARSEABLE,
   REASON_STRUCTURAL_COMMAND_VALIDATION_LIMIT,
 } from '@/gate/analyzer/reasons';
 import type { SemanticFacts } from '@/gate/facts';
@@ -35,6 +36,7 @@ import {
   createSemanticFacts,
   getCommandSyntaxFact,
   StructuralShellSyntaxLimitError,
+  UnparseableCommandError,
 } from '@/gate/guards/semantic-facts';
 import { resolveCanonicalCwd } from '@/gate/intake';
 import { createToolInvocation, type ToolInvocation } from '@/gate/invocation';
@@ -298,9 +300,6 @@ export function evaluateGuard(
             environment: options.environment,
             protectedGitMetadata,
             effectiveCapabilities: modes.capabilities,
-            strict: modes.strict,
-            paranoidRm: modes.paranoidRm,
-            paranoidInterpreters: modes.paranoidInterpreters,
             worktreeMode: modes.worktreeMode,
             budget,
 
@@ -452,14 +451,17 @@ function failedClosedEvaluation(
   command: string | null | undefined,
   cause?: unknown,
 ): GuardEvaluation {
-  const isAnalysisLimit =
-    cause instanceof AnalysisLimit || cause instanceof StructuralShellSyntaxLimitError;
+  const denial =
+    cause instanceof UnparseableCommandError
+      ? { reason: REASON_STRICT_UNPARSEABLE, ruleId: 'analysis.strict-unparseable' }
+      : cause instanceof AnalysisLimit || cause instanceof StructuralShellSyntaxLimitError
+        ? { reason: REASON_COMMAND_ANALYSIS_LIMIT, ruleId: 'analysis.limit' }
+        : { reason: REASON_SAFETY_NET_FAILED_CLOSED, ruleId: 'analysis.failed-closed' };
   return {
     stage,
     decision: {
       kind: 'deny',
-      reason: isAnalysisLimit ? REASON_COMMAND_ANALYSIS_LIMIT : REASON_SAFETY_NET_FAILED_CLOSED,
-      ruleId: isAnalysisLimit ? 'analysis.limit' : 'analysis.failed-closed',
+      ...denial,
       intent: 'stop_and_explain',
       ...(command ? { evidence: { command, segment: command } } : {}),
     },

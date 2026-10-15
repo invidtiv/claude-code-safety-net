@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { runExplain } from '@/cli/explain/run';
+import { REASON_STRICT_UNPARSEABLE } from '@/gate/analyzer/reasons';
 import type { ExplainResult } from '@/gate/explain';
 import type { TraceStep } from '@/gate/trace';
 import {
@@ -263,6 +264,28 @@ describe('explain reports an analysis budget breach as bounded output', () => {
       30_000,
     );
   }
+});
+
+describe('explain refuses a command it cannot parse with the reason, not a crash', () => {
+  test('as human output', async () => {
+    const outcome = await explain({ args: ['explain', 'echo ${'] });
+
+    expect(outcome).toMatchObject({
+      stdout: '',
+      stderr: `${REASON_STRICT_UNPARSEABLE}\n`,
+      exitCode: 1,
+    });
+  }, 30_000);
+
+  test('as JSON', async () => {
+    const outcome = await explain({ args: ['explain', '--json', 'rm -rf / ${'] });
+
+    expect(outcome).toMatchObject({
+      stdout: `${JSON.stringify({ error: REASON_STRICT_UNPARSEABLE })}\n`,
+      stderr: '',
+      exitCode: 1,
+    });
+  }, 30_000);
 });
 
 describe('explain flags', () => {

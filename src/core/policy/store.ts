@@ -628,7 +628,8 @@ function readPolicyConfig(
   const file = readPolicyFile(path, home);
   if (!file.exists) {
     const embedded = (globalThis as Record<string, unknown>).__CC_SAFETY_NET_EMBEDDED_POLICY__;
-    if (!isRecord(embedded)) return { policy: createEmptyPolicy(), errors: [] };
+    if (!isRecord(embedded))
+      return { policy: normalizePolicyConfig(createDefaultGuiPolicy()), errors: [] };
     const gui = normalizeGuiPolicy(embedded, home);
     return {
       policy: normalizePolicyConfig(gui),
@@ -639,7 +640,7 @@ function readPolicyConfig(
   }
   if (file.parsed === undefined) {
     return {
-      policy: createEmptyPolicy(),
+      policy: normalizePolicyConfig(createDefaultGuiPolicy()),
       errors: file.errors,
       ...(file.fallback ? { fallback: file.fallback } : {}),
     };
@@ -668,22 +669,6 @@ export function resolveSecretDisabledRules(overrides: Record<string, 'on' | 'off
       ...entries.flatMap(([id, value]) => (value === 'off' ? [id] : [])),
     ]),
   ];
-}
-
-function createEmptyPolicy(): PartialPolicy {
-  return {
-    safety: {},
-    worktreeMode: false,
-    destructiveCommandProtectionEnabled: true,
-    destructiveCommandRuleOverrides: {},
-    destructiveCommandAllowPaths: [],
-    secretProtection: {
-      enabled: true,
-      disabledRules: resolveSecretDisabledRules({}),
-      denyPaths: [],
-      allowPaths: [],
-    },
-  };
 }
 
 function normalizePolicyConfig(config: GuiPolicy): PartialPolicy {

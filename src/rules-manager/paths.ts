@@ -1,4 +1,4 @@
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { Environment } from '@/core/environment';
 import {
   getPolicyFilesystemTargetForPath,
@@ -10,7 +10,6 @@ import {
   getProjectRulesConfigPath,
   getUserPolicyFilesystemScope,
   getUserRulesConfigPath,
-  type RulesPolicyOptions,
 } from '@/core/policy/paths';
 import type { SyncRulesConfigOptions } from './types';
 
@@ -29,10 +28,6 @@ export interface ScopePaths {
 /** @internal */
 export function getRulesLockPathForConfigPath(configPath: string): string {
   return join(dirname(configPath), RULES_LOCK_FILE);
-}
-
-export function getLegacyProjectRulesConfigPath(options: Partial<RulesPolicyOptions> = {}): string {
-  return resolve(options.cwd ?? process.cwd(), '.safety-net.json');
 }
 
 export function getScopePaths(

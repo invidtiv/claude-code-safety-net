@@ -80,14 +80,11 @@ export function explainCommand(
   const context = resolveCommandAnalysisContext({
     policySnapshot: snapshot,
     effectiveCapabilities: modes.capabilities,
-    strict: modes.strict,
-    paranoidRm: modes.paranoidRm,
-    paranoidInterpreters: modes.paranoidInterpreters,
     worktreeMode: modes.worktreeMode,
   });
   const configuration = {
     effectiveLevel: context.effectiveLevel,
-    selectedPreset: snapshot.policy.safety.level ?? 'standard',
+    selectedPreset: snapshot.policy.safety.level,
     ...(snapshot.policyScopes ? { safetyPresetScope: snapshot.policyScopes.levelScope } : {}),
     effectiveCapabilities: context.effectiveCapabilities,
     destructiveCommandRuleOverrides: snapshot.policy.destructiveCommandRuleOverrides,
@@ -296,7 +293,17 @@ function identifyModeGatedCandidate(
     environment,
     dependencies: {
       loadPolicySnapshot: () => candidateSnapshot,
-      getModes: () => ({ ...modes, strict: true, paranoidRm: true, paranoidInterpreters: true }),
+      getModes: () => ({
+        ...modes,
+        strict: true,
+        paranoidRm: true,
+        paranoidInterpreters: true,
+        capabilities: {
+          fail_closed: { ...modes.capabilities.fail_closed, enabled: true },
+          paranoid_rm: { ...modes.capabilities.paranoid_rm, enabled: true },
+          paranoid_interpreters: { ...modes.capabilities.paranoid_interpreters, enabled: true },
+        },
+      }),
       findSensitiveTarget: () => null,
     },
   });
@@ -328,12 +335,10 @@ function sanitizeCustomRule(rule: ExplainResult['customRule']): ExplainResult['c
 }
 
 function projectExplainTrace(trace: CommandTrace): ExplainTrace {
-  const steps = trace.events.flatMap((event) =>
-    event.kind === 'step' && event.scope === 'global' ? [event.step] : [],
-  );
+  const steps = trace.events.flatMap((event) => (event.scope === 'global' ? [event.step] : []));
   const segments = new Map<number, ExplainTrace['segments'][number]>();
   for (const event of trace.events) {
-    if (event.kind !== 'step' || event.scope !== 'segment') continue;
+    if (event.scope !== 'segment') continue;
     const segment = segments.get(event.segmentIndex) ?? { index: event.segmentIndex, steps: [] };
     segment.steps.push(event.step);
     segments.set(event.segmentIndex, segment);

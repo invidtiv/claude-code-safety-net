@@ -5,6 +5,7 @@ import { LIMITS, REASON_SAFETY_NET_FAILED_CLOSED } from '@/core/budget';
 import { createCwdDenial } from '@/core/denial';
 import { createProcessEnvironment } from '@/core/environment';
 import { getUserPolicyPath } from '@/core/policy/paths';
+import { REASON_STRICT_UNPARSEABLE } from '@/gate/analyzer/reasons';
 import { runAntigravityCliHook as portedAntigravityCliHook } from '@/hosts/antigravity-cli/hook';
 import { runClaudeCodeHook as portedClaudeCodeHook } from '@/hosts/claude-code/hook';
 import { runCodexHook as portedCodexHook } from '@/hosts/codex/hook';
@@ -102,6 +103,12 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   'a command past the structural shell-syntax limit': {
     document: 'deny',
     audit: 'deny',
+  },
+  'a command that cannot be parsed': {
+    document: 'deny',
+    audit: 'deny',
+    ruleId: 'analysis.strict-unparseable',
+    reason: REASON_STRICT_UNPARSEABLE,
   },
   'a command that breaches an analysis limit with debug output on': {
     document: 'deny',
@@ -338,6 +345,7 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   'a workdir that exists': { document: 'none', audit: 'allow' },
   'a workdir that does not exist': REQUESTED_UNUSABLE,
   'a blank workdir': MALFORMED,
+  'a workdir in Windows namespace form': REQUESTED_UNUSABLE,
 };
 
 const ANSWERED_OUTCOMES: Readonly<Record<string, HookOutcome>> = {
@@ -1277,6 +1285,10 @@ const HOST_SPECS: readonly HostSpec[] = [
         stdin: hermesPayload(fixture, 'missing-dir'),
       },
       { name: 'a blank workdir', stdin: hermesPayload(fixture, '') },
+      {
+        name: 'a workdir in Windows namespace form',
+        stdin: hermesPayload(fixture, `\\\\?\\${fixture.project}`),
+      },
     ],
   },
 ];
@@ -1362,6 +1374,7 @@ function commonRows(spec: HostSpec, fixture: HookFixture): Omit<HookRow, 'expect
       name: 'a command past the structural shell-syntax limit',
       stdin: inProject(STRUCTURAL_LIMIT_COMMAND),
     },
+    { name: 'a command that cannot be parsed', stdin: inProject('echo ${') },
     {
       name: 'a command that breaches an analysis limit with debug output on',
       stdin: inProject(BREACH_COMMAND),

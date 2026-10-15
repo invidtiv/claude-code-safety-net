@@ -2,7 +2,10 @@ import type { AuditErrorCode, AuditFailureStage } from '@/core/audit';
 import { AnalysisLimit, LIMITS } from '@/core/budget';
 import type { Environment } from '@/core/environment';
 import { ToolInputLimitError } from '@/core/tool-input';
-import { StructuralShellSyntaxLimitError } from '@/gate/guards/semantic-facts';
+import {
+  StructuralShellSyntaxLimitError,
+  UnparseableCommandError,
+} from '@/gate/guards/semantic-facts';
 import type { ToolInvocation } from '@/gate/invocation';
 import {
   evaluateGuard,
@@ -70,5 +73,6 @@ function classifyAuditError(cause: unknown): AuditErrorCode {
   if (cause instanceof AnalysisLimit) return LIMITS[cause.kind].errorCode;
   if (cause instanceof ToolInputLimitError) return 'tool-input-limit';
   if (cause instanceof StructuralShellSyntaxLimitError) return 'structural-shell-syntax-limit';
+  if (cause instanceof UnparseableCommandError) return 'unparseable-command';
   return 'unexpected-error';
 }

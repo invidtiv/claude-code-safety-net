@@ -22,7 +22,8 @@ export interface AnalyzeResult {
 
 export type EnvironmentContext = Environment;
 
-/** @internal */
+export type AnalysisModeFlag = 'strict' | 'paranoidRm' | 'paranoidInterpreters';
+
 export interface AnalyzeOptions {
   policySnapshot: PolicySnapshot;
 
@@ -47,7 +48,7 @@ export interface AnalyzeOptions {
   trace?: CommandTraceContext;
 }
 
-export type AnalyzeInput = AnalyzeOptions & {
+export type AnalyzeInput = Omit<AnalyzeOptions, AnalysisModeFlag> & {
   effectiveCapabilities: EffectiveSafetyCapabilities;
   environment: EnvironmentContext;
   protectedGitMetadata: ProtectedGitMetadata | null;

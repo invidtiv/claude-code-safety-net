@@ -251,7 +251,7 @@ const RESOLVED: readonly Resolved[] = [
   {
     behavior: 'the debug variable changes no capability',
     env: { CC_SAFETY_NET_DEBUG: '1' },
-    policy: { safety: {} },
+    policy: { safety: { level: 'standard' } },
     strict: false,
     paranoidRm: false,
     paranoidInterpreters: false,
@@ -415,7 +415,7 @@ const VALUE_CHOICES = [
 
 const LEVELS = ['standard', 'strict', 'paranoid'] as const;
 const TRISTATE = [undefined, true, false] as const;
-const POLICY_SHAPES = ['none', 'plain', 'safetyEmpty', 'safetyLevel'] as const;
+const POLICY_SHAPES = ['none', 'plain', 'safety'] as const;
 
 function sampledPolicy(random: () => number): PolicyInput {
   const shape = pick(random, POLICY_SHAPES);
@@ -426,7 +426,7 @@ function sampledPolicy(random: () => number): PolicyInput {
   return {
     ...workflow,
     safety: {
-      ...(shape === 'safetyLevel' ? { level: pick(random, LEVELS) } : {}),
+      level: pick(random, LEVELS),
       ...(random() < 0.75
         ? {
             overrides: {

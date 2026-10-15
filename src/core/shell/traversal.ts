@@ -10,13 +10,11 @@ export function* walkCommandViews(program: CommandProgram): Generator<CommandVie
 
 /** @internal */
 export function projectCommandViews(program: CommandProgram): readonly CommandView[] {
-  return Object.freeze([...walkCommandViews(program)]);
+  return [...walkCommandViews(program)];
 }
 
 export function projectSegmentWords(program: CommandProgram): readonly (readonly string[])[] {
-  return Object.freeze(
-    projectCommandViews(program).map((view) => Object.freeze(view.words.map((word) => word.text))),
-  );
+  return projectCommandViews(program).map((view) => view.words.map((word) => word.text));
 }
 
 export function parseSimpleWords(source: string): string[] | null {

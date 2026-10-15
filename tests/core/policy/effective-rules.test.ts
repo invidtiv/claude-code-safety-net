@@ -110,7 +110,7 @@ const BASE_POLICY: EffectivePolicy = {
   rules: [],
   transparentWrappers: [],
   commandTools: [],
-  safety: {},
+  safety: { level: 'standard' },
   worktreeMode: false,
   destructiveCommandProtectionEnabled: true,
   destructiveCommandRuleOverrides: {},
@@ -399,20 +399,13 @@ const SNAPSHOT = createPolicySnapshot({
   destructiveCommandRuleOverrides: MIXED_OVERRIDES,
 });
 
-const contextWith = (
-  effectiveCapabilities: EffectiveSafetyCapabilities,
-  options: {
-    strict?: boolean;
-    paranoidRm?: boolean;
-    paranoidInterpreters?: boolean;
-    worktreeMode?: boolean;
-  },
-) => resolveCommandAnalysisContext({ policySnapshot: SNAPSHOT, effectiveCapabilities, ...options });
+const contextWith = (effectiveCapabilities: EffectiveSafetyCapabilities, worktreeMode?: boolean) =>
+  resolveCommandAnalysisContext({ policySnapshot: SNAPSHOT, effectiveCapabilities, worktreeMode });
 
 describe('the analysis context an evaluation runs under', () => {
-  test('with no options the capabilities pass through unchanged and worktree mode is off', () => {
+  test('the capabilities pass through unchanged and worktree mode is off by default', () => {
     const capabilities = capabilitiesFor('the strict preset');
-    const context = contextWith(capabilities, {});
+    const context = contextWith(capabilities);
     expect(context.effectiveCapabilities).toEqual(capabilities);
     expect(context.strict).toBeTrue();
     expect(context.paranoidRm).toBeFalse();
@@ -421,51 +414,15 @@ describe('the analysis context an evaluation runs under', () => {
     expect(context.effectiveLevel).toBe('strict');
   });
 
-  test('an option that repeats what the capability already said leaves its provenance alone', () => {
-    const capabilities = capabilitiesFor('the strict preset');
-    expect(contextWith(capabilities, { strict: true }).effectiveCapabilities.fail_closed).toEqual(
-      capabilities.fail_closed,
-    );
-  });
-
-  test('an option that contradicts the capability replaces it and names itself in the trail', () => {
-    const capabilities = capabilitiesFor('the strict preset');
-    expect(contextWith(capabilities, { strict: false }).effectiveCapabilities.fail_closed).toEqual({
-      enabled: false,
-      source: 'capability_override',
-      sources: [...capabilities.fail_closed.sources, 'analysis options.strict'],
-    });
-  });
-
-  test('every option combination resolves consistently with the capabilities it started from', () => {
-    const TRISTATE = [undefined, true, false] as const;
-    const combinations = TRISTATE.flatMap((strict) =>
-      TRISTATE.flatMap((paranoidRm) =>
-        TRISTATE.flatMap((paranoidInterpreters) =>
-          TRISTATE.map((worktreeMode) => ({
-            strict,
-            paranoidRm,
-            paranoidInterpreters,
-            worktreeMode,
-          })),
-        ),
-      ),
-    );
-    expect(combinations).toHaveLength(81);
+  test('every capability set resolves its flags and level from the capabilities alone', () => {
     for (const capabilities of CAPABILITIES) {
-      for (const options of combinations) {
-        const context = contextWith(capabilities, options);
-        expect(context.strict).toBe(options.strict ?? capabilities.fail_closed.enabled);
-        expect(context.paranoidRm).toBe(options.paranoidRm ?? capabilities.paranoid_rm.enabled);
-        expect(context.paranoidInterpreters).toBe(
-          options.paranoidInterpreters ?? capabilities.paranoid_interpreters.enabled,
-        );
-        expect(context.worktreeMode).toBe(options.worktreeMode ?? false);
-        expect(context.effectiveCapabilities.fail_closed.enabled).toBe(context.strict);
-        expect(context.effectiveCapabilities.paranoid_rm.enabled).toBe(context.paranoidRm);
-        expect(context.effectiveCapabilities.paranoid_interpreters.enabled).toBe(
-          context.paranoidInterpreters,
-        );
+      for (const worktreeMode of [undefined, true, false]) {
+        const context = contextWith(capabilities, worktreeMode);
+        expect(context.strict).toBe(capabilities.fail_closed.enabled);
+        expect(context.paranoidRm).toBe(capabilities.paranoid_rm.enabled);
+        expect(context.paranoidInterpreters).toBe(capabilities.paranoid_interpreters.enabled);
+        expect(context.worktreeMode).toBe(worktreeMode ?? false);
+        expect(context.effectiveCapabilities).toEqual(capabilities);
         expect(context.effectiveLevel).toBe(
           deriveEffectiveSafetyLevel({
             failClosed: context.strict,

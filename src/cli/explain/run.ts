@@ -7,7 +7,10 @@ import {
 import { AnalysisLimit, LIMITS } from '@/core/budget';
 import type { Environment } from '@/core/environment';
 import { ToolInputLimitError } from '@/core/tool-input';
-import { StructuralShellSyntaxLimitError } from '@/gate/guards/semantic-facts';
+import {
+  StructuralShellSyntaxLimitError,
+  UnparseableCommandError,
+} from '@/gate/guards/semantic-facts';
 import { GuardEvaluationError } from '@/gate/pipeline';
 
 function writeStdoutLine(text: string): Promise<void> {
@@ -46,6 +49,7 @@ export async function runExplain(environment: Environment, args: string[]): Prom
 
 function analysisLimitMessage(cause: unknown): string | undefined {
   if (cause instanceof StructuralShellSyntaxLimitError) return cause.message;
+  if (cause instanceof UnparseableCommandError) return cause.message;
   if (cause instanceof ToolInputLimitError) return cause.message;
   if (
     cause instanceof AnalysisLimit &&

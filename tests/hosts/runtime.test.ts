@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AnalysisLimit, REASON_SAFETY_NET_FAILED_CLOSED } from '@/core/budget';
 import { createProcessEnvironment } from '@/core/environment';
+import { REASON_STRICT_UNPARSEABLE } from '@/gate/analyzer/reasons';
 import { ToolInputLimitError as PortedToolInputLimitError } from '@/core/tool-input';
 import { evaluateRuntimeGuard as portedEvaluateRuntimeGuard } from '@/hosts/runtime';
 import { withEnv } from '../helpers';
@@ -104,6 +105,22 @@ const ROWS: readonly Row[] = [
       decision: 'deny',
       failureStage: 'secret-protection',
       errorCode: 'structural-shell-syntax-limit',
+    },
+  },
+  {
+    name: 'a command that cannot be parsed',
+    command: 'echo ${',
+    auditAllowed: false,
+    throws: true,
+    lines: 1,
+    stage: 'secret-protection',
+    entry: {
+      decision: 'deny',
+      command: 'echo ${',
+      reason: REASON_STRICT_UNPARSEABLE,
+      ruleId: 'analysis.strict-unparseable',
+      failureStage: 'secret-protection',
+      errorCode: 'unparseable-command',
     },
   },
   {

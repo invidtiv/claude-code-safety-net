@@ -41,7 +41,7 @@ const SNAPSHOT: PolicySnapshot = Object.freeze({
     rules: Object.freeze([]),
     transparentWrappers: Object.freeze([]),
     commandTools: Object.freeze([]),
-    safety: Object.freeze({}),
+    safety: Object.freeze({ level: 'standard' }),
     worktreeMode: false,
     destructiveCommandProtectionEnabled: true,
     destructiveCommandRuleOverrides: Object.freeze({}),

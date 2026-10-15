@@ -1,5 +1,5 @@
 - Before filing an issue, read `CONTRIBUTING.md` and follow its reporting rules.
-- Run focused tests during development, including the failing and passing tests required by Red-Green TDD.
+- Run focused tests during development, including the reproducing test for a behavior change.
 - After all implementation changes, run `bun run check`. This is the required final check for lint, code comments, formatting, typecheck, knip, duplication, and tests. Do not run its components separately as additional final checks. A change that touches only Markdown skips it, as the pre-push hook and CI do, unless it touches `skills/cc-safety-net/SKILL.md` or `README.md`: the build bundles the skill into `dist/`, and tests read both.
 - Ignore the dist folder; it gets auto-rebuilt by lefthook's pre-commit hook.
 - Keep implementation modular; put tests in `tests/` mirroring `src/`, not colocated in `src/`.
@@ -71,14 +71,14 @@ a probe to a PR branch or `main`.
 
 ## Testing
 
-- A behavior change lands as a failing expectation first — a contract corpus row or a stated
-  assertion — then the fix. Re-recording a snapshot or editing the verdict table is never the
-  first step.
-- State what a test expects; do not record it. Snapshots (`toMatchSnapshot`) are permitted only for
-  the two output surfaces whose bytes are the contract: `explain` (`tests/cli/explain`) and
+- Behavior is pinned by the contract corpus (`tests/gate/behavioral-contract-cases.ts`,
+  `tests/gate/pipeline-contract-cases.ts`) and the hand-edited verdict table
+  `tests/fixtures/gate/harvested-verdicts.jsonl`. A behavior change lands as a failing row or
+  stated assertion first; a refactor leaves both unchanged and diffs `explain` output against
+  `main` (the `verify-ccsn` skill drives the real CLI).
+- Snapshots (`toMatchSnapshot`) are permitted only for `explain` (`tests/cli/explain`) and
   `doctor --json` (`tests/cli/doctor`).
-- `tests/fixtures/gate/harvested-verdicts.jsonl` is the readable verdict table, edited by hand. A
-  change that re-records a snapshot or flips a table row must name in its commit message which
+- A change that re-records a snapshot or flips a table row names in its commit message which
   entries changed and why, alongside the contract row that explains the flip.
 
 ## Scope Discipline

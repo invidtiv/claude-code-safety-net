@@ -45,8 +45,7 @@ export type TraceStep =
   | { type: 'error'; message: string; partial?: boolean };
 
 export type CommandTraceEvent = Readonly<
-  | { kind: 'step'; scope: 'global'; step: TraceStep }
-  | { kind: 'step'; scope: 'segment'; segmentIndex: number; step: TraceStep }
+  { scope: 'global'; step: TraceStep } | { scope: 'segment'; segmentIndex: number; step: TraceStep }
 >;
 
 export type CommandTrace = Readonly<{
@@ -62,20 +61,16 @@ export type CommandTraceContext = {
   recordSegment: (step: TraceStep, segmentIndex?: number) => void;
 };
 
-type RecorderOptions = {
-  maxEvents?: number;
-  maxTextLength?: number;
-  maxListLength?: number;
-  maxObjectProperties?: number;
-  maxDepth?: number;
-};
+const MAX_EVENTS = 512;
 
-type TraversalLimits = Readonly<{
-  maxTextLength: number;
-  maxListLength: number;
-  maxObjectProperties: number;
-  maxDepth: number;
-}>;
+const LIMITS = {
+  maxTextLength: 2_048,
+  maxListLength: 128,
+  maxObjectProperties: 128,
+  maxDepth: 16,
+} as const;
+
+type TraversalLimits = typeof LIMITS;
 
 const PROVIDER_HINTS = [
   'AKIA',
@@ -118,61 +113,32 @@ export function createCommandTraceContext(recorder: CommandTraceRecorder): Comma
       return nextSegmentIndex;
     },
     recordGlobal(step) {
-      recorder.record({ kind: 'step', scope: 'global', step });
+      recorder.record({ scope: 'global', step });
     },
     recordSegment(step, segmentIndex = context.currentSegmentIndex) {
       if (segmentIndex === undefined) return;
-      recorder.record({ kind: 'step', scope: 'segment', segmentIndex, step });
+      recorder.record({ scope: 'segment', segmentIndex, step });
     },
   };
   return context;
 }
 
-export function createCommandTraceRecorder(options: RecorderOptions = {}) {
+export function createCommandTraceRecorder() {
   const events: CommandTraceEvent[] = [];
-  const maxEvents = options.maxEvents ?? 512;
-  const limits = {
-    maxTextLength: options.maxTextLength ?? 2_048,
-    maxListLength: options.maxListLength ?? 128,
-    maxObjectProperties: options.maxObjectProperties ?? options.maxListLength ?? 128,
-    maxDepth: options.maxDepth ?? 16,
-  };
-  let result: CommandTrace | undefined;
   const sensitiveHashes = new Set<string>();
 
   return {
     record(event: CommandTraceEvent): void {
-      if (result) return;
-      if (!event || events.length >= maxEvents) return;
-      try {
-        events.push(deepFreeze(sanitizeEvent(event, limits, sensitiveHashes)));
-      } catch {}
+      if (events.length >= MAX_EVENTS) return;
+      collectSensitiveHashes(event.step, sensitiveHashes, LIMITS);
+      events.push({
+        ...event,
+        step: sanitizeValue(event.step, LIMITS, sensitiveHashes) as TraceStep,
+      });
     },
     finish(): CommandTrace {
-      if (result) return result;
-      result = deepFreeze({ events: Object.freeze(events) }) as CommandTrace;
-      return result;
+      return { events };
     },
-  };
-}
-
-function sanitizeEvent(
-  event: CommandTraceEvent,
-  limits: TraversalLimits,
-  sensitiveHashes: Set<string>,
-): CommandTraceEvent {
-  if (event.kind !== 'step') throw new TypeError('invalid trace event');
-  const scope = event.scope;
-  const step = event.step;
-  collectSensitiveHashes(step, sensitiveHashes, limits);
-  const sanitizedStep = sanitizeValue(step, limits, sensitiveHashes) as CommandTraceEvent['step'];
-  if (scope === 'global') return { kind: 'step', scope: 'global', step: sanitizedStep };
-  if (scope !== 'segment') throw new TypeError('invalid trace event scope');
-  return {
-    kind: 'step',
-    scope: 'segment',
-    segmentIndex: event.segmentIndex,
-    step: sanitizedStep,
   };
 }
 
@@ -310,12 +276,4 @@ function hashText(text: string): string {
     second = Math.imul(second ^ text.charCodeAt(text.length - index - 1), 16_777_619);
   }
   return `${first >>> 0}:${second >>> 0}:${text.length}`;
-}
-
-function deepFreeze<T>(value: T): T {
-  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
-    for (const child of Object.values(value)) deepFreeze(child);
-    Object.freeze(value);
-  }
-  return value;
 }
