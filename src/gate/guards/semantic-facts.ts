@@ -161,6 +161,10 @@ export function createSemanticFactStore(): SemanticFactStore {
   return {
     getShellSyntax,
     getCommandProgram,
+    readsAutoAsPowerShell: () =>
+      [...commandPrograms].some(
+        ([key, program]) => key.startsWith('auto\u0000') && program.dialect === 'powershell',
+      ),
   };
 }
 

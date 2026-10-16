@@ -886,19 +886,19 @@ export function behavioralContractCases(paths: {
     ...atStandardAndStrict(
       [
         [
-          'fails closed on a mid-word hash after a PowerShell selector in auto mode',
+          'blocks a home removal behind a mid-word hash that a PowerShell guess reads as a comment in auto mode',
           'Get-Content x#; rm -rf ~',
-          unparseableBlock,
+          homeRemovalBlock,
         ],
         [
-          'fails closed on a backslash-quote that PowerShell reads as a quote in auto mode',
+          'blocks a home removal between backslash-quotes that a PowerShell guess reads as quotes in auto mode',
           'echo \\"; rm -rf ~; echo \\"; Get-Content x',
-          unparseableBlock,
+          homeRemovalBlock,
         ],
         [
-          'fails closed on a backslash-apostrophe that PowerShell reads as a quote in auto mode',
+          'blocks a home removal between backslash-apostrophes that a PowerShell guess reads as quotes in auto mode',
           "echo \\'; rm -rf ~; echo \\'; Get-Content x",
-          unparseableBlock,
+          homeRemovalBlock,
         ],
         [
           'fails closed on a backslash-backtick that PowerShell reads as an escape in auto mode',
@@ -911,9 +911,29 @@ export function behavioralContractCases(paths: {
           unparseableBlock,
         ],
         [
-          'fails closed on a line continuation that PowerShell reads as a line break in auto mode',
+          'blocks a home removal joined by a line continuation that a PowerShell guess reads as a line break in auto mode',
           'Get-Content x; r\\\nm -rf ~',
-          unparseableBlock,
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal in an input process substitution that PowerShell reads as text in auto mode',
+          'Get-Content x; cat <(rm -rf ~)',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal in an output process substitution that PowerShell reads as text in auto mode',
+          'Get-Content x; echo >(rm -rf ~)',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal behind a mid-word hash in a nested shell body guessed as PowerShell',
+          "bash -c 'Get-Content x#; rm -rf ~'",
+          homeRemovalBlock,
+        ],
+        [
+          'allows a PowerShell comment after a selector in auto mode',
+          'Get-Content x # note',
+          { kind: 'allow' },
         ],
         ['allows a plain PowerShell selector in auto mode', 'Get-Content x', { kind: 'allow' }],
         [

@@ -14,6 +14,7 @@ export type CommandSyntaxFacts = {
 export type SemanticFactStore = {
   readonly getShellSyntax: (source: string, program?: CommandProgram) => GuardSyntax;
   readonly getCommandProgram: (source: string, dialect: ShellKind) => CommandProgram;
+  readonly readsAutoAsPowerShell: () => boolean;
 };
 
 export type SemanticFacts = {

@@ -312,6 +312,26 @@ export function evaluateGuard(
       options.trace,
     ),
   );
+  const readAsPosix =
+    invocation.route.shell === 'auto' && facts.store.readsAutoAsPowerShell()
+      ? () => {
+          options.trace?.restartSegments();
+          return {
+            ...evaluateGuard(
+              { ...invocation, route: { kind: 'command', shell: 'posix' } },
+              {
+                ...options,
+                dependencies: {
+                  ...options.dependencies,
+                  loadPolicySnapshot: () => snapshot,
+                  resolveGitMetadata: () => protectedGitMetadata,
+                },
+              },
+            ),
+            ...promoted,
+          };
+        }
+      : undefined;
   if (analysis.decision) {
     const unverifiedByStandardMode =
       !modes.strict &&
@@ -319,6 +339,10 @@ export function evaluateGuard(
         (analysis.decision.reason === REASON_DYNAMIC_SHELL_SOURCE &&
           !BARE_SHELL_READING_STDIN.test(analysis.decision.evidence?.segment ?? '') &&
           dangerousInTextMatch(invocation.command as string) === null));
+    const posixReading = unverifiedByStandardMode ? readAsPosix?.() : undefined;
+    if (posixReading?.decision.kind === 'deny' && !posixReading.decision.unverifiedByStandardMode) {
+      return posixReading;
+    }
     return {
       stage: 'command-analysis',
       ...reported,
@@ -328,7 +352,7 @@ export function evaluateGuard(
         : analysis.decision,
     };
   }
-  return { stage: 'command-analysis', ...reported, decision: { kind: 'allow' } };
+  return readAsPosix?.() ?? { stage: 'command-analysis', ...reported, decision: { kind: 'allow' } };
 }
 
 function promoteDeclaredCommandTool(

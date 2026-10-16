@@ -152,3 +152,20 @@ test('a literal for list records the later segments once per forked state', () =
     'custom-rules-check',
   ]);
 });
+
+test('a POSIX reading of a PowerShell guess records its match on the segment it blocks', () => {
+  const result = compareSides(fixture(), 'Get-Content x; cat <(rm -rf ~)');
+  expect(result.result).toBe('blocked');
+  const segments = (
+    result.trace as { segments: { index: number; steps: { type: string; matched?: boolean }[] }[] }
+  ).segments;
+  expect(segments.map((segment) => segment.index)).toStrictEqual([0, 1, 2]);
+  expect(segments[2]?.steps).toContainEqual(
+    expect.objectContaining({
+      type: 'rule-check',
+      rule: 'analyzer/rm.ts:analyzeRmMatch',
+      matched: true,
+    }),
+  );
+  expect(segments[2]?.steps.map((step) => step.type)).not.toContain('segment-skipped');
+});

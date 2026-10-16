@@ -57,6 +57,7 @@ export type CommandTraceContext = {
   flattenNested?: boolean;
   allocateSegment: () => number;
   getNextSegmentIndex: () => number;
+  restartSegments: () => void;
   recordGlobal: (step: TraceStep) => void;
   recordSegment: (step: TraceStep, segmentIndex?: number) => void;
 };
@@ -111,6 +112,9 @@ export function createCommandTraceContext(recorder: CommandTraceRecorder): Comma
     },
     getNextSegmentIndex() {
       return nextSegmentIndex;
+    },
+    restartSegments() {
+      nextSegmentIndex = 0;
     },
     recordGlobal(step) {
       recorder.record({ scope: 'global', step });
