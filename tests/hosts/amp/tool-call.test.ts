@@ -166,6 +166,27 @@ const ROWS: readonly Row[] = [
     lines: 1,
   },
   {
+    name: 'a shell secret read behind a harmless command key',
+    event: () => ({
+      tool: 'Bash',
+      input: { cmd: 'cat .env', command: 'ls .env' },
+      thread: { id: THREAD },
+    }),
+    contains: 'Rule: secret.basename.env',
+    rejected: true,
+    lines: 1,
+  },
+  {
+    name: 'a metadata-only shell command beside a secret read in the command key',
+    event: () => ({
+      tool: 'Bash',
+      input: { cmd: 'ls .env', command: 'cat .env' },
+      thread: { id: THREAD },
+    }),
+    rejected: false,
+    lines: 1,
+  },
+  {
     name: 'a shell redirect into the user policy file',
     event: () => shell("echo '{}' > ~/.cc-safety-net/policy.json"),
     contains: 'Rule: guard.policy-config',
