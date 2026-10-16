@@ -12,8 +12,10 @@ export { DEFAULT_COMMAND_PARSER_LIMITS };
 const AUTO_POWERSHELL_DIVERGENCE_ISSUE = {
   code: 'ambiguous-auto-powershell',
   message:
-    'the shell was guessed as PowerShell, and # or \\" reads differently in PowerShell and POSIX shells',
+    'the shell was guessed as PowerShell, and #, a backtick, or a backslash before a quote or line break reads differently in PowerShell and POSIX shells',
 };
+
+const POSIX_DIVERGENT_TEXT = /[#`]|\\['"\n\r]/;
 
 export function parseCommand(
   source: string,
@@ -26,7 +28,7 @@ export function parseCommand(
     shouldUsePowerShellParser(source.slice(0, limits.maxInputLength), limits)
   ) {
     const program = parsePowerShellCommand(source, limits);
-    if (program.status === 'limited' || !(source.includes('#') || source.includes('\\"'))) {
+    if (program.status === 'limited' || !POSIX_DIVERGENT_TEXT.test(source)) {
       return program;
     }
     return {

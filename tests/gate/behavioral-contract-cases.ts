@@ -895,7 +895,32 @@ export function behavioralContractCases(paths: {
           'echo \\"; rm -rf ~; echo \\"; Get-Content x',
           unparseableBlock,
         ],
+        [
+          'fails closed on a backslash-apostrophe that PowerShell reads as a quote in auto mode',
+          "echo \\'; rm -rf ~; echo \\'; Get-Content x",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a backslash-backtick that PowerShell reads as an escape in auto mode',
+          'echo \\`; rm -rf ~; Get-Content x',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a backtick substitution that PowerShell reads as escapes in auto mode',
+          'Get-Content x; echo `true`;rm -rf ~/` true`',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a line continuation that PowerShell reads as a line break in auto mode',
+          'Get-Content x; r\\\nm -rf ~',
+          unparseableBlock,
+        ],
         ['allows a plain PowerShell selector in auto mode', 'Get-Content x', { kind: 'allow' }],
+        [
+          'allows a Windows path after a PowerShell selector in auto mode',
+          'Get-Content C:\\Users\\me\\notes.txt',
+          { kind: 'allow' },
+        ],
         [
           'allows a POSIX comment that never selects PowerShell in auto mode',
           'git log --oneline # recent commits',

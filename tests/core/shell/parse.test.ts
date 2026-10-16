@@ -453,14 +453,20 @@ describe('core/shell/parse', () => {
   test.each([
     'Get-Content x#; rm -rf ~',
     'echo \\"; rm -rf ~; echo \\"; Get-Content x',
+    "echo \\'; rm -rf ~; echo \\'; Get-Content x",
+    'echo \\`; rm -rf ~; Get-Content x',
+    'Get-Content x; r\\\nm -rf ~',
     'Get-Content x # note',
-  ])('an auto parse that picks PowerShell for source with # or \\" is invalid: %s', (source) => {
-    expect(parseCommand(source, 'auto')).toMatchObject({
-      dialect: 'powershell',
-      status: 'invalid',
-    });
-    expect(parseCommand(source, 'powershell').status).toBe('complete');
-  });
+  ])(
+    'an auto parse that picks PowerShell for source a POSIX shell reads differently is invalid: %s',
+    (source) => {
+      expect(parseCommand(source, 'auto')).toMatchObject({
+        dialect: 'powershell',
+        status: 'invalid',
+      });
+      expect(parseCommand(source, 'powershell').status).toBe('complete');
+    },
+  );
 });
 
 describe('parser caps yield status limited without throwing', () => {
