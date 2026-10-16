@@ -16,7 +16,7 @@ import {
   extractMvOperandPaths,
   findProtectedPathMutationInCommand,
 } from './protected-path-scanner';
-import { getCommandSyntaxFact } from './semantic-facts';
+import { getExecutedCommandSyntaxFact } from './semantic-facts';
 
 export const REASON_GIT_METADATA_PROTECTION =
   'Git metadata and hooks are protected. Ask the user before modifying them.';
@@ -45,7 +45,7 @@ export function findGitMetadataMutationTargetInSemanticFacts(
   }
   if (facts.invocation.route.kind !== 'command') return null;
 
-  const command = getCommandSyntaxFact(facts, 'input-candidate');
+  const command = getExecutedCommandSyntaxFact(facts);
   if (!command) return null;
   const target = findProtectedPathMutationInCommand(command.shell, cwd, environment, budget, {
     findSegmentTarget: (segment, state) =>

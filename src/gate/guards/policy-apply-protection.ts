@@ -5,7 +5,7 @@ import { stripWrappers } from '@/gate/analyzer/wrapper-prelude';
 import type { SemanticFacts } from '@/gate/facts';
 import { findProtectedPathMutationInCommand } from './protected-path-scanner';
 import { safetyNetSubcommandIndex } from './safety-net-invocation';
-import { getCommandSyntaxFact } from './semantic-facts';
+import { getExecutedCommandSyntaxFact } from './semantic-facts';
 
 export const REASON_POLICY_APPLY_PROTECTION =
   'Only the user may apply a policy proposal, because it rewrites the configuration CC Safety Net enforces. Ask them to run `cc-safety-net policy apply <file>` themselves in a terminal; you can run `cc-safety-net policy check <file>` to show them what it would change.';
@@ -17,7 +17,7 @@ export function findPolicyApplyInvocationInSemanticFacts(
   environment: EnvironmentContext,
   budget: Budget,
 ): PolicyApplyTarget | null {
-  const command = getCommandSyntaxFact(facts, 'input-candidate');
+  const command = getExecutedCommandSyntaxFact(facts);
   if (!command) return null;
 
   const target = findProtectedPathMutationInCommand(

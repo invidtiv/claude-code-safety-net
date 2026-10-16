@@ -120,6 +120,13 @@ export function getCommandSyntaxFact(
   return facts.commands.find((fact) => fact.usages.includes(usage));
 }
 
+export function getExecutedCommandSyntaxFact(facts: SemanticFacts): CommandSyntaxFacts | undefined {
+  return (
+    getCommandSyntaxFact(facts, 'declared-command') ??
+    getCommandSyntaxFact(facts, 'input-candidate')
+  );
+}
+
 export function projectSensitiveShellText(source: string, environment: Environment): string {
   if (!source.includes('$')) return source;
   return expandSupportedPathEnvironmentVariables(source, environment);

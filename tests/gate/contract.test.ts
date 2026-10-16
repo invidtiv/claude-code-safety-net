@@ -67,13 +67,14 @@ function invocationFor(
   input: unknown,
   route: ToolRoute,
   cwd: string,
+  command = route.kind === 'command' ? (getCommandFromToolInput(input) ?? null) : null,
 ): ToolInvocation {
   return createToolInvocation(
     toolName,
     input,
     route,
     { configCwd: cwd, executionCwd: cwd },
-    route.kind === 'command' ? (getCommandFromToolInput(input) ?? null) : null,
+    command,
   );
 }
 
@@ -181,6 +182,7 @@ describe('pipeline-only contract through the ported gate', () => {
               contractCase.input,
               contractCase.route,
               contractCase.cwd === 'repo' ? repository : workspace,
+              contractCase.invocationCommand,
             ),
             policySnapshot({ safety: { level } }),
           ),
