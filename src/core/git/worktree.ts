@@ -199,8 +199,13 @@ function gitDirectoriesRedirect(gitDir: string, commonDir: string): boolean {
   );
 }
 
+const GIT_FILE_SIZE_LIMIT = 1_048_576;
+
 function readRegularFile(path: string): string {
-  if (!statSync(path).isFile()) throw new Error(`${path} is not a regular file`);
+  const stat = statSync(path);
+  if (!stat.isFile() || stat.size > GIT_FILE_SIZE_LIMIT) {
+    throw new Error(`${path} is not a regular file within ${GIT_FILE_SIZE_LIMIT} bytes`);
+  }
   return readFileSync(path, 'utf-8');
 }
 

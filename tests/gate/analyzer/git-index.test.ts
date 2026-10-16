@@ -497,6 +497,10 @@ describe('temp-root relaxation', () => {
     join(workspace, '.git', 'refs', 'heads'),
     join(symlinkedHeads, '.git', 'refs', 'heads'),
   );
+  const oversizedConfig = initRepository('oversized-config');
+  writeFileSync(join(oversizedConfig, '.git', 'config'), `${'#'.repeat(1_048_576)}\n`, {
+    flag: 'a',
+  });
   const fifoRepositories = ['config', 'HEAD'].flatMap((name) => {
     if (process.platform === 'win32') return [];
     const repository = initRepository(`fifo-${name.toLowerCase()}`);
@@ -623,6 +627,7 @@ describe('temp-root relaxation', () => {
     { line: 'git clean -ffdx', options: { cwd: symlinkedRefs }, relaxed: false },
     { line: 'git branch -D feature', options: { cwd: symlinkedHeads }, relaxed: false },
     { line: 'git reset --hard', options: { cwd: symlinkedIndexLinked }, relaxed: false },
+    { line: 'git clean -ffdx', options: { cwd: oversizedConfig }, relaxed: false },
     ...fifoRepositories.map((cwd) => ({
       line: 'git clean -ffdx',
       options: { cwd },
