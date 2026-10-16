@@ -485,6 +485,12 @@ describe('temp-root relaxation', () => {
   const symlinkedRefs = initRepository('symlinked-refs');
   rmSync(join(symlinkedRefs, '.git', 'refs'), { recursive: true });
   symlinkSync(join(workspace, '.git', 'refs'), join(symlinkedRefs, '.git', 'refs'));
+  const symlinkedHeads = initRepository('symlinked-heads');
+  rmSync(join(symlinkedHeads, '.git', 'refs', 'heads'), { recursive: true });
+  symlinkSync(
+    join(workspace, '.git', 'refs', 'heads'),
+    join(symlinkedHeads, '.git', 'refs', 'heads'),
+  );
   const symlinkedIndexLinked = join(tempRoot, 'symlinked-index-linked');
   runGit(['worktree', 'add', '--quiet', symlinkedIndexLinked, '-b', 'index'], workspace);
   const linkedIndex = join(workspace, '.git', 'worktrees', 'symlinked-index-linked', 'index');
@@ -598,6 +604,7 @@ describe('temp-root relaxation', () => {
     { line: 'git reset --hard', options: { cwd: sharedConfigLinked }, relaxed: false },
     { line: 'git branch -D feature', options: { cwd: symlinkedRefs }, relaxed: false },
     { line: 'git clean -ffdx', options: { cwd: symlinkedRefs }, relaxed: false },
+    { line: 'git branch -D feature', options: { cwd: symlinkedHeads }, relaxed: false },
     { line: 'git reset --hard', options: { cwd: symlinkedIndexLinked }, relaxed: false },
     { line: 'git -c core.quotepath=off clean -ffdx', relaxed: true },
     { line: 'git clean -ffdx', options: { cwd: branchNamedWorktree }, relaxed: true },

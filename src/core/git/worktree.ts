@@ -188,9 +188,22 @@ function configNamesWorktree(configPath: string): boolean {
   }
 }
 
-function holdsSymbolicLink(directory: string): boolean {
+const GIT_DIRECTORY_ENTRY_BUDGET = 10_000;
+
+function holdsSymbolicLink(gitDir: string): boolean {
+  const pending = [gitDir];
+  let visited = 0;
   try {
-    return readdirSync(directory, { withFileTypes: true }).some((entry) => entry.isSymbolicLink());
+    while (pending.length > 0) {
+      const directory = pending.pop() as string;
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        visited++;
+        if (entry.isSymbolicLink() || visited > GIT_DIRECTORY_ENTRY_BUDGET) return true;
+        const isObjectStore = directory === gitDir && entry.name === 'objects';
+        if (entry.isDirectory() && !isObjectStore) pending.push(join(directory, entry.name));
+      }
+    }
+    return false;
   } catch (error) {
     return (error as NodeJS.ErrnoException).code !== 'ENOENT';
   }
