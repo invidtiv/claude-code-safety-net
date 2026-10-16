@@ -153,19 +153,34 @@ test('a literal for list records the later segments once per forked state', () =
   ]);
 });
 
-test('a POSIX reading of a PowerShell guess records its match on the segment it blocks', () => {
+const segmentSteps = (result: Record<string, unknown>) =>
+  (
+    result.trace as { segments: { index: number; steps: { type: string; rule?: string }[] }[] }
+  ).segments.map((segment) => [
+    segment.index,
+    segment.steps.map((step) => (step.rule ? `${step.type} ${step.rule}` : step.type)),
+  ]);
+
+test('a POSIX reading of a PowerShell guess traces only the POSIX reading', () => {
   const result = compareSides(fixture(), 'Get-Content x; cat <(rm -rf ~)');
   expect(result.result).toBe('blocked');
-  const segments = (
-    result.trace as { segments: { index: number; steps: { type: string; matched?: boolean }[] }[] }
-  ).segments;
-  expect(segments.map((segment) => segment.index)).toStrictEqual([0, 1, 2]);
-  expect(segments[2]?.steps).toContainEqual(
-    expect.objectContaining({
-      type: 'rule-check',
-      rule: 'analyzer/rm.ts:analyzeRmMatch',
-      matched: true,
-    }),
-  );
-  expect(segments[2]?.steps.map((step) => step.type)).not.toContain('segment-skipped');
+  expect(
+    (result.trace as { steps: { type: string }[] }).steps.map((step) => step.type),
+  ).toStrictEqual(['parse']);
+  expect(segmentSteps(result)).toStrictEqual([
+    [0, ['fallback-scan', 'custom-rules-check']],
+    [2, ['tmpdir-check', 'rule-check analyzer/rm.ts:analyzeRmMatch']],
+  ]);
+});
+
+test('a PowerShell decision kept over an unverified POSIX reading traces only the PowerShell reading', () => {
+  const powerShellMatch =
+    'rule-check analyzer/powershell/remove-item.ts:analyzePowerShellCommandViewMatch';
+  const result = compareSides(fixture(), "Get-Content x; W='rm -rf ~'; $W");
+  expect(result.ruleId).toBe('raw-text.dangerous-command');
+  expect(segmentSteps(result)).toStrictEqual([
+    [0, [powerShellMatch, 'fallback-scan', 'custom-rules-check']],
+    [1, [powerShellMatch, 'dangerous-text']],
+    [2, ['segment-skipped']],
+  ]);
 });

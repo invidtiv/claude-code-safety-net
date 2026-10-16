@@ -901,14 +901,9 @@ export function behavioralContractCases(paths: {
           homeRemovalBlock,
         ],
         [
-          'fails closed on a backslash-backtick that PowerShell reads as an escape in auto mode',
+          'blocks a home removal after a backslash-backtick that PowerShell reads as an escape in auto mode',
           'echo \\`; rm -rf ~; Get-Content x',
-          unparseableBlock,
-        ],
-        [
-          'fails closed on a backtick substitution that PowerShell reads as escapes in auto mode',
-          'Get-Content x; echo `true`;rm -rf ~/` true`',
-          unparseableBlock,
+          homeRemovalBlock,
         ],
         [
           'blocks a home removal joined by a line continuation that a PowerShell guess reads as a line break in auto mode',
@@ -935,6 +930,11 @@ export function behavioralContractCases(paths: {
           'Get-Content x # note',
           { kind: 'allow' },
         ],
+        [
+          'allows inline code in a PowerShell comment after a selector in auto mode',
+          'Get-Content README.md # use `code` in docs',
+          { kind: 'allow' },
+        ],
         ['allows a plain PowerShell selector in auto mode', 'Get-Content x', { kind: 'allow' }],
         [
           'allows a Windows path after a PowerShell selector in auto mode',
@@ -949,6 +949,18 @@ export function behavioralContractCases(paths: {
       ],
       { cwd: paths.cwd, shell: 'auto' },
     ),
+    {
+      name: 'allows a backtick substitution that PowerShell reads as escapes in auto mode, like its POSIX reading',
+      command: 'Get-Content x; echo `true`;rm -rf ~/` true`',
+      options: options({ cwd: paths.cwd, shell: 'auto' }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'fails closed on a backtick substitution that PowerShell reads as escapes in auto mode at strict safety',
+      command: 'Get-Content x; echo `true`;rm -rf ~/` true`',
+      options: options({ cwd: paths.cwd, shell: 'auto', strict: true }),
+      expected: unparseableBlock,
+    },
     {
       name: 'keeps reading a PowerShell comment in explicit powershell mode',
       command: 'Get-Content x # note',

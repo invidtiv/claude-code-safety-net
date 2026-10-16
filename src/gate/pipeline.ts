@@ -315,12 +315,13 @@ export function evaluateGuard(
   const readAsPosix =
     invocation.route.shell === 'auto' && facts.store.readsAutoAsPowerShell()
       ? () => {
-          options.trace?.restartSegments();
-          return {
+          const posixTrace = options.trace?.branch();
+          const evaluation: GuardEvaluation = {
             ...evaluateGuard(
               { ...invocation, route: { kind: 'command', shell: 'posix' } },
               {
                 ...options,
+                ...(posixTrace ? { trace: posixTrace.trace } : {}),
                 dependencies: {
                   ...options.dependencies,
                   loadPolicySnapshot: () => snapshot,
@@ -329,6 +330,13 @@ export function evaluateGuard(
               },
             ),
             ...promoted,
+          };
+          return {
+            decision: evaluation.decision,
+            withItsTrace: () => {
+              posixTrace?.adopt();
+              return evaluation;
+            },
           };
         }
       : undefined;
@@ -341,7 +349,7 @@ export function evaluateGuard(
           dangerousInTextMatch(invocation.command as string) === null));
     const posixReading = unverifiedByStandardMode ? readAsPosix?.() : undefined;
     if (posixReading?.decision.kind === 'deny' && !posixReading.decision.unverifiedByStandardMode) {
-      return posixReading;
+      return posixReading.withItsTrace();
     }
     return {
       stage: 'command-analysis',
@@ -352,7 +360,13 @@ export function evaluateGuard(
         : analysis.decision,
     };
   }
-  return readAsPosix?.() ?? { stage: 'command-analysis', ...reported, decision: { kind: 'allow' } };
+  return (
+    readAsPosix?.().withItsTrace() ?? {
+      stage: 'command-analysis',
+      ...reported,
+      decision: { kind: 'allow' },
+    }
+  );
 }
 
 function promoteDeclaredCommandTool(

@@ -57,7 +57,7 @@ export type CommandTraceContext = {
   flattenNested?: boolean;
   allocateSegment: () => number;
   getNextSegmentIndex: () => number;
-  restartSegments: () => void;
+  branch: () => { trace: CommandTraceContext; adopt: () => void };
   recordGlobal: (step: TraceStep) => void;
   recordSegment: (step: TraceStep, segmentIndex?: number) => void;
 };
@@ -113,8 +113,16 @@ export function createCommandTraceContext(recorder: CommandTraceRecorder): Comma
     getNextSegmentIndex() {
       return nextSegmentIndex;
     },
-    restartSegments() {
-      nextSegmentIndex = 0;
+    branch() {
+      const branchRecorder = createCommandTraceRecorder();
+      const trace = createCommandTraceContext(branchRecorder);
+      return {
+        trace,
+        adopt() {
+          recorder.replaceSegmentEvents(branchRecorder.finish().events);
+          nextSegmentIndex = trace.getNextSegmentIndex();
+        },
+      };
     },
     recordGlobal(step) {
       recorder.record({ scope: 'global', step });
@@ -139,6 +147,16 @@ export function createCommandTraceRecorder() {
         ...event,
         step: sanitizeValue(event.step, LIMITS, sensitiveHashes) as TraceStep,
       });
+    },
+    replaceSegmentEvents(replacement: readonly CommandTraceEvent[]): void {
+      events.splice(
+        0,
+        events.length,
+        ...[...events.filter((event) => event.scope === 'global'), ...replacement].slice(
+          0,
+          MAX_EVENTS,
+        ),
+      );
     },
     finish(): CommandTrace {
       return { events };

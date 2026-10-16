@@ -450,27 +450,17 @@ describe('core/shell/parse', () => {
     }
   });
 
-  test('an auto parse that picks PowerShell for source with a backtick is invalid', () => {
-    const source = 'echo \\`; rm -rf ~; Get-Content x';
-    expect(parseCommand(source, 'auto')).toMatchObject({
-      dialect: 'powershell',
-      status: 'invalid',
-    });
-    expect(parseCommand(source, 'powershell').status).toBe('complete');
-  });
-
   test.each([
+    'echo \\`; rm -rf ~; Get-Content x',
+    'Get-Content README.md # use `code` in docs',
     'Get-Content x#; rm -rf ~',
     'echo \\"; rm -rf ~; echo \\"; Get-Content x',
     "echo \\'; rm -rf ~; echo \\'; Get-Content x",
     'Get-Content x; r\\\nm -rf ~',
     'Get-Content x # note',
-  ])(
-    'an auto parse that picks PowerShell for source without a backtick is the PowerShell parse: %s',
-    (source) => {
-      expect(parseCommand(source, 'auto')).toStrictEqual(parseCommand(source, 'powershell'));
-    },
-  );
+  ])('an auto parse that picks PowerShell is the PowerShell parse: %s', (source) => {
+    expect(parseCommand(source, 'auto')).toStrictEqual(parseCommand(source, 'powershell'));
+  });
 });
 
 describe('parser caps yield status limited without throwing', () => {
