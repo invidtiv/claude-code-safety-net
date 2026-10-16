@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 export type WorktreeFacts = Readonly<{
@@ -71,7 +71,7 @@ function resolveLinkedWorktreeTargets(cwd: string): LinkedWorktreeTargets | null
       return null;
     }
 
-    return configNamesWorktree(join(targets.gitDir, 'config.worktree'))
+    return gitDirectoriesRedirect(targets.gitDir, targets.commonDir)
       ? null
       : { gitDir: targets.gitDir, commonDir: targets.commonDir };
   } catch {
@@ -170,12 +170,27 @@ export function normalizePathForComparison(path: string): string {
 }
 
 export function gitDirectoryRedirects(gitDir: string): boolean {
-  return existsSync(join(gitDir, 'commondir')) || configNamesWorktree(join(gitDir, 'config'));
+  return existsSync(join(gitDir, 'commondir')) || gitDirectoriesRedirect(gitDir, gitDir);
+}
+
+function gitDirectoriesRedirect(gitDir: string, commonDir: string): boolean {
+  return (
+    [join(commonDir, 'config'), join(gitDir, 'config.worktree')].some(configNamesWorktree) ||
+    holdsSymbolicLink(gitDir)
+  );
 }
 
 function configNamesWorktree(configPath: string): boolean {
   try {
-    return /(?:^|[\s\]])worktree/i.test(readFileSync(configPath, 'utf-8'));
+    return /(?:^|[\s\]])worktree\s*=/i.test(readFileSync(configPath, 'utf-8'));
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ENOENT';
+  }
+}
+
+function holdsSymbolicLink(directory: string): boolean {
+  try {
+    return readdirSync(directory, { withFileTypes: true }).some((entry) => entry.isSymbolicLink());
   } catch (error) {
     return (error as NodeJS.ErrnoException).code !== 'ENOENT';
   }
