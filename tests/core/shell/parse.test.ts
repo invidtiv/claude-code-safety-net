@@ -26,13 +26,10 @@ describe('core/shell/parse', () => {
     expect(program.issues.map((issue) => issue.code)).toContain('ambiguous-heredoc-delimiter');
   });
 
-  test('a quoted CRLF continuation joins one literal argument', () => {
+  test('refuses a quoted CRLF continuation, because bash keeps the backslash and the CR', () => {
     const program = parseCommand('printf "first\\\r\nsecond"', 'posix');
-    expect(program.status).toBe('complete');
-    expect(projectCommandViews(program)[0]?.words.map((word) => word.text)).toEqual([
-      'printf',
-      'firstsecond',
-    ]);
+    expect(program.status).toBe('invalid');
+    expect(program.issues.map((issue) => issue.code)).toContain('unsupported-blank');
   });
 
   test.each(['echo; f() { :; }', 'echo > output'])(
@@ -56,7 +53,7 @@ describe('core/shell/parse', () => {
   });
 
   test('parses a command into segments, words and nested programs', () => {
-    const program = parseCommand('echo "\u{1F600}" && git reset --hard\r\nrm -rf /tmp/x', 'posix');
+    const program = parseCommand('echo "\u{1F600}" && git reset --hard\nrm -rf /tmp/x', 'posix');
     expect(program.status).toBe('complete');
     expect(
       projectCommandViews(program).map((view) => view.words.map((word) => word.text)),
@@ -66,7 +63,7 @@ describe('core/shell/parse', () => {
       ['rm', '-rf', '/tmp/x'],
     ]);
     expect(
-      parseCommand('echo "\u{1F600}" && git reset --hard\r\nrm -rf /tmp/x', 'posix'),
+      parseCommand('echo "\u{1F600}" && git reset --hard\nrm -rf /tmp/x', 'posix'),
     ).toStrictEqual(program);
   });
 
@@ -142,6 +139,39 @@ describe('core/shell/parse', () => {
       'unsupported-function-substitution',
     );
   });
+
+  test.each([
+    ['vertical tab', '\v'],
+    ['form feed', '\f'],
+    ['carriage return', '\r'],
+    ['no-break space', '\u00a0'],
+    ['ogham space mark', '\u1680'],
+    ['en quad', '\u2000'],
+    ['figure space', '\u2007'],
+    ['hair space', '\u200a'],
+    ['line separator', '\u2028'],
+    ['paragraph separator', '\u2029'],
+    ['narrow no-break space', '\u202f'],
+    ['medium mathematical space', '\u205f'],
+    ['ideographic space', '\u3000'],
+  ])('rejects a %s, which bash and zsh read as part of a word', (_name, blank) => {
+    for (const source of [
+      `cd /tmp${blank}; rm -rf x`,
+      `echo 'a${blank}b'`,
+      `cat <<EOF\na${blank}b\nEOF`,
+    ]) {
+      const program = parseCommand(source, 'posix');
+      expect(program.status).toBe('invalid');
+      expect(program.issues.map((issue) => issue.code)).toContain('unsupported-blank');
+    }
+  });
+
+  test.each(['echo a b\tc\nd', 'echo \u0085 \u200b é 日本語'])(
+    'leaves space, tab, newline and non-blank Unicode alone: %s',
+    (source) => {
+      expect(parseCommand(source, 'posix').status).toBe('complete');
+    },
+  );
 
   test.each([
     'echo ${HOME} ${x:-a b} ${#x}',

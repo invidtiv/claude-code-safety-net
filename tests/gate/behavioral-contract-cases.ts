@@ -1597,66 +1597,31 @@ export function behavioralContractCases(paths: {
         reasonIncludes: 'Unquoted heredoc',
       },
     },
-    {
-      name: 'blocks a live expansion behind a CR-suffixed heredoc terminator at standard safety',
-      command: "cat <<EOF\nEOF\r\ncat <<'EOF'\n$(git push --force)\nEOF",
-      options: options({ cwd: paths.cwd }),
-      expected: {
-        kind: 'block',
-        ruleId: 'git.push-force',
-        intent: 'use_alternative',
-        reasonIncludes: 'destroys remote history',
-        segment: 'git push --force',
-      },
-    },
-    {
-      name: 'blocks a live expansion behind a CR-suffixed heredoc terminator at strict safety',
-      command: "cat <<EOF\nEOF\r\ncat <<'EOF'\n$(git push --force)\nEOF",
-      options: options({ cwd: paths.cwd, strict: true }),
-      expected: {
-        kind: 'block',
-        ruleId: 'git.push-force',
-        intent: 'use_alternative',
-        reasonIncludes: 'destroys remote history',
-        segment: 'git push --force',
-      },
-    },
-    {
-      name: 'allows a benign CRLF heredoc at standard safety',
-      command: 'cat <<EOF\r\nhello\r\nEOF\r\n',
-      options: options({ cwd: paths.cwd }),
-      expected: { kind: 'allow' },
-    },
-    {
-      name: 'allows a benign CRLF heredoc at strict safety because its delimiter keeps the CR',
-      command: 'cat <<EOF\r\nhello\r\nEOF\r\n',
-      options: options({ cwd: paths.cwd, strict: true }),
-      expected: { kind: 'allow' },
-    },
-    {
-      name: 'blocks a live expansion inside a CRLF heredoc at standard safety',
-      command: 'cat <<EOF\r\n$(git switch -f main)\r\nEOF\r\n',
-      options: options({ cwd: paths.cwd }),
-      expected: {
-        kind: 'block',
-        ruleId: 'git.switch-force',
-        intent: 'use_alternative',
-        reasonIncludes: 'discards uncommitted changes',
-        segment: 'git switch -f main',
-      },
-    },
-    {
-      name: 'blocks a live expansion inside a CRLF heredoc at strict safety',
-      command: 'cat <<EOF\r\n$(git switch -f main)\r\nEOF\r\n',
-      options: options({ cwd: paths.cwd, strict: true }),
-      expected: {
-        kind: 'block',
-        ruleId: 'git.switch-force',
-        intent: 'use_alternative',
-        reasonIncludes: 'discards uncommitted changes',
-        segment: 'git switch -f main',
-      },
-    },
+    ...atStandardAndStrict(
+      [
+        [
+          'fails closed on a CR-suffixed heredoc terminator, whose CR bash keeps in the line',
+          "cat <<EOF\nEOF\r\ncat <<'EOF'\n$(git push --force)\nEOF",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a benign CRLF heredoc, whose CR bash keeps in each line',
+          'cat <<EOF\r\nhello\r\nEOF\r\n',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a no-break space that bash keeps inside a heredoc delimiter',
+          'cat <<EOF\u00a0x\nEOF\u00a0x\nrm -rf ~/Documents\nEOF',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a live expansion inside a CRLF heredoc',
+          'cat <<EOF\r\n$(git switch -f main)\r\nEOF\r\n',
+          unparseableBlock,
+        ],
+      ],
+      { cwd: paths.cwd },
+    ),
     {
       name: 'allows dd writing to a regular file',
       command: 'dd if=/dev/zero of=disk.img bs=1M',
@@ -2223,6 +2188,31 @@ export function behavioralContractCases(paths: {
         segment: 'rm -rf build',
       },
     },
+    ...atStandardAndStrict(
+      [
+        [
+          'fails closed on a vertical tab that bash keeps inside a cd operand',
+          `cd ~; cd ${tempRepo}\v; rm -rf Documents`,
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a no-break space that bash keeps inside a cd operand',
+          `cd ~; cd ${tempRepo}\u00a0; rm -rf Documents`,
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a CRLF line end whose CR bash keeps inside a cd operand',
+          `cd ~; cd ${tempRepo}\r\nrm -rf Documents`,
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a vertical tab an ANSI-C quoted shell body keeps inside a cd operand',
+          `bash -c $'cd ~; cd ${tempRepo}\\v; rm -rf Documents'`,
+          unparseableBlock,
+        ],
+      ],
+      { cwd: paths.cwd },
+    ),
     {
       name: 'blocks a delete after a cd into a directory whose mkdir may have failed',
       command: `mkdir -p ${tempParent}/fresh || true; cd ${tempParent}/fresh; rm -rf build`,
