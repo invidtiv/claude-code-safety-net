@@ -10,7 +10,12 @@ import {
   matchesGitLongOption,
   SWITCH_SHORT_OPTS_WITH_VALUE,
 } from './rules';
-import { getGitExecutionContext, hasGitContextEnvOverride } from './worktree';
+import {
+  findGitRepositoryRoot,
+  getGitExecutionContext,
+  hasGitContextEnvOverride,
+  mayRedirectGitRepository,
+} from './worktree';
 
 export interface GitAnalyzeOptions {
   environment: EnvironmentContext;
@@ -48,7 +53,18 @@ export function getGitWorktreeRelaxationForMatch(
   }
 
   const facts = options.environment.worktreeFacts(context.gitCwd);
-  if (!facts) {
+  const root = findGitRepositoryRoot(context.gitCwd, options.environment.paths);
+  if (
+    !facts ||
+    root === null ||
+    mayRedirectGitRepository(
+      tokens,
+      context.gitCwd,
+      root,
+      options.environment,
+      options.envAssignments,
+    )
+  ) {
     return null;
   }
 

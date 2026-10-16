@@ -71,9 +71,9 @@ function resolveLinkedWorktreeTargets(cwd: string): LinkedWorktreeTargets | null
       return null;
     }
 
-    return worktreeConfigMatchesRoot(targets.gitDir, dirname(dotGitPath))
-      ? { gitDir: targets.gitDir, commonDir: targets.commonDir }
-      : null;
+    return configNamesWorktree(join(targets.gitDir, 'config.worktree'))
+      ? null
+      : { gitDir: targets.gitDir, commonDir: targets.commonDir };
   } catch {
     return null;
   }
@@ -122,24 +122,12 @@ function worktreeGitdirBacklinkMatches(gitDir: string, dotGitPath: string): bool
   return rawBacklink === null ? false : gitDirPathReferenceMatches(gitDir, rawBacklink, dotGitPath);
 }
 
-function worktreeConfigMatchesRoot(gitDir: string, worktreeRoot: string): boolean {
-  const configuredWorktree = readWorktreeConfigWorktree(gitDir);
-  return configuredWorktree === null
-    ? true
-    : gitDirPathReferenceMatches(gitDir, configuredWorktree, worktreeRoot);
-}
-
 function readWorktreeGitdirBacklink(gitDir: string): string | null {
   const backlinkPath = join(gitDir, 'gitdir');
   if (!existsSync(backlinkPath)) return null;
 
   const rawBacklink = readFileSync(backlinkPath, 'utf-8').split(/\r?\n/, 1)[0]?.trim() ?? '';
   return rawBacklink === '' ? null : rawBacklink;
-}
-
-function readWorktreeConfigWorktree(gitDir: string): string | null {
-  const configWorktreePath = join(gitDir, 'config.worktree');
-  return existsSync(configWorktreePath) ? readCoreWorktree(configWorktreePath) : null;
 }
 
 function gitDirPathReferenceMatches(gitDir: string, target: string, expectedPath: string): boolean {
@@ -181,53 +169,16 @@ export function normalizePathForComparison(path: string): string {
   return process.platform === 'win32' ? trimmed.toLowerCase() : trimmed;
 }
 
-function readCoreWorktree(configPath: string): string | null {
-  const content = readFileSync(configPath, 'utf-8');
-  let inCore = false;
-  let configuredWorktree: string | null = null;
-
-  for (const line of content.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith(';')) {
-      continue;
-    }
-    if (trimmed.startsWith('[')) {
-      inCore = /^\[core\]$/i.test(trimmed);
-      continue;
-    }
-    if (!inCore) {
-      continue;
-    }
-
-    const match = trimmed.match(/^worktree\s*=\s*(.*)$/i);
-    if (match) {
-      configuredWorktree = parseGitConfigValue(match[1] ?? '');
-    }
-  }
-
-  return configuredWorktree;
+export function gitDirectoryRedirects(gitDir: string): boolean {
+  return existsSync(join(gitDir, 'commondir')) || configNamesWorktree(join(gitDir, 'config'));
 }
 
-function parseGitConfigValue(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed.startsWith('"') || !trimmed.endsWith('"')) {
-    return trimmed;
+function configNamesWorktree(configPath: string): boolean {
+  try {
+    return /(?:^|[\s\]])worktree/i.test(readFileSync(configPath, 'utf-8'));
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ENOENT';
   }
-  return unescapeDoubleQuotedGitConfigValue(trimmed.slice(1, -1));
-}
-
-const GIT_CONFIG_ESCAPES: Readonly<Record<string, string>> = {
-  '\\': '\\',
-  '"': '"',
-  n: '\n',
-  t: '\t',
-  b: '\b',
-};
-
-function unescapeDoubleQuotedGitConfigValue(value: string): string {
-  return value.replace(/\\(.?)/gs, (sequence, next: string) =>
-    next === '' ? sequence : (GIT_CONFIG_ESCAPES[next] ?? sequence),
-  );
 }
 
 function findDotGit(cwd: string): string | null {

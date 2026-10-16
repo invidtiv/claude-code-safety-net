@@ -1,8 +1,10 @@
-import { resolve } from 'node:path';
-import type { PathResolver } from '@/core/environment';
+import { dirname, join, resolve } from 'node:path';
+import type { Environment, PathResolver } from '@/core/environment';
 import { resolveChdirTarget } from '@/core/paths/chdir';
+import { isPathOrSubpath } from '@/core/paths/tmpdir';
 import { GIT_GLOBAL_OPTS_WITH_VALUE } from '@/core/rules/constants';
 import { GIT_CONTEXT_ENV_OVERRIDES } from './env';
+import { getGitConfigEntries } from './parse';
 
 export interface GitExecutionContext {
   gitCwd: string | null;
@@ -95,4 +97,41 @@ function resolveGitCwd(baseCwd: string, target: string, paths: PathResolver): st
   } catch {
     return null;
   }
+}
+
+export function findGitRepositoryRoot(directory: string, paths: PathResolver): string | null {
+  if (paths.entryKind(join(directory, '.git')) !== 'missing') return directory;
+  const parent = dirname(directory);
+  return parent === directory ? null : findGitRepositoryRoot(parent, paths);
+}
+
+export function mayRedirectGitRepository(
+  tokens: readonly string[],
+  gitCwd: string,
+  root: string,
+  environment: Environment,
+  envAssignments?: ReadonlyMap<string, string>,
+): boolean {
+  const paths = environment.paths;
+  const gitDirectory = join(root, '.git');
+  const ownsItsGitDirectory = paths.isDirectory(gitDirectory);
+  const discoveryVisits = selfAndAncestors(gitCwd).filter(
+    (directory) => ownsItsGitDirectory || (directory !== root && isPathOrSubpath(directory, root)),
+  );
+  return (
+    getGitConfigEntries(tokens, environment.env, envAssignments).entries.some(
+      (entry) => entry.key.toLowerCase() === 'core.worktree',
+    ) ||
+    discoveryVisits.some(
+      (directory) =>
+        paths.entryKind(join(directory, 'HEAD')) !== 'missing' ||
+        (directory !== root && paths.entryKind(join(directory, '.git')) !== 'missing'),
+    ) ||
+    (ownsItsGitDirectory && environment.gitDirectoryRedirects(gitDirectory))
+  );
+}
+
+function selfAndAncestors(directory: string): string[] {
+  const parent = dirname(directory);
+  return parent === directory ? [directory] : [directory, ...selfAndAncestors(parent)];
 }

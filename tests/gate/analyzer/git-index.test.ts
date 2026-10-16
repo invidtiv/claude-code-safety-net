@@ -346,6 +346,29 @@ describe('git configuration read through the environment', () => {
       }).match?.id,
     ).toBe('git.reset-hard');
   });
+
+  test('a local discard is not relaxed where Git would leave the linked worktree', () => {
+    const bareChild = join(fixture.linkedWorktree, 'bare-child');
+    runGit(['init', '--quiet', '--bare', bareChild], fixture.linkedWorktree);
+    runGit(['config', 'core.bare', 'false'], bareChild);
+    runGit(['config', 'core.worktree', fixture.mainWorktree], bareChild);
+    const relaxationIn = (tokens: readonly string[], cwd: string) =>
+      analyzeGitDetailed(textCommandWords(tokens), {
+        cwd,
+        worktreeMode: true,
+        dynamicArguments: false,
+        environment: environment(),
+      }).relaxation?.kind;
+
+    expect(relaxationIn(['git', 'clean', '-fdx'], bareChild)).toBeUndefined();
+    expect(
+      relaxationIn(
+        ['git', '-c', `core.worktree=${fixture.mainWorktree}`, 'clean', '-fdx'],
+        fixture.linkedWorktree,
+      ),
+    ).toBeUndefined();
+    expect(relaxationIn(['git', 'clean', '-fdx'], fixture.linkedWorktree)).toBe('worktree');
+  });
 });
 
 describe('temp-root relaxation', () => {
@@ -372,6 +395,47 @@ describe('temp-root relaxation', () => {
   const forged = join(tempRoot, 'forged');
   mkdirSync(forged);
   writeFileSync(join(forged, '.git'), `gitdir: ${join(workspace, '.git')}\n`);
+  const initRepository = (name: string, ...args: string[]) => {
+    const path = join(tempRoot, name);
+    runGit(['init', '--quiet', ...args, path], tempRoot);
+    return path;
+  };
+  const storedWorktree = initRepository('stored-worktree');
+  runGit(['config', 'core.worktree', workspace], storedWorktree);
+  const sameLineWorktree = initRepository('same-line-worktree');
+  writeFileSync(join(sameLineWorktree, '.git', 'config'), `[CORE] WorkTree = ${workspace}\n`, {
+    flag: 'a',
+  });
+  const perWorktreeConfig = initRepository('per-worktree-config');
+  runGit(['config', 'extensions.worktreeConfig', 'true'], perWorktreeConfig);
+  writeFileSync(
+    join(perWorktreeConfig, '.git', 'config.worktree'),
+    `[core]\n\tworktree = ${workspace}\n`,
+  );
+  const sharedRefs = initRepository('shared-refs');
+  writeFileSync(join(sharedRefs, '.git', 'commondir'), `${join(workspace, '.git')}\n`);
+  const branchNamedWorktree = initRepository('branch-named-worktree');
+  runGit(['config', 'branch.fix/worktree-cleanup.remote', 'origin'], branchNamedWorktree);
+  const selfBare = initRepository('self-bare', '--bare');
+  runGit(['config', 'core.bare', 'false'], selfBare);
+  runGit(['config', 'core.worktree', workspace], selfBare);
+  mkdirSync(join(selfBare, '.git'));
+  const outer = initRepository('outer');
+  runGit(['config', 'core.worktree', workspace], outer);
+  const brokenInner = join(outer, 'inner');
+  mkdirSync(join(brokenInner, '.git'), { recursive: true });
+  const bareBelow = initRepository('bare-below');
+  const bareChild = join(bareBelow, 'child');
+  runGit(['init', '--quiet', '--bare', bareChild], tempRoot);
+  runGit(['config', 'core.bare', 'false'], bareChild);
+  runGit(['config', 'core.worktree', workspace], bareChild);
+  const redirectedLinked = join(tempRoot, 'redirected-linked');
+  runGit(['worktree', 'add', '--quiet', redirectedLinked, '-b', 'redirected'], workspace);
+  runGit(['config', 'extensions.worktreeConfig', 'true'], workspace);
+  writeFileSync(
+    join(workspace, '.git', 'worktrees', 'redirected-linked', 'config.worktree'),
+    `[core] worktree = ${workspace}\n`,
+  );
 
   afterAll(() => {
     rmSync(tempRoot, { recursive: true, force: true });
@@ -457,6 +521,27 @@ describe('temp-root relaxation', () => {
     { line: 'git reset --hard', options: { cwd: forged }, relaxed: false },
     { line: 'git checkout -- .', options: { cwd: forged }, relaxed: false },
     { line: 'git branch -D feature', options: { cwd: symlinked }, relaxed: false },
+    ...[storedWorktree, sameLineWorktree, perWorktreeConfig, sharedRefs, selfBare].flatMap(
+      (cwd) => [
+        { line: 'git clean -ffdx', options: { cwd }, relaxed: false },
+        { line: 'git branch -D feature', options: { cwd }, relaxed: false },
+      ],
+    ),
+    { line: 'git clean -ffdx', options: { cwd: brokenInner }, relaxed: false },
+    { line: 'git reset --hard', options: { cwd: bareChild }, relaxed: false },
+    { line: 'git clean -fdx', options: { cwd: redirectedLinked }, relaxed: false },
+    { line: 'git reset --hard', options: { cwd: redirectedLinked }, relaxed: false },
+    { line: `git -c core.worktree=${workspace} clean -ffdx`, relaxed: false },
+    { line: `git -cCore.WorkTree=${workspace} branch -D feature`, relaxed: false },
+    {
+      line: 'git clean -ffdx',
+      options: {
+        assignments: new Map([['GIT_CONFIG_PARAMETERS', `'core.worktree'='${workspace}'`]]),
+      },
+      relaxed: false,
+    },
+    { line: 'git -c core.quotepath=off clean -ffdx', relaxed: true },
+    { line: 'git clean -ffdx', options: { cwd: branchNamedWorktree }, relaxed: true },
     { line: `git worktree remove --force ${linked}`, options: { cwd: workspace }, relaxed: true },
     { line: `git worktree remove -f -- ${nested}`, options: { cwd: workspace }, relaxed: true },
     { line: 'git worktree remove --force ../linked', options: { cwd: workspace }, relaxed: false },

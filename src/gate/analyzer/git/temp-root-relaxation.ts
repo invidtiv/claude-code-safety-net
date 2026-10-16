@@ -1,4 +1,4 @@
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import type { PathResolver } from '@/core/environment';
 import { isPathOrSubpath, isTrustedTempPath, isTrustedTempRootPath } from '@/core/paths/tmpdir';
 import type { CommandWord } from '@/core/shell/model';
@@ -6,7 +6,12 @@ import { analysisWordText } from '../command-words';
 import { expandKnownVariableWord } from '../shell-git-env';
 import { extractGitSubcommandAndRest, splitAtDoubleDash } from './parse';
 import type { GitRuleMatch } from './rules';
-import { getGitExecutionContext, hasGitContextEnvOverride } from './worktree';
+import {
+  findGitRepositoryRoot,
+  getGitExecutionContext,
+  hasGitContextEnvOverride,
+  mayRedirectGitRepository,
+} from './worktree';
 import {
   type GitAnalyzeOptions,
   type GitRelaxation,
@@ -44,7 +49,7 @@ export function getGitTempRootRelaxationForMatch(
   if (
     subject === null ||
     (match.id !== 'git.worktree-remove-force' &&
-      !isDisposableRepository(subject, tokens, match, options)) ||
+      !isDisposableRepository(subject, context.gitCwd, tokens, match, options)) ||
     !isTrustedTempPath(subject, options.environment) ||
     isTrustedTempRootPath(subject, options.environment) ||
     isPathOrSubpath(workspace, subject) ||
@@ -58,13 +63,19 @@ export function getGitTempRootRelaxationForMatch(
 
 function isDisposableRepository(
   root: string,
+  gitCwd: string,
   tokens: readonly string[],
   match: GitRuleMatch,
   options: GitAnalyzeOptions,
 ): boolean {
   const paths = options.environment.paths;
   const gitEntry = join(root, '.git');
-  if (paths.entryKind(gitEntry) !== 'present') return false;
+  if (
+    paths.entryKind(gitEntry) !== 'present' ||
+    mayRedirectGitRepository(tokens, gitCwd, root, options.environment, options.envAssignments)
+  ) {
+    return false;
+  }
   const ownsItsGitDirectory = paths.isDirectory(gitEntry);
   if (ownsItsGitDirectory) return true;
   if (!match.localDiscard) return false;
@@ -100,10 +111,4 @@ function worktreeRemoveOperand(
     return null;
   }
   return paths.realpath(expanded);
-}
-
-function findGitRepositoryRoot(directory: string, paths: PathResolver): string | null {
-  if (paths.entryKind(join(directory, '.git')) !== 'missing') return directory;
-  const parent = dirname(directory);
-  return parent === directory ? null : findGitRepositoryRoot(parent, paths);
 }

@@ -2052,6 +2052,31 @@ export function behavioralContractCases(paths: {
         reasonIncludes: 'destroys all uncommitted changes',
       },
     },
+    ...atStandardAndStrict(
+      [
+        [
+          'blocks a temp-root Git clean whose command-line config moves the work tree',
+          `git -C ${tempRepo} -c core.worktree=${paths.home} clean -ffdx`,
+          {
+            kind: 'block',
+            ruleId: 'git.clean-force',
+            intent: 'use_alternative',
+            reasonIncludes: 'removes untracked files permanently',
+          },
+        ],
+        [
+          'blocks a temp-root Git clean whose environment config moves the work tree',
+          `GIT_CONFIG_PARAMETERS="'core.worktree'='${paths.home}'" git -C ${tempRepo} clean -ffdx`,
+          {
+            kind: 'block',
+            ruleId: 'git.clean-force',
+            intent: 'use_alternative',
+            reasonIncludes: 'removes untracked files permanently',
+          },
+        ],
+      ],
+      { cwd: paths.cwd },
+    ),
     {
       name: 'blocks a Git discard when the for list exceeds the binding cap',
       command: `for c in a b c d e f g h i; do R=${tempParent}/$c; cd $R; git reset --hard; done`,
