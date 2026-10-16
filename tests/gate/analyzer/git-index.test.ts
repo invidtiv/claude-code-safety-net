@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from 'bun:test';
+import { execFileSync } from 'node:child_process';
 import {
   mkdirSync,
   mkdtempSync,
@@ -496,6 +497,13 @@ describe('temp-root relaxation', () => {
     join(workspace, '.git', 'refs', 'heads'),
     join(symlinkedHeads, '.git', 'refs', 'heads'),
   );
+  const fifoRepositories = ['config', 'HEAD'].flatMap((name) => {
+    if (process.platform === 'win32') return [];
+    const repository = initRepository(`fifo-${name.toLowerCase()}`);
+    rmSync(join(repository, '.git', name));
+    execFileSync('mkfifo', [join(repository, '.git', name)]);
+    return [repository];
+  });
   const symlinkedIndexLinked = join(tempRoot, 'symlinked-index-linked');
   runGit(['worktree', 'add', '--quiet', symlinkedIndexLinked, '-b', 'index'], workspace);
   const linkedIndex = join(workspace, '.git', 'worktrees', 'symlinked-index-linked', 'index');
@@ -615,6 +623,11 @@ describe('temp-root relaxation', () => {
     { line: 'git clean -ffdx', options: { cwd: symlinkedRefs }, relaxed: false },
     { line: 'git branch -D feature', options: { cwd: symlinkedHeads }, relaxed: false },
     { line: 'git reset --hard', options: { cwd: symlinkedIndexLinked }, relaxed: false },
+    ...fifoRepositories.map((cwd) => ({
+      line: 'git clean -ffdx',
+      options: { cwd },
+      relaxed: false,
+    })),
     { line: 'git -c core.quotepath=off clean -ffdx', relaxed: true },
     { line: 'git clean -ffdx', options: { cwd: branchNamedWorktree }, relaxed: true },
     { line: 'git clean -ffdx', options: { cwd: sparseRepository }, relaxed: true },

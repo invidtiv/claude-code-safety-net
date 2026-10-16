@@ -182,9 +182,7 @@ export function isGitDirectory(gitDir: string): boolean {
   try {
     accessSync(join(gitDir, 'objects'), constants.X_OK);
     accessSync(join(gitDir, 'refs'), constants.X_OK);
-    return /^(?:ref:[\t\n\r ]*refs\/|[0-9a-fA-F]{40})/.test(
-      readFileSync(join(gitDir, 'HEAD'), 'utf-8'),
-    );
+    return /^(?:ref:[\t\n\r ]*refs\/|[0-9a-fA-F]{40})/.test(readRegularFile(join(gitDir, 'HEAD')));
   } catch {
     return false;
   }
@@ -197,13 +195,18 @@ export function gitDirectoryRedirects(gitDir: string): boolean {
 function gitDirectoriesRedirect(gitDir: string, commonDir: string): boolean {
   return (
     [join(commonDir, 'config'), join(gitDir, 'config.worktree')].some(configNamesWorktree) ||
-    holdsSymbolicLink(gitDir)
+    holdsSymbolicLinkOrFifo(gitDir)
   );
+}
+
+function readRegularFile(path: string): string {
+  if (!statSync(path).isFile()) throw new Error(`${path} is not a regular file`);
+  return readFileSync(path, 'utf-8');
 }
 
 function configNamesWorktree(configPath: string): boolean {
   try {
-    return /(?:^|[\s\]])worktree\s*=/i.test(readFileSync(configPath, 'utf-8'));
+    return /(?:^|[\s\]])worktree\s*=/i.test(readRegularFile(configPath));
   } catch (error) {
     return (error as NodeJS.ErrnoException).code !== 'ENOENT';
   }
@@ -211,7 +214,7 @@ function configNamesWorktree(configPath: string): boolean {
 
 const GIT_DIRECTORY_ENTRY_BUDGET = 10_000;
 
-function holdsSymbolicLink(gitDir: string): boolean {
+function holdsSymbolicLinkOrFifo(gitDir: string): boolean {
   const pending = [gitDir];
   let visited = 0;
   try {
@@ -219,7 +222,9 @@ function holdsSymbolicLink(gitDir: string): boolean {
       const directory = pending.pop() as string;
       for (const entry of readdirSync(directory, { withFileTypes: true })) {
         visited++;
-        if (entry.isSymbolicLink() || visited > GIT_DIRECTORY_ENTRY_BUDGET) return true;
+        if (entry.isSymbolicLink() || entry.isFIFO() || visited > GIT_DIRECTORY_ENTRY_BUDGET) {
+          return true;
+        }
         const isObjectStore = directory === gitDir && entry.name === 'objects';
         if (entry.isDirectory() && !isObjectStore) pending.push(join(directory, entry.name));
       }
