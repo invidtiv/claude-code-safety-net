@@ -154,6 +154,7 @@ describe('core/shell/parse', () => {
     ['narrow no-break space', '\u202f'],
     ['medium mathematical space', '\u205f'],
     ['ideographic space', '\u3000'],
+    ['byte order mark', '\ufeff'],
   ])('rejects a %s, which bash and zsh read as part of a word', (_name, blank) => {
     for (const source of [
       `cd /tmp${blank}; rm -rf x`,

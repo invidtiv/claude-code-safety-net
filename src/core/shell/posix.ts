@@ -1075,7 +1075,7 @@ const UNCLOSED_PARAMETER_EXPANSION_ISSUE: CommandIssue = Object.freeze({
   message: '${ parameter expansion is not closed',
 });
 
-const REFUSED_BLANK = /(?![ \t\n\ufeff])\s/u;
+const REFUSED_BLANK = /(?![ \t\n])\s/u;
 
 const UNSUPPORTED_BLANK_ISSUE: CommandIssue = Object.freeze({
   code: 'unsupported-blank',

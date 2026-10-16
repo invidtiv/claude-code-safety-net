@@ -1615,6 +1615,11 @@ export function behavioralContractCases(paths: {
           unparseableBlock,
         ],
         [
+          'fails closed on a byte order mark that bash keeps inside a heredoc delimiter',
+          'cat <<EOF\ufeffx\nEOF\ufeffx\nrm -rf ~/Documents\nEOF',
+          unparseableBlock,
+        ],
+        [
           'fails closed on a live expansion inside a CRLF heredoc',
           'cat <<EOF\r\n$(git switch -f main)\r\nEOF\r\n',
           unparseableBlock,
@@ -2198,6 +2203,11 @@ export function behavioralContractCases(paths: {
         [
           'fails closed on a no-break space that bash keeps inside a cd operand',
           `cd ~; cd ${tempRepo}\u00a0; rm -rf Documents`,
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a byte order mark that bash keeps inside a cd operand',
+          `cd ~; cd ${tempRepo}\ufeff; rm -rf Documents`,
           unparseableBlock,
         ],
         [
