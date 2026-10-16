@@ -1,7 +1,12 @@
 import { lstatSync, realpathSync, statSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { type ProtectedGitMetadata, resolveProtectedGitMetadata } from './git/metadata';
-import { gitDirectoryRedirects, resolveWorktreeFacts, type WorktreeFacts } from './git/worktree';
+import {
+  gitDirectoryRedirects,
+  isGitDirectory,
+  resolveWorktreeFacts,
+  type WorktreeFacts,
+} from './git/worktree';
 import { normalizeMsysDrivePath } from './paths/canonicalization';
 
 export type PathResolver = Readonly<{
@@ -21,6 +26,8 @@ export type Environment = Readonly<{
   gitMetadata: (cwd: string) => ProtectedGitMetadata | null;
 
   worktreeFacts: (cwd: string) => WorktreeFacts | null;
+
+  isGitDirectory: (gitDir: string) => boolean;
 
   gitDirectoryRedirects: (gitDir: string) => boolean;
 }>;
@@ -109,17 +116,23 @@ function fakeRealpath(
 }
 
 function withGitFacts(
-  base: Omit<Environment, 'gitMetadata' | 'worktreeFacts' | 'gitDirectoryRedirects'>,
+  base: Omit<
+    Environment,
+    'gitMetadata' | 'worktreeFacts' | 'isGitDirectory' | 'gitDirectoryRedirects'
+  >,
   overrides: Partial<Environment> = {},
 ): Environment {
   const metadata = new Map<string, ProtectedGitMetadata | null>();
   const facts = new Map<string, WorktreeFacts | null>();
+  const redirects = new Map<string, boolean>();
   const environment: Environment = {
     ...base,
     gitMetadata: (cwd) =>
       memoized(metadata, cwd, () => resolveProtectedGitMetadata(cwd, environment)),
     worktreeFacts: (cwd) => memoized(facts, cwd, () => resolveWorktreeFacts(cwd)),
-    gitDirectoryRedirects,
+    isGitDirectory,
+    gitDirectoryRedirects: (gitDir) =>
+      memoized(redirects, gitDir, () => gitDirectoryRedirects(gitDir)),
     ...overrides,
   };
   return environment;

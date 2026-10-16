@@ -1,5 +1,14 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import {
+  accessSync,
+  constants,
+  existsSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 export type WorktreeFacts = Readonly<{
@@ -167,6 +176,18 @@ export function normalizePathForComparison(path: string): string {
   const trimmed =
     normalized.length > 1 && normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
   return process.platform === 'win32' ? trimmed.toLowerCase() : trimmed;
+}
+
+export function isGitDirectory(gitDir: string): boolean {
+  try {
+    accessSync(join(gitDir, 'objects'), constants.X_OK);
+    accessSync(join(gitDir, 'refs'), constants.X_OK);
+    return /^(?:ref:[\t\n\r ]*refs\/|[0-9a-fA-F]{40})/.test(
+      readFileSync(join(gitDir, 'HEAD'), 'utf-8'),
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function gitDirectoryRedirects(gitDir: string): boolean {

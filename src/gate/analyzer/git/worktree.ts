@@ -115,8 +115,11 @@ export function mayRedirectGitRepository(
   const paths = environment.paths;
   const gitDirectory = join(root, '.git');
   const ownsItsGitDirectory = paths.isDirectory(gitDirectory);
+  const gitFallsThroughToAncestors =
+    ownsItsGitDirectory && !environment.isGitDirectory(gitDirectory);
   const discoveryVisits = selfAndAncestors(gitCwd).filter(
-    (directory) => ownsItsGitDirectory || (directory !== root && isPathOrSubpath(directory, root)),
+    (directory) =>
+      gitFallsThroughToAncestors || (directory !== root && isPathOrSubpath(directory, root)),
   );
   return (
     getGitConfigEntries(tokens, environment.env, envAssignments).entries.some(

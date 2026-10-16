@@ -456,6 +456,11 @@ describe('temp-root relaxation', () => {
   runGit(['config', 'core.worktree', workspace], outer);
   const brokenInner = join(outer, 'inner');
   mkdirSync(join(brokenInner, '.git'), { recursive: true });
+  const validInner = join(outer, 'clone');
+  runGit(['init', '--quiet', validInner], tempRoot);
+  const objectlessInner = join(outer, 'objectless');
+  runGit(['init', '--quiet', objectlessInner], tempRoot);
+  rmSync(join(objectlessInner, '.git', 'objects'), { recursive: true });
   const bareBelow = initRepository('bare-below');
   const bareChild = join(bareBelow, 'child');
   runGit(['init', '--quiet', '--bare', bareChild], tempRoot);
@@ -588,6 +593,10 @@ describe('temp-root relaxation', () => {
       ],
     ),
     { line: 'git clean -ffdx', options: { cwd: brokenInner }, relaxed: false },
+    { line: 'git clean -ffdx', options: { cwd: objectlessInner }, relaxed: false },
+    { line: 'git clean -ffdx', options: { cwd: validInner }, relaxed: true },
+    { line: 'git branch -D feature', options: { cwd: validInner }, relaxed: true },
+    { line: `git -C ${validInner} clean -ffdx`, options: { cwd: workspace }, relaxed: true },
     { line: 'git reset --hard', options: { cwd: bareChild }, relaxed: false },
     { line: 'git clean -fdx', options: { cwd: redirectedLinked }, relaxed: false },
     { line: 'git reset --hard', options: { cwd: redirectedLinked }, relaxed: false },
