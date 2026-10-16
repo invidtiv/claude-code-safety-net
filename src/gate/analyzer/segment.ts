@@ -64,6 +64,7 @@ import { expandKnownVariableWord } from './shell-git-env';
 import {
   extractDashCArg,
   extractShellStartupLoaderMetadata,
+  hasUnidentifiableCommandString,
   isShellSyntaxCheck,
 } from './shell-wrappers';
 import { isStandardCommandWrapper, unwrapTransparentWrapper } from './transparent-wrappers';
@@ -280,6 +281,7 @@ export function analyzeSegment(
     : isShellWrapperCommand(head, normalizedHead);
   if (shellWrapperHead) {
     if (isShellSyntaxCheck(stripped)) return null;
+    if (hasUnidentifiableCommandString(stripped)) return dynamicShellSourceResult(trace);
     if (stream && child) {
       const streamDashCArg = extractDashCArg(stripped);
       if (streamDashCArg) {

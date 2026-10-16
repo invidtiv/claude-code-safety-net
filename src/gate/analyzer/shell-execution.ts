@@ -9,6 +9,7 @@ import { DEFAULT_COMMAND_PARSER_LIMITS, parseCommand } from '@/core/shell/parse'
 import { getBasename, normalizeCommandToken, parseShellArgv } from '@/core/shell/tokens';
 import { analysisWordText, isLiteralExecutionSourceWord } from './command-words';
 import { expandKnownVariableWord } from './shell-git-env';
+import { isShellSyntaxCheck } from './shell-wrappers';
 import { isStandardCommandWrapper } from './transparent-wrappers';
 import { parseEnvAssignment } from './wrapper-prelude';
 
@@ -465,10 +466,11 @@ function wordsHaveDynamicExecutionCarrier(
   }
   if (SHELL_WRAPPERS.has(normalizedHead)) {
     const shellWords = words.slice(headIndex);
-    const parsed = parseShellArgv(shellWords.map((word) => word.text));
+    const shellTokens = shellWords.map((word) => word.text);
+    const parsed = parseShellArgv(shellTokens);
     const sourceIndex = parsed.commandIndex ?? parsed.scriptIndex;
     return (
-      !parsed.syntaxCheck &&
+      !isShellSyntaxCheck(shellTokens) &&
       sourceIndex !== null &&
       wordSuppliesDynamicExecutionSource(shellWords[sourceIndex], dynamicNames)
     );

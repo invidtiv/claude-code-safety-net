@@ -618,6 +618,104 @@ export function behavioralContractCases(paths: {
         reasonIncludes: 'destroys all uncommitted changes',
       },
     },
+    ...atStandardAndStrict(
+      [
+        [
+          'blocks a home removal behind zsh options that turn execution back on after -n',
+          "zsh -n -o exec -c 'rm -rf ~'",
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal behind a ksh long option that turns execution back on after -n',
+          "ksh -n --exec -c 'rm -rf ~'",
+          homeRemovalBlock,
+        ],
+        [
+          'fails closed on a zsh +n that turns execution back on after -n',
+          "zsh -n +n -c 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a bash +n that the -c cluster would take as its command string',
+          "bash -nc +n 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a +o noexec that turns execution back on after -n',
+          "bash -n +o noexec -c 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a +n after an -o value',
+          "sh -n -o posix +n -c 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a +nc cluster that selects the command string',
+          "bash -n +nc 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on an option word that -c would take as its command string',
+          "bash -c -x 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a lone dash that -c would take as its command string',
+          "sh -c - 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a -c cluster followed by an -o option',
+          "bash -ec -o pipefail 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a -c cluster whose -o takes the next word as its value',
+          "dash -oc pipefail 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a child shell of xargs with a +o noexec after -n',
+          "echo x | xargs bash -n +o noexec -c 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'blocks a home removal in a child shell of parallel with a +n after -n',
+          "parallel zsh -n +n -c 'rm -rf ~' ::: x",
+          homeRemovalBlock,
+        ],
+        ['allows a syntax check of a script', 'bash -n script.sh', { kind: 'allow' }],
+        [
+          'allows a syntax check of a command string that is never run',
+          "bash -n -c 'rm -rf ~'",
+          { kind: 'allow' },
+        ],
+        [
+          'allows a shell option before the command string',
+          "bash -o pipefail -c 'echo ok'",
+          { kind: 'allow' },
+        ],
+      ],
+      { cwd: paths.cwd },
+    ),
+    {
+      name: 'blocks a heredoc fed to zsh with an option that turns execution back on after -n',
+      command: "zsh -n -o exec <<'EOF'\ngit reset --hard\nEOF",
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'raw-text.dangerous-command',
+        intent: 'stop_and_explain',
+        reasonIncludes: 'Unparseable command text contains a destructive pattern',
+      },
+    },
+    {
+      name: 'fails closed on a heredoc fed to zsh with a +n after -n',
+      command: "zsh -n +n <<'EOF'\ngit reset --hard\nEOF",
+      options: options({ cwd: paths.cwd }),
+      expected: unverifiableShellSourceBlock,
+    },
     {
       name: 'allows an executable assembled by command substitution at standard safety',
       command: '$(printf r)m -rf /',

@@ -202,7 +202,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: 2,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -212,7 +211,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: 3,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -222,7 +220,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: 2,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -232,7 +229,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: null,
           scriptIndex: 2,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -242,7 +238,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: 2,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: true,
         },
       },
       {
@@ -252,7 +247,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: null,
           scriptIndex: null,
           readsStdinAsCommands: true,
-          syntaxCheck: false,
         },
       },
       {
@@ -262,7 +256,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: null,
           scriptIndex: null,
           readsStdinAsCommands: true,
-          syntaxCheck: false,
         },
       },
       {
@@ -272,7 +265,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: null,
           scriptIndex: 1,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -282,7 +274,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: null,
           scriptIndex: null,
           readsStdinAsCommands: true,
-          syntaxCheck: false,
         },
       },
       {
@@ -292,7 +283,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: null,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -302,7 +292,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: null,
           scriptIndex: null,
           readsStdinAsCommands: true,
-          syntaxCheck: false,
         },
       },
       {
@@ -312,7 +301,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: 4,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -322,7 +310,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: 3,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -332,7 +319,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: 4,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -342,7 +328,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: 2,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -352,7 +337,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: null,
           scriptIndex: null,
           readsStdinAsCommands: true,
-          syntaxCheck: false,
         },
       },
       {
@@ -362,7 +346,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: null,
           scriptIndex: 3,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -372,7 +355,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: 4,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -382,7 +364,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: 2,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -392,7 +373,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: 3,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -402,7 +382,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: 2,
           scriptIndex: null,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
       {
@@ -412,7 +391,6 @@ describe('gate/analyzer/shell-wrappers', () => {
           commandIndex: null,
           scriptIndex: 1,
           readsStdinAsCommands: false,
-          syntaxCheck: false,
         },
       },
     ];
