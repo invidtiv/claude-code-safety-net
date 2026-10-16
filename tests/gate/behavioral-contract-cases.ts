@@ -681,9 +681,19 @@ export function behavioralContractCases(paths: {
           unverifiableShellSourceBlock,
         ],
         [
-          'blocks a home removal in a child shell of parallel with a +n after -n',
+          'fails closed on a child shell of parallel with a +n after -n',
           "parallel zsh -n +n -c 'rm -rf ~' ::: x",
-          homeRemovalBlock,
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on an option word that -c would take as its command string in a quoted parallel child shell',
+          "parallel -q bash -c -x 'rm -rf ~' ::: x",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a +n in a quoted parallel child shell',
+          "parallel -q bash -c +n 'git reset --hard' ::: x",
+          unverifiableShellSourceBlock,
         ],
         ['allows a syntax check of a script', 'bash -n script.sh', { kind: 'allow' }],
         [
