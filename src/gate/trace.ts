@@ -114,7 +114,7 @@ export function createCommandTraceContext(recorder: CommandTraceRecorder): Comma
       return nextSegmentIndex;
     },
     branch() {
-      const branchRecorder = createCommandTraceRecorder();
+      const branchRecorder = recorder.fork();
       const trace = createCommandTraceContext(branchRecorder);
       return {
         trace,
@@ -135,9 +135,8 @@ export function createCommandTraceContext(recorder: CommandTraceRecorder): Comma
   return context;
 }
 
-export function createCommandTraceRecorder() {
+export function createCommandTraceRecorder(sensitiveHashes = new Set<string>()) {
   const events: CommandTraceEvent[] = [];
-  const sensitiveHashes = new Set<string>();
 
   return {
     record(event: CommandTraceEvent): void {
@@ -147,6 +146,9 @@ export function createCommandTraceRecorder() {
         ...event,
         step: sanitizeValue(event.step, LIMITS, sensitiveHashes) as TraceStep,
       });
+    },
+    fork() {
+      return createCommandTraceRecorder(sensitiveHashes);
     },
     replaceSegmentEvents(replacement: readonly CommandTraceEvent[]): void {
       events.splice(

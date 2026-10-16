@@ -173,6 +173,16 @@ test('a POSIX reading of a PowerShell guess traces only the POSIX reading', () =
   ]);
 });
 
+test('a POSIX reading of a PowerShell guess hides a value already marked secret', () => {
+  const result = compareSides(
+    fixture(),
+    'Get-Content local-private-value; PASSWORD=local-private-value true',
+  );
+  expect(JSON.stringify((result.trace as { segments: unknown }).segments)).not.toContain(
+    'local-private-value',
+  );
+});
+
 test('a PowerShell decision kept over an unverified POSIX reading traces only the PowerShell reading', () => {
   const powerShellMatch =
     'rule-check analyzer/powershell/remove-item.ts:analyzePowerShellCommandViewMatch';
