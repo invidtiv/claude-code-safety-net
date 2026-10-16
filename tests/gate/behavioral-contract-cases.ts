@@ -79,6 +79,18 @@ export function behavioralContractCases(paths: {
     intent: 'stop_and_explain',
     reasonIncludes: 'could not be safely analyzed',
   };
+  const atStandardAndStrict = (
+    rows: [string, string, BehavioralContractCase['expected']][],
+    values: OptionValues,
+  ) =>
+    [false, true].flatMap((strict) =>
+      rows.map(([name, command, expected]) => ({
+        name: `${name}${strict ? ' at strict safety' : ''}`,
+        command,
+        options: options({ ...values, strict }),
+        expected,
+      })),
+    );
   const homeRemovalBlock: BehavioralContractCase['expected'] = {
     kind: 'block',
     ruleId: 'rm.recursive-force-root-or-home',
@@ -664,112 +676,106 @@ export function behavioralContractCases(paths: {
         reasonIncludes: 'targeting root or home',
       },
     },
-    ...[false, true].flatMap((strict) =>
-      (
+    ...atStandardAndStrict(
+      [
         [
-          [
-            'blocks a home removal in a parameter-expansion operand',
-            'echo ${x:-$(rm -rf ~/)}',
-            homeRemovalBlock,
-          ],
-          [
-            'blocks a home removal in a double-quoted parameter-expansion operand',
-            'echo "${x:-$(rm -rf ~/)}"',
-            homeRemovalBlock,
-          ],
-          [
-            'blocks a home removal in an operand inside a double-quoted argument of a substitution',
-            'echo $(printf "%s" "${U:-$(rm -rf ~/)}")',
-            homeRemovalBlock,
-          ],
-          [
-            'blocks a home removal behind a process substitution in a pattern operand',
-            'echo "${y#<(rm -rf ~/)}"',
-            homeRemovalBlock,
-          ],
-          [
-            'blocks a home removal inside double-quoted arithmetic',
-            'echo "$(( $(rm -rf ~/) ))"',
-            homeRemovalBlock,
-          ],
-          [
-            'fails closed on a backtick body whose escaped dollar hides a substitution',
-            'echo `echo "\\$(rm -rf ~/)"`',
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a backtick body whose doubled backslash unquotes a substitution',
-            "echo `echo \\\\'$(rm -rf ~/)\\\\'`",
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a backtick body whose doubled backslash reaches a quote across a line continuation',
-            "echo `echo \\\\\\\n'$(rm -rf ~/)\\\\\\\n'`",
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a quote beside a substitution in a parameter expansion',
-            'echo ${x:-"$(date)"}',
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a function substitution in a parameter-expansion operand',
-            'echo ${x:-${ rm -rf ~/; }}',
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a quoted closing brace that ends a parameter expansion early',
-            "echo ${x:-'}'$(rm -rf ~/)\\'}",
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a line continuation that hides a substitution in a parameter expansion',
-            'echo ${x:-$\\\n(rm -rf ~/)}',
-            unparseableBlock,
-          ],
-          [
-            'fails closed on balanced mixed quotes that end a parameter expansion early',
-            "echo ${x:-'\"'\"}'$(rm -rf ~/)'\"}'\"\\'",
-            unparseableBlock,
-          ],
-          [
-            'fails closed on an escaped quote that ends a parameter expansion early',
-            "echo ${x:-'\\''}'$(rm -rf ~/)'}'\\'}",
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a backtick body whose doubled backslash joins a command name',
-            'echo `r\\\\m -rf ~/`',
-            unparseableBlock,
-          ],
-          [
-            'allows an apostrophe in a double-quoted default-value operand',
-            'echo "${MSG:-it\'s done}"',
-            { kind: 'allow' },
-          ],
-          ['allows a nested parameter expansion', 'echo ${x:-${y}}', { kind: 'allow' }],
-          [
-            'allows a harmless generator in a default-value operand',
-            'EDITOR=${EDITOR:-$(command -v vim)}',
-            { kind: 'allow' },
-          ],
-          [
-            'allows a double-quoted substitution nested in a default-value operand',
-            'NODE_DIR=${NODE_DIR:-$(dirname "$(command -v node)")}',
-            { kind: 'allow' },
-          ],
-          [
-            'allows harmless double-quoted arithmetic over a substitution',
-            'echo "$(( $(date +%s) - 60 ))"',
-            { kind: 'allow' },
-          ],
-        ] satisfies [string, string, BehavioralContractCase['expected']][]
-      ).map(([name, command, expected]) => ({
-        name: `${name}${strict ? ' at strict safety' : ''}`,
-        command,
-        options: options({ cwd: paths.cwd, strict }),
-        expected,
-      })),
+          'blocks a home removal in a parameter-expansion operand',
+          'echo ${x:-$(rm -rf ~/)}',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal in a double-quoted parameter-expansion operand',
+          'echo "${x:-$(rm -rf ~/)}"',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal in an operand inside a double-quoted argument of a substitution',
+          'echo $(printf "%s" "${U:-$(rm -rf ~/)}")',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal behind a process substitution in a pattern operand',
+          'echo "${y#<(rm -rf ~/)}"',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal inside double-quoted arithmetic',
+          'echo "$(( $(rm -rf ~/) ))"',
+          homeRemovalBlock,
+        ],
+        [
+          'fails closed on a backtick body whose escaped dollar hides a substitution',
+          'echo `echo "\\$(rm -rf ~/)"`',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a backtick body whose doubled backslash unquotes a substitution',
+          "echo `echo \\\\'$(rm -rf ~/)\\\\'`",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a backtick body whose doubled backslash reaches a quote across a line continuation',
+          "echo `echo \\\\\\\n'$(rm -rf ~/)\\\\\\\n'`",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a quote beside a substitution in a parameter expansion',
+          'echo ${x:-"$(date)"}',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a function substitution in a parameter-expansion operand',
+          'echo ${x:-${ rm -rf ~/; }}',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a quoted closing brace that ends a parameter expansion early',
+          "echo ${x:-'}'$(rm -rf ~/)\\'}",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a line continuation that hides a substitution in a parameter expansion',
+          'echo ${x:-$\\\n(rm -rf ~/)}',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on balanced mixed quotes that end a parameter expansion early',
+          "echo ${x:-'\"'\"}'$(rm -rf ~/)'\"}'\"\\'",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on an escaped quote that ends a parameter expansion early',
+          "echo ${x:-'\\''}'$(rm -rf ~/)'}'\\'}",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a backtick body whose doubled backslash joins a command name',
+          'echo `r\\\\m -rf ~/`',
+          unparseableBlock,
+        ],
+        [
+          'allows an apostrophe in a double-quoted default-value operand',
+          'echo "${MSG:-it\'s done}"',
+          { kind: 'allow' },
+        ],
+        ['allows a nested parameter expansion', 'echo ${x:-${y}}', { kind: 'allow' }],
+        [
+          'allows a harmless generator in a default-value operand',
+          'EDITOR=${EDITOR:-$(command -v vim)}',
+          { kind: 'allow' },
+        ],
+        [
+          'allows a double-quoted substitution nested in a default-value operand',
+          'NODE_DIR=${NODE_DIR:-$(dirname "$(command -v node)")}',
+          { kind: 'allow' },
+        ],
+        [
+          'allows harmless double-quoted arithmetic over a substitution',
+          'echo "$(( $(date +%s) - 60 ))"',
+          { kind: 'allow' },
+        ],
+      ],
+      { cwd: paths.cwd },
     ),
     {
       name: 'blocks find delete',
@@ -876,6 +882,33 @@ export function behavioralContractCases(paths: {
         reasonIncludes: 'PowerShell Remove-Item -Recurse -Force',
         segment: 'Remove-Item . -Recurse -Force',
       },
+    },
+    ...atStandardAndStrict(
+      [
+        [
+          'fails closed on a mid-word hash after a PowerShell selector in auto mode',
+          'Get-Content x#; rm -rf ~',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a backslash-quote that PowerShell reads as a quote in auto mode',
+          'echo \\"; rm -rf ~; echo \\"; Get-Content x',
+          unparseableBlock,
+        ],
+        ['allows a plain PowerShell selector in auto mode', 'Get-Content x', { kind: 'allow' }],
+        [
+          'allows a POSIX comment that never selects PowerShell in auto mode',
+          'git log --oneline # recent commits',
+          { kind: 'allow' },
+        ],
+      ],
+      { cwd: paths.cwd, shell: 'auto' },
+    ),
+    {
+      name: 'keeps reading a PowerShell comment in explicit powershell mode',
+      command: 'Get-Content x # note',
+      options: options({ cwd: paths.cwd, shell: 'powershell' }),
+      expected: { kind: 'allow' },
     },
     {
       name: 'applies a custom rule',
