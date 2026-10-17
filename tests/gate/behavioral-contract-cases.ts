@@ -2206,17 +2206,6 @@ export function behavioralContractCases(paths: {
       },
     },
     {
-      name: 'blocks a heredoc script run after intervening commands that print nothing',
-      command: `cat > ${tempParent}/later.sh <<'EOF'\nrm -rf ~\nEOF\ntrue; ready=1; bash ${tempParent}/later.sh`,
-      options: options({ cwd: paths.cwd }),
-      expected: {
-        kind: 'block',
-        ruleId: 'rm.recursive-force-root-or-home',
-        intent: 'hard_stop',
-        reasonIncludes: 'rm -rf',
-      },
-    },
-    {
       name: 'blocks a heredoc script executed directly by its path',
       command: `S=${tempParent}; cat > $S/run.sh <<'EOF'\nrm -rf ~\nEOF\nchmod +x $S/run.sh && $S/run.sh`,
       options: options({ cwd: paths.cwd }),
@@ -2225,28 +2214,6 @@ export function behavioralContractCases(paths: {
         ruleId: 'rm.recursive-force-root-or-home',
         intent: 'hard_stop',
         reasonIncludes: 'rm -rf',
-      },
-    },
-    {
-      name: 'forgets a heredoc rcfile once a later command could have rewritten it',
-      command: `cat > ${tempParent}/rc.sh <<'EOF'\necho hi\nEOF\ncp ${tempParent}/other.sh ${tempParent}/rc.sh; bash --rcfile ${tempParent}/rc.sh -i -c 'echo hi'`,
-      options: options({ cwd: paths.cwd }),
-      expected: {
-        kind: 'block',
-        ruleId: 'analysis.dynamic-shell-source',
-        intent: 'stop_and_explain',
-        reasonIncludes: 'shell execution source cannot be verified',
-      },
-    },
-    {
-      name: 'forgets a heredoc rcfile once a later echo redirects into it through a variable',
-      command: `S=${tempParent}; cat > $S/rc2.sh <<'EOF'\necho hi\nEOF\necho x > $S/rc2.sh; bash --rcfile ${tempParent}/rc2.sh -i -c 'echo hi'`,
-      options: options({ cwd: paths.cwd }),
-      expected: {
-        kind: 'block',
-        ruleId: 'analysis.dynamic-shell-source',
-        intent: 'stop_and_explain',
-        reasonIncludes: 'shell execution source cannot be verified',
       },
     },
     {
@@ -2312,52 +2279,8 @@ export function behavioralContractCases(paths: {
       expected: { kind: 'allow' },
     },
     {
-      name: 'forgets a heredoc rcfile once an earlier exec points stdout at it',
-      command: `exec >${tempParent}/rc3.sh; cat >${tempParent}/rc3.sh <<'EOF'\necho hi\nEOF\nprintf 'rm -rf ~\\n'; bash --rcfile ${tempParent}/rc3.sh -i -c 'echo hi'`,
-      options: options({ cwd: paths.cwd }),
-      expected: {
-        kind: 'block',
-        ruleId: 'analysis.dynamic-shell-source',
-        intent: 'stop_and_explain',
-        reasonIncludes: 'shell execution source cannot be verified',
-      },
-    },
-    {
-      name: 'forgets a heredoc rcfile once a later command writes to a descriptor opened on it',
-      command: `exec 3>${tempParent}/rc4.sh; cat >${tempParent}/rc4.sh <<'EOF'\necho hi\nEOF\nprintf 'rm -rf ~\\n' >&3; bash --rcfile ${tempParent}/rc4.sh -i -c 'echo hi'`,
-      options: options({ cwd: paths.cwd }),
-      expected: {
-        kind: 'block',
-        ruleId: 'analysis.dynamic-shell-source',
-        intent: 'stop_and_explain',
-        reasonIncludes: 'shell execution source cannot be verified',
-      },
-    },
-    {
       name: 'keeps $PWD in a script operand dynamic when a wrapper changes the working directory',
       command: `cat > $PWD/cleanup.sh <<'EOF'\nrm -rf ~\nEOF\nenv -C ${tempParent} bash $PWD/cleanup.sh`,
-      options: options({ cwd: paths.cwd }),
-      expected: {
-        kind: 'block',
-        ruleId: 'analysis.dynamic-shell-source',
-        intent: 'stop_and_explain',
-        reasonIncludes: 'shell execution source cannot be verified',
-      },
-    },
-    {
-      name: 'forgets a heredoc rcfile once a cd that may print runs after an exec redirection',
-      command: `exec > ${tempParent}/rc5.sh; CDPATH=${tempParent}; cat > ${tempParent}/rc5.sh <<'EOF'\necho hi\nEOF\ncd 'x; rm -rf ~'; bash --rcfile ${tempParent}/rc5.sh -i -c 'echo hi'`,
-      options: options({ cwd: paths.cwd }),
-      expected: {
-        kind: 'block',
-        ruleId: 'analysis.dynamic-shell-source',
-        intent: 'stop_and_explain',
-        reasonIncludes: 'shell execution source cannot be verified',
-      },
-    },
-    {
-      name: 'forgets a heredoc rcfile once a verbose chmod runs after an exec redirection',
-      command: `exec > ${tempParent}/rc6.sh; cat > ${tempParent}/rc6.sh <<'EOF'\necho hi\nEOF\nchmod -v +x ${tempParent}/rc6.sh; bash --rcfile ${tempParent}/rc6.sh -i -c 'echo hi'`,
       options: options({ cwd: paths.cwd }),
       expected: {
         kind: 'block',

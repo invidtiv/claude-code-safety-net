@@ -883,7 +883,7 @@ function finalizeAnalyzedCommandView(
     options.environment.paths,
     options.budget,
   );
-  if (!leavesFileContentsUnchanged(commandView)) state.literalHeredocFiles.clear();
+  if (!onlyAssignsVariables(commandView)) state.literalHeredocFiles.clear();
   trackLiteralHeredocFiles(
     commandView,
     heredocReason,
@@ -911,25 +911,14 @@ function finalizeAnalyzedCommandView(
 
 const FILE_NONTRUNCATING_WRITE_REDIRECTIONS = new Set(['>>', '<>']);
 const SHELL_ASSIGNMENT_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
-const OUTPUT_FREE_COMMANDS = new Set([':', 'true']);
 
-function leavesFileContentsUnchanged(commandView: CommandView): boolean {
-  const head = commandView.words[0];
-  const runsPreservingCommand =
-    head !== undefined && OUTPUT_FREE_COMMANDS.has(head.text) && isBareCommandWord(head, head.text);
-  const onlyAssigns =
-    commandView.words.length > 0 &&
-    commandView.words.every((word) => SHELL_ASSIGNMENT_WORD_RE.test(word.raw));
+function onlyAssignsVariables(commandView: CommandView): boolean {
   return (
     commandView.nested.length === 0 &&
-    (runsPreservingCommand || onlyAssigns) &&
-    commandView.redirections.every(writesNoFile)
+    commandView.redirections.length === 0 &&
+    commandView.words.length > 0 &&
+    commandView.words.every((word) => SHELL_ASSIGNMENT_WORD_RE.test(word.raw))
   );
-}
-
-function writesNoFile(redirection: CommandRedirection): boolean {
-  if (!redirection.operator.includes('>')) return true;
-  return redirection.target?.provenance === 'literal' && redirection.target.text === '/dev/null';
 }
 
 function invalidateLiteralHeredocFiles(
