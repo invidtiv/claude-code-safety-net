@@ -409,12 +409,7 @@ export function analyzeSegment(
       stripped[sourceCandidateIndex] === '--' ? sourceCandidateIndex + 1 : sourceCandidateIndex;
     const source = options.commandView ? words[sourceOperandIndex] : undefined;
     if (!source) return null;
-    const sourcePath =
-      source.provenance === 'literal'
-        ? source.text
-        : options.strict
-          ? null
-          : expandKnownVariableWord(source, options.shellAssignments ?? new Map());
+    const sourcePath = literalOrAssignedPath(source, options);
     if (sourcePath !== null) {
       return analyzeTrackedHeredocScript(
         sourcePath,
@@ -432,6 +427,23 @@ export function analyzeSegment(
     ) {
       return dynamicShellSourceResult(trace);
     }
+  }
+
+  const executable = words[0];
+  if (!child && executable && head.includes('/') && options.literalHeredocFiles?.size) {
+    const executablePath = literalOrAssignedPath(executable, options);
+    const scriptResult =
+      executablePath === null
+        ? null
+        : analyzeTrackedHeredocScript(
+            executablePath,
+            nestedEffectiveCwd,
+            envAssignments,
+            options,
+            trace,
+            depth,
+          );
+    if (scriptResult) return scriptResult;
   }
 
   if (AWK_INTERPRETERS.has(normalizedHead) && !embedded) {
@@ -872,6 +884,13 @@ function analyzeShellStartupSources(
     depth,
     true,
   );
+}
+
+function literalOrAssignedPath(word: CommandWord, options: InternalOptions): string | null {
+  if (word.provenance === 'literal') return word.text;
+  return options.strict
+    ? null
+    : expandKnownVariableWord(word, options.shellAssignments ?? new Map());
 }
 
 function analyzeTrackedHeredocScript(

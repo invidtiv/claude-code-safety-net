@@ -2206,6 +2206,50 @@ export function behavioralContractCases(paths: {
       },
     },
     {
+      name: 'blocks a heredoc script run after intervening commands that leave files unchanged',
+      command: `cat > ${tempParent}/later.sh <<'EOF'\nrm -rf ~\nEOF\ntrue; chmod +x ${tempParent}/later.sh; bash ${tempParent}/later.sh`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'rm.recursive-force-root-or-home',
+        intent: 'hard_stop',
+        reasonIncludes: 'rm -rf',
+      },
+    },
+    {
+      name: 'blocks a heredoc script executed directly by its path',
+      command: `S=${tempParent}; cat > $S/run.sh <<'EOF'\nrm -rf ~\nEOF\nchmod +x $S/run.sh && $S/run.sh`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'rm.recursive-force-root-or-home',
+        intent: 'hard_stop',
+        reasonIncludes: 'rm -rf',
+      },
+    },
+    {
+      name: 'forgets a heredoc rcfile once a later command could have rewritten it',
+      command: `cat > ${tempParent}/rc.sh <<'EOF'\necho hi\nEOF\ncp ${tempParent}/other.sh ${tempParent}/rc.sh; bash --rcfile ${tempParent}/rc.sh -i -c 'echo hi'`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'analysis.dynamic-shell-source',
+        intent: 'stop_and_explain',
+        reasonIncludes: 'shell execution source cannot be verified',
+      },
+    },
+    {
+      name: 'forgets a heredoc rcfile once a later echo redirects into it through a variable',
+      command: `S=${tempParent}; cat > $S/rc2.sh <<'EOF'\necho hi\nEOF\necho x > $S/rc2.sh; bash --rcfile ${tempParent}/rc2.sh -i -c 'echo hi'`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'analysis.dynamic-shell-source',
+        intent: 'stop_and_explain',
+        reasonIncludes: 'shell execution source cannot be verified',
+      },
+    },
+    {
       name: 'blocks sourcing a file whose path expands from an unbound variable',
       command: 'source $S/env.sh',
       options: options({ cwd: paths.cwd }),
