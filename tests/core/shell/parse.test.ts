@@ -141,31 +141,43 @@ describe('core/shell/parse', () => {
   });
 
   test.each([
-    ['vertical tab', '\v'],
-    ['form feed', '\f'],
-    ['carriage return', '\r'],
-    ['no-break space', '\u00a0'],
-    ['ogham space mark', '\u1680'],
-    ['en quad', '\u2000'],
-    ['figure space', '\u2007'],
-    ['hair space', '\u200a'],
-    ['line separator', '\u2028'],
-    ['paragraph separator', '\u2029'],
-    ['narrow no-break space', '\u202f'],
-    ['medium mathematical space', '\u205f'],
-    ['ideographic space', '\u3000'],
-    ['byte order mark', '\ufeff'],
-  ])('rejects a %s, which bash and zsh read as part of a word', (_name, blank) => {
-    for (const source of [
-      `cd /tmp${blank}; rm -rf x`,
-      `echo 'a${blank}b'`,
-      `cat <<EOF\na${blank}b\nEOF`,
-    ]) {
-      const program = parseCommand(source, 'posix');
-      expect(program.status).toBe('invalid');
-      expect(program.issues.map((issue) => issue.code)).toContain('unsupported-blank');
-    }
-  });
+    ['vertical tab', '\v', 'invalid'],
+    ['form feed', '\f', 'invalid'],
+    ['carriage return', '\r', 'invalid'],
+    ['no-break space', '\u00a0', 'complete'],
+    ['ogham space mark', '\u1680', 'complete'],
+    ['en quad', '\u2000', 'complete'],
+    ['figure space', '\u2007', 'complete'],
+    ['hair space', '\u200a', 'complete'],
+    ['line separator', '\u2028', 'complete'],
+    ['paragraph separator', '\u2029', 'complete'],
+    ['narrow no-break space', '\u202f', 'complete'],
+    ['medium mathematical space', '\u205f', 'complete'],
+    ['ideographic space', '\u3000', 'complete'],
+    ['byte order mark', '\ufeff', 'complete'],
+  ] as const)(
+    'rejects an unquoted %s, which bash and zsh read as part of a word, and reads a quoted one as %s',
+    (_name, blank, quotedStatus) => {
+      for (const source of [
+        `cd /tmp${blank}; rm -rf x`,
+        `echo a${blank}b`,
+        `cat <<EOF${blank}x\nEOF${blank}x\nEOF`,
+        `echo "$(echo a${blank}b)"`,
+      ]) {
+        const program = parseCommand(source, 'posix');
+        expect(program.status).toBe('invalid');
+        expect(program.issues.map((issue) => issue.code)).toContain('unsupported-blank');
+      }
+      for (const source of [
+        `echo 'a${blank}b'`,
+        `git commit -m "a${blank}b"`,
+        `cat <<'EOF'\na${blank}b\nEOF`,
+        `cat <<EOF\na${blank}b\nEOF`,
+      ]) {
+        expect(parseCommand(source, 'posix').status).toBe(quotedStatus);
+      }
+    },
+  );
 
   test.each(['echo a b\tc\nd', 'echo \u0085 \u200b é 日本語'])(
     'leaves space, tab, newline and non-blank Unicode alone: %s',

@@ -1620,6 +1620,31 @@ export function behavioralContractCases(paths: {
           unparseableBlock,
         ],
         [
+          'fails closed on an ideographic space a quoted shell body reads as part of a word',
+          'bash -c "echo a　#; rm -rf ~"',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on an ideographic space inside a quoted command substitution',
+          'echo "$(echo a　#; rm -rf ~)"',
+          unparseableBlock,
+        ],
+        [
+          'allows an ideographic space inside a quoted commit message',
+          "git commit -m '修正　テスト'",
+          { kind: 'allow' },
+        ],
+        [
+          'allows an ideographic space inside a quoted heredoc body',
+          "cat > notes.md <<'EOF'\n日本語　です\nEOF",
+          { kind: 'allow' },
+        ],
+        [
+          'allows a no-break space inside a quoted argument',
+          "gh pr create --title 'feat: 追加' --body 'Some text'",
+          { kind: 'allow' },
+        ],
+        [
           'fails closed on a live expansion inside a CRLF heredoc',
           'cat <<EOF\r\n$(git switch -f main)\r\nEOF\r\n',
           unparseableBlock,

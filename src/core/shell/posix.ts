@@ -96,7 +96,7 @@ export function parsePosixCommand(source: string, limits: CommandParserLimits): 
     ...(substitutionFollowsQuotedExpansion(source, parseState.quotedExpansionEnd, result.nodes)
       ? [QUOTED_PARAMETER_EXPANSION_ISSUE]
       : []),
-    ...(REFUSED_BLANK.test(source) ? [UNSUPPORTED_BLANK_ISSUE] : []),
+    ...(CONTROL_BLANK.test(source) ? [UNSUPPORTED_BLANK_ISSUE] : []),
   ];
   return {
     kind: 'program',
@@ -159,6 +159,7 @@ function scanSequence(
     }
 
     if (isShellWhitespace(char)) {
+      if (char.charCodeAt(0) > 127) issues.push(UNSUPPORTED_BLANK_ISSUE);
       if (char === '\n' || char === '\r') {
         flushCommand();
         const connectorEnd = char === '\r' && source[i + 1] === '\n' ? i + 2 : i + 1;
@@ -1075,7 +1076,7 @@ const UNCLOSED_PARAMETER_EXPANSION_ISSUE: CommandIssue = Object.freeze({
   message: '${ parameter expansion is not closed',
 });
 
-const REFUSED_BLANK = /(?![ \t\n])\s/u;
+const CONTROL_BLANK = /[\v\f\r]/;
 
 const UNSUPPORTED_BLANK_ISSUE: CommandIssue = Object.freeze({
   code: 'unsupported-blank',
