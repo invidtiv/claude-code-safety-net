@@ -312,6 +312,34 @@ export function evaluateGuard(
       options.trace,
     ),
   );
+  const readAsPosix =
+    invocation.route.shell === 'auto' && facts.store.readsAutoAsPowerShell()
+      ? () => {
+          const posixTrace = options.trace?.branch();
+          const evaluation: GuardEvaluation = {
+            ...evaluateGuard(
+              { ...invocation, route: { kind: 'command', shell: 'posix' } },
+              {
+                ...options,
+                ...(posixTrace ? { trace: posixTrace.trace } : {}),
+                dependencies: {
+                  ...options.dependencies,
+                  loadPolicySnapshot: () => snapshot,
+                  resolveGitMetadata: () => protectedGitMetadata,
+                },
+              },
+            ),
+            ...promoted,
+          };
+          return {
+            decision: evaluation.decision,
+            withItsTrace: () => {
+              posixTrace?.adopt();
+              return evaluation;
+            },
+          };
+        }
+      : undefined;
   if (analysis.decision) {
     const unverifiedByStandardMode =
       !modes.strict &&
@@ -319,6 +347,10 @@ export function evaluateGuard(
         (analysis.decision.reason === REASON_DYNAMIC_SHELL_SOURCE &&
           !BARE_SHELL_READING_STDIN.test(analysis.decision.evidence?.segment ?? '') &&
           dangerousInTextMatch(invocation.command as string) === null));
+    const posixReading = unverifiedByStandardMode ? readAsPosix?.() : undefined;
+    if (posixReading?.decision.kind === 'deny' && !posixReading.decision.unverifiedByStandardMode) {
+      return posixReading.withItsTrace();
+    }
     return {
       stage: 'command-analysis',
       ...reported,
@@ -328,7 +360,13 @@ export function evaluateGuard(
         : analysis.decision,
     };
   }
-  return { stage: 'command-analysis', ...reported, decision: { kind: 'allow' } };
+  return (
+    readAsPosix?.().withItsTrace() ?? {
+      stage: 'command-analysis',
+      ...reported,
+      decision: { kind: 'allow' },
+    }
+  );
 }
 
 function promoteDeclaredCommandTool(

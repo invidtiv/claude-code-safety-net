@@ -91,13 +91,13 @@ export function parsePosixCommand(source: string, limits: CommandParserLimits): 
 
   const parseState = { wordsUsed: 0, maxWords: limits.maxWords, quotedExpansionEnd: Infinity };
   const result = scanSequence(source, 0, source.length, limits, parseState, 0);
-  const issues = substitutionFollowsQuotedExpansion(
-    source,
-    parseState.quotedExpansionEnd,
-    result.nodes,
-  )
-    ? [...result.issues, QUOTED_PARAMETER_EXPANSION_ISSUE]
-    : result.issues;
+  const issues = [
+    ...result.issues,
+    ...(substitutionFollowsQuotedExpansion(source, parseState.quotedExpansionEnd, result.nodes)
+      ? [QUOTED_PARAMETER_EXPANSION_ISSUE]
+      : []),
+    ...(CONTROL_BLANK.test(source) ? [UNSUPPORTED_BLANK_ISSUE] : []),
+  ];
   return {
     kind: 'program',
     dialect: 'posix',
@@ -159,6 +159,7 @@ function scanSequence(
     }
 
     if (isShellWhitespace(char)) {
+      if (char.charCodeAt(0) > 127) issues.push(UNSUPPORTED_BLANK_ISSUE);
       if (char === '\n' || char === '\r') {
         flushCommand();
         const connectorEnd = char === '\r' && source[i + 1] === '\n' ? i + 2 : i + 1;
@@ -1075,6 +1076,14 @@ const UNCLOSED_PARAMETER_EXPANSION_ISSUE: CommandIssue = Object.freeze({
   message: '${ parameter expansion is not closed',
 });
 
+const CONTROL_BLANK = /[\v\f\r]/;
+
+const UNSUPPORTED_BLANK_ISSUE: CommandIssue = Object.freeze({
+  code: 'unsupported-blank',
+  message:
+    'a vertical tab, form feed, carriage return or Unicode space is part of a word in bash and zsh, not a separator',
+});
+
 const QUOTED_PARAMETER_EXPANSION_ISSUE: CommandIssue = Object.freeze({
   code: 'unsupported-parameter-expansion',
   message:
@@ -1277,7 +1286,8 @@ function getParseStatus(issues: readonly CommandIssue[], limited = false): Comma
         issue.code === 'unsupported-function-substitution' ||
         issue.code === 'unsupported-backtick-escape' ||
         issue.code === 'unclosed-parameter-expansion' ||
-        issue.code === 'unsupported-parameter-expansion',
+        issue.code === 'unsupported-parameter-expansion' ||
+        issue.code === 'unsupported-blank',
     )
   ) {
     return 'invalid';

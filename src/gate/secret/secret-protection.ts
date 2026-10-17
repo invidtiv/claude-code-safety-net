@@ -32,7 +32,7 @@ import {
 } from '@/gate/guards/guard-walk';
 import { safetyNetSubcommandIndex } from '@/gate/guards/safety-net-invocation';
 import {
-  getCommandSyntaxFact,
+  getExecutedCommandSyntaxFact,
   projectSensitiveShellText,
   StructuralShellSyntaxLimitError,
   UnparseableCommandError,
@@ -396,9 +396,7 @@ export function findSensitiveTargetInSemanticFacts(
 }
 
 function isMetadataOnlyCommand(facts: SemanticFacts, environment: EnvironmentContext): boolean {
-  const syntax =
-    getCommandSyntaxFact(facts, 'input-candidate') ??
-    getCommandSyntaxFact(facts, 'declared-command');
+  const syntax = getExecutedCommandSyntaxFact(facts);
   if (!syntax) return false;
   if (syntax.program.nodes.some((node) => node.kind === 'command' && node.nested.length > 0)) {
     return false;
@@ -480,7 +478,7 @@ function extractToolPathTargets(
     return facts.paths.map((target) => ({ target, cwd }));
   }
 
-  const command = getCommandSyntaxFact(facts, 'input-candidate');
+  const command = getExecutedCommandSyntaxFact(facts);
   return [
     ...(command
       ? extractCommandPathTargets(

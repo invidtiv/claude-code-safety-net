@@ -79,6 +79,18 @@ export function behavioralContractCases(paths: {
     intent: 'stop_and_explain',
     reasonIncludes: 'could not be safely analyzed',
   };
+  const atStandardAndStrict = (
+    rows: [string, string, BehavioralContractCase['expected']][],
+    values: OptionValues,
+  ) =>
+    [false, true].flatMap((strict) =>
+      rows.map(([name, command, expected]) => ({
+        name: `${name}${strict ? ' at strict safety' : ''}`,
+        command,
+        options: options({ ...values, strict }),
+        expected,
+      })),
+    );
   const homeRemovalBlock: BehavioralContractCase['expected'] = {
     kind: 'block',
     ruleId: 'rm.recursive-force-root-or-home',
@@ -606,6 +618,134 @@ export function behavioralContractCases(paths: {
         reasonIncludes: 'destroys all uncommitted changes',
       },
     },
+    ...atStandardAndStrict(
+      [
+        [
+          'blocks a home removal behind zsh options that turn execution back on after -n',
+          "zsh -n -o exec -c 'rm -rf ~'",
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal behind a ksh long option that turns execution back on after -n',
+          "ksh -n --exec -c 'rm -rf ~'",
+          homeRemovalBlock,
+        ],
+        [
+          'fails closed on a zsh +n that turns execution back on after -n',
+          "zsh -n +n -c 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a bash +n that the -c cluster would take as its command string',
+          "bash -nc +n 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a +o noexec that turns execution back on after -n',
+          "bash -n +o noexec -c 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a +n after an -o value',
+          "sh -n -o posix +n -c 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a +nc cluster that selects the command string',
+          "bash -n +nc 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on an option word that -c would take as its command string',
+          "bash -c -x 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a lone dash that -c would take as its command string',
+          "sh -c - 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a -c cluster followed by an -o option',
+          "bash -ec -o pipefail 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a -c cluster whose -o takes the next word as its value',
+          "dash -oc pipefail 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a child shell of xargs with a +o noexec after -n',
+          "echo x | xargs bash -n +o noexec -c 'rm -rf ~'",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a child shell of parallel with a +n after -n',
+          "parallel zsh -n +n -c 'rm -rf ~' ::: x",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on an option word that -c would take as its command string in a quoted parallel child shell',
+          "parallel -q bash -c -x 'rm -rf ~' ::: x",
+          unverifiableShellSourceBlock,
+        ],
+        [
+          'fails closed on a +n in a quoted parallel child shell',
+          "parallel -q bash -c +n 'git reset --hard' ::: x",
+          unverifiableShellSourceBlock,
+        ],
+        ['allows a syntax check of a script', 'bash -n script.sh', { kind: 'allow' }],
+        [
+          'allows a syntax check of a command string that is never run',
+          "bash -n -c 'rm -rf ~'",
+          { kind: 'allow' },
+        ],
+        [
+          'allows a shell option before the command string',
+          "bash -o pipefail -c 'echo ok'",
+          { kind: 'allow' },
+        ],
+        [
+          'allows a script whose own arguments are property options',
+          'bash ./gradlew -Dorg.gradle.console=plain build',
+          { kind: 'allow' },
+        ],
+        [
+          'allows a script whose own arguments hold c and o',
+          'bash ./scripts/ci.sh -config ci.yml',
+          { kind: 'allow' },
+        ],
+        [
+          'allows a script whose own argument starts with +',
+          'bash scripts/release.sh +1',
+          { kind: 'allow' },
+        ],
+        [
+          'allows a positional argument starting with + after the command string',
+          `bash -c 'date "$1"' _ +%Y-%m-%d`,
+          { kind: 'allow' },
+        ],
+      ],
+      { cwd: paths.cwd },
+    ),
+    {
+      name: 'blocks a heredoc fed to zsh with an option that turns execution back on after -n',
+      command: "zsh -n -o exec <<'EOF'\ngit reset --hard\nEOF",
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'raw-text.dangerous-command',
+        intent: 'stop_and_explain',
+        reasonIncludes: 'Unparseable command text contains a destructive pattern',
+      },
+    },
+    {
+      name: 'fails closed on a heredoc fed to zsh with a +n after -n',
+      command: "zsh -n +n <<'EOF'\ngit reset --hard\nEOF",
+      options: options({ cwd: paths.cwd }),
+      expected: unverifiableShellSourceBlock,
+    },
     {
       name: 'allows an executable assembled by command substitution at standard safety',
       command: '$(printf r)m -rf /',
@@ -664,112 +804,106 @@ export function behavioralContractCases(paths: {
         reasonIncludes: 'targeting root or home',
       },
     },
-    ...[false, true].flatMap((strict) =>
-      (
+    ...atStandardAndStrict(
+      [
         [
-          [
-            'blocks a home removal in a parameter-expansion operand',
-            'echo ${x:-$(rm -rf ~/)}',
-            homeRemovalBlock,
-          ],
-          [
-            'blocks a home removal in a double-quoted parameter-expansion operand',
-            'echo "${x:-$(rm -rf ~/)}"',
-            homeRemovalBlock,
-          ],
-          [
-            'blocks a home removal in an operand inside a double-quoted argument of a substitution',
-            'echo $(printf "%s" "${U:-$(rm -rf ~/)}")',
-            homeRemovalBlock,
-          ],
-          [
-            'blocks a home removal behind a process substitution in a pattern operand',
-            'echo "${y#<(rm -rf ~/)}"',
-            homeRemovalBlock,
-          ],
-          [
-            'blocks a home removal inside double-quoted arithmetic',
-            'echo "$(( $(rm -rf ~/) ))"',
-            homeRemovalBlock,
-          ],
-          [
-            'fails closed on a backtick body whose escaped dollar hides a substitution',
-            'echo `echo "\\$(rm -rf ~/)"`',
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a backtick body whose doubled backslash unquotes a substitution',
-            "echo `echo \\\\'$(rm -rf ~/)\\\\'`",
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a backtick body whose doubled backslash reaches a quote across a line continuation',
-            "echo `echo \\\\\\\n'$(rm -rf ~/)\\\\\\\n'`",
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a quote beside a substitution in a parameter expansion',
-            'echo ${x:-"$(date)"}',
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a function substitution in a parameter-expansion operand',
-            'echo ${x:-${ rm -rf ~/; }}',
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a quoted closing brace that ends a parameter expansion early',
-            "echo ${x:-'}'$(rm -rf ~/)\\'}",
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a line continuation that hides a substitution in a parameter expansion',
-            'echo ${x:-$\\\n(rm -rf ~/)}',
-            unparseableBlock,
-          ],
-          [
-            'fails closed on balanced mixed quotes that end a parameter expansion early',
-            "echo ${x:-'\"'\"}'$(rm -rf ~/)'\"}'\"\\'",
-            unparseableBlock,
-          ],
-          [
-            'fails closed on an escaped quote that ends a parameter expansion early',
-            "echo ${x:-'\\''}'$(rm -rf ~/)'}'\\'}",
-            unparseableBlock,
-          ],
-          [
-            'fails closed on a backtick body whose doubled backslash joins a command name',
-            'echo `r\\\\m -rf ~/`',
-            unparseableBlock,
-          ],
-          [
-            'allows an apostrophe in a double-quoted default-value operand',
-            'echo "${MSG:-it\'s done}"',
-            { kind: 'allow' },
-          ],
-          ['allows a nested parameter expansion', 'echo ${x:-${y}}', { kind: 'allow' }],
-          [
-            'allows a harmless generator in a default-value operand',
-            'EDITOR=${EDITOR:-$(command -v vim)}',
-            { kind: 'allow' },
-          ],
-          [
-            'allows a double-quoted substitution nested in a default-value operand',
-            'NODE_DIR=${NODE_DIR:-$(dirname "$(command -v node)")}',
-            { kind: 'allow' },
-          ],
-          [
-            'allows harmless double-quoted arithmetic over a substitution',
-            'echo "$(( $(date +%s) - 60 ))"',
-            { kind: 'allow' },
-          ],
-        ] satisfies [string, string, BehavioralContractCase['expected']][]
-      ).map(([name, command, expected]) => ({
-        name: `${name}${strict ? ' at strict safety' : ''}`,
-        command,
-        options: options({ cwd: paths.cwd, strict }),
-        expected,
-      })),
+          'blocks a home removal in a parameter-expansion operand',
+          'echo ${x:-$(rm -rf ~/)}',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal in a double-quoted parameter-expansion operand',
+          'echo "${x:-$(rm -rf ~/)}"',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal in an operand inside a double-quoted argument of a substitution',
+          'echo $(printf "%s" "${U:-$(rm -rf ~/)}")',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal behind a process substitution in a pattern operand',
+          'echo "${y#<(rm -rf ~/)}"',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal inside double-quoted arithmetic',
+          'echo "$(( $(rm -rf ~/) ))"',
+          homeRemovalBlock,
+        ],
+        [
+          'fails closed on a backtick body whose escaped dollar hides a substitution',
+          'echo `echo "\\$(rm -rf ~/)"`',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a backtick body whose doubled backslash unquotes a substitution',
+          "echo `echo \\\\'$(rm -rf ~/)\\\\'`",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a backtick body whose doubled backslash reaches a quote across a line continuation',
+          "echo `echo \\\\\\\n'$(rm -rf ~/)\\\\\\\n'`",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a quote beside a substitution in a parameter expansion',
+          'echo ${x:-"$(date)"}',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a function substitution in a parameter-expansion operand',
+          'echo ${x:-${ rm -rf ~/; }}',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a quoted closing brace that ends a parameter expansion early',
+          "echo ${x:-'}'$(rm -rf ~/)\\'}",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a line continuation that hides a substitution in a parameter expansion',
+          'echo ${x:-$\\\n(rm -rf ~/)}',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on balanced mixed quotes that end a parameter expansion early',
+          "echo ${x:-'\"'\"}'$(rm -rf ~/)'\"}'\"\\'",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on an escaped quote that ends a parameter expansion early',
+          "echo ${x:-'\\''}'$(rm -rf ~/)'}'\\'}",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a backtick body whose doubled backslash joins a command name',
+          'echo `r\\\\m -rf ~/`',
+          unparseableBlock,
+        ],
+        [
+          'allows an apostrophe in a double-quoted default-value operand',
+          'echo "${MSG:-it\'s done}"',
+          { kind: 'allow' },
+        ],
+        ['allows a nested parameter expansion', 'echo ${x:-${y}}', { kind: 'allow' }],
+        [
+          'allows a harmless generator in a default-value operand',
+          'EDITOR=${EDITOR:-$(command -v vim)}',
+          { kind: 'allow' },
+        ],
+        [
+          'allows a double-quoted substitution nested in a default-value operand',
+          'NODE_DIR=${NODE_DIR:-$(dirname "$(command -v node)")}',
+          { kind: 'allow' },
+        ],
+        [
+          'allows harmless double-quoted arithmetic over a substitution',
+          'echo "$(( $(date +%s) - 60 ))"',
+          { kind: 'allow' },
+        ],
+      ],
+      { cwd: paths.cwd },
     ),
     {
       name: 'blocks find delete',
@@ -876,6 +1010,90 @@ export function behavioralContractCases(paths: {
         reasonIncludes: 'PowerShell Remove-Item -Recurse -Force',
         segment: 'Remove-Item . -Recurse -Force',
       },
+    },
+    ...atStandardAndStrict(
+      [
+        [
+          'blocks a home removal behind a mid-word hash that a PowerShell guess reads as a comment in auto mode',
+          'Get-Content x#; rm -rf ~',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal between backslash-quotes that a PowerShell guess reads as quotes in auto mode',
+          'echo \\"; rm -rf ~; echo \\"; Get-Content x',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal between backslash-apostrophes that a PowerShell guess reads as quotes in auto mode',
+          "echo \\'; rm -rf ~; echo \\'; Get-Content x",
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal after a backslash-backtick that PowerShell reads as an escape in auto mode',
+          'echo \\`; rm -rf ~; Get-Content x',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal joined by a line continuation that a PowerShell guess reads as a line break in auto mode',
+          'Get-Content x; r\\\nm -rf ~',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal in an input process substitution that PowerShell reads as text in auto mode',
+          'Get-Content x; cat <(rm -rf ~)',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal in an output process substitution that PowerShell reads as text in auto mode',
+          'Get-Content x; echo >(rm -rf ~)',
+          homeRemovalBlock,
+        ],
+        [
+          'blocks a home removal behind a mid-word hash in a nested shell body guessed as PowerShell',
+          "bash -c 'Get-Content x#; rm -rf ~'",
+          homeRemovalBlock,
+        ],
+        [
+          'allows a PowerShell comment after a selector in auto mode',
+          'Get-Content x # note',
+          { kind: 'allow' },
+        ],
+        [
+          'allows inline code in a PowerShell comment after a selector in auto mode',
+          'Get-Content README.md # use `code` in docs',
+          { kind: 'allow' },
+        ],
+        ['allows a plain PowerShell selector in auto mode', 'Get-Content x', { kind: 'allow' }],
+        [
+          'allows a Windows path after a PowerShell selector in auto mode',
+          'Get-Content C:\\Users\\me\\notes.txt',
+          { kind: 'allow' },
+        ],
+        [
+          'allows a POSIX comment that never selects PowerShell in auto mode',
+          'git log --oneline # recent commits',
+          { kind: 'allow' },
+        ],
+      ],
+      { cwd: paths.cwd, shell: 'auto' },
+    ),
+    {
+      name: 'allows a backtick substitution that PowerShell reads as escapes in auto mode, like its POSIX reading',
+      command: 'Get-Content x; echo `true`;rm -rf ~/` true`',
+      options: options({ cwd: paths.cwd, shell: 'auto' }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'fails closed on a backtick substitution that PowerShell reads as escapes in auto mode at strict safety',
+      command: 'Get-Content x; echo `true`;rm -rf ~/` true`',
+      options: options({ cwd: paths.cwd, shell: 'auto', strict: true }),
+      expected: unparseableBlock,
+    },
+    {
+      name: 'keeps reading a PowerShell comment in explicit powershell mode',
+      command: 'Get-Content x # note',
+      options: options({ cwd: paths.cwd, shell: 'powershell' }),
+      expected: { kind: 'allow' },
     },
     {
       name: 'applies a custom rule',
@@ -1379,66 +1597,61 @@ export function behavioralContractCases(paths: {
         reasonIncludes: 'Unquoted heredoc',
       },
     },
-    {
-      name: 'blocks a live expansion behind a CR-suffixed heredoc terminator at standard safety',
-      command: "cat <<EOF\nEOF\r\ncat <<'EOF'\n$(git push --force)\nEOF",
-      options: options({ cwd: paths.cwd }),
-      expected: {
-        kind: 'block',
-        ruleId: 'git.push-force',
-        intent: 'use_alternative',
-        reasonIncludes: 'destroys remote history',
-        segment: 'git push --force',
-      },
-    },
-    {
-      name: 'blocks a live expansion behind a CR-suffixed heredoc terminator at strict safety',
-      command: "cat <<EOF\nEOF\r\ncat <<'EOF'\n$(git push --force)\nEOF",
-      options: options({ cwd: paths.cwd, strict: true }),
-      expected: {
-        kind: 'block',
-        ruleId: 'git.push-force',
-        intent: 'use_alternative',
-        reasonIncludes: 'destroys remote history',
-        segment: 'git push --force',
-      },
-    },
-    {
-      name: 'allows a benign CRLF heredoc at standard safety',
-      command: 'cat <<EOF\r\nhello\r\nEOF\r\n',
-      options: options({ cwd: paths.cwd }),
-      expected: { kind: 'allow' },
-    },
-    {
-      name: 'allows a benign CRLF heredoc at strict safety because its delimiter keeps the CR',
-      command: 'cat <<EOF\r\nhello\r\nEOF\r\n',
-      options: options({ cwd: paths.cwd, strict: true }),
-      expected: { kind: 'allow' },
-    },
-    {
-      name: 'blocks a live expansion inside a CRLF heredoc at standard safety',
-      command: 'cat <<EOF\r\n$(git switch -f main)\r\nEOF\r\n',
-      options: options({ cwd: paths.cwd }),
-      expected: {
-        kind: 'block',
-        ruleId: 'git.switch-force',
-        intent: 'use_alternative',
-        reasonIncludes: 'discards uncommitted changes',
-        segment: 'git switch -f main',
-      },
-    },
-    {
-      name: 'blocks a live expansion inside a CRLF heredoc at strict safety',
-      command: 'cat <<EOF\r\n$(git switch -f main)\r\nEOF\r\n',
-      options: options({ cwd: paths.cwd, strict: true }),
-      expected: {
-        kind: 'block',
-        ruleId: 'git.switch-force',
-        intent: 'use_alternative',
-        reasonIncludes: 'discards uncommitted changes',
-        segment: 'git switch -f main',
-      },
-    },
+    ...atStandardAndStrict(
+      [
+        [
+          'fails closed on a CR-suffixed heredoc terminator, whose CR bash keeps in the line',
+          "cat <<EOF\nEOF\r\ncat <<'EOF'\n$(git push --force)\nEOF",
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a benign CRLF heredoc, whose CR bash keeps in each line',
+          'cat <<EOF\r\nhello\r\nEOF\r\n',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a no-break space that bash keeps inside a heredoc delimiter',
+          'cat <<EOF\u00a0x\nEOF\u00a0x\nrm -rf ~/Documents\nEOF',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a byte order mark that bash keeps inside a heredoc delimiter',
+          'cat <<EOF\ufeffx\nEOF\ufeffx\nrm -rf ~/Documents\nEOF',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on an ideographic space a quoted shell body reads as part of a word',
+          'bash -c "echo a　#; rm -rf ~"',
+          unparseableBlock,
+        ],
+        [
+          'fails closed on an ideographic space inside a quoted command substitution',
+          'echo "$(echo a　#; rm -rf ~)"',
+          unparseableBlock,
+        ],
+        [
+          'allows an ideographic space inside a quoted commit message',
+          "git commit -m '修正　テスト'",
+          { kind: 'allow' },
+        ],
+        [
+          'allows an ideographic space inside a quoted heredoc body',
+          "cat > notes.md <<'EOF'\n日本語　です\nEOF",
+          { kind: 'allow' },
+        ],
+        [
+          'allows a no-break space inside a quoted argument',
+          "gh pr create --title 'feat: 追加' --body 'Some text'",
+          { kind: 'allow' },
+        ],
+        [
+          'fails closed on a live expansion inside a CRLF heredoc',
+          'cat <<EOF\r\n$(git switch -f main)\r\nEOF\r\n',
+          unparseableBlock,
+        ],
+      ],
+      { cwd: paths.cwd },
+    ),
     {
       name: 'allows dd writing to a regular file',
       command: 'dd if=/dev/zero of=disk.img bs=1M',
@@ -1839,6 +2052,31 @@ export function behavioralContractCases(paths: {
         reasonIncludes: 'destroys all uncommitted changes',
       },
     },
+    ...atStandardAndStrict(
+      [
+        [
+          'blocks a temp-root Git clean whose command-line config moves the work tree',
+          `git -C ${tempRepo} -c core.worktree=${paths.home} clean -ffdx`,
+          {
+            kind: 'block',
+            ruleId: 'git.clean-force',
+            intent: 'use_alternative',
+            reasonIncludes: 'removes untracked files permanently',
+          },
+        ],
+        [
+          'blocks a temp-root Git clean whose environment config moves the work tree',
+          `GIT_CONFIG_PARAMETERS="'core.worktree'='${paths.home}'" git -C ${tempRepo} clean -ffdx`,
+          {
+            kind: 'block',
+            ruleId: 'git.clean-force',
+            intent: 'use_alternative',
+            reasonIncludes: 'removes untracked files permanently',
+          },
+        ],
+      ],
+      { cwd: paths.cwd },
+    ),
     {
       name: 'blocks a Git discard when the for list exceeds the binding cap',
       command: `for c in a b c d e f g h i; do R=${tempParent}/$c; cd $R; git reset --hard; done`,
@@ -2005,6 +2243,36 @@ export function behavioralContractCases(paths: {
         segment: 'rm -rf build',
       },
     },
+    ...atStandardAndStrict(
+      [
+        [
+          'fails closed on a vertical tab that bash keeps inside a cd operand',
+          `cd ~; cd ${tempRepo}\v; rm -rf Documents`,
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a no-break space that bash keeps inside a cd operand',
+          `cd ~; cd ${tempRepo}\u00a0; rm -rf Documents`,
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a byte order mark that bash keeps inside a cd operand',
+          `cd ~; cd ${tempRepo}\ufeff; rm -rf Documents`,
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a CRLF line end whose CR bash keeps inside a cd operand',
+          `cd ~; cd ${tempRepo}\r\nrm -rf Documents`,
+          unparseableBlock,
+        ],
+        [
+          'fails closed on a vertical tab an ANSI-C quoted shell body keeps inside a cd operand',
+          `bash -c $'cd ~; cd ${tempRepo}\\v; rm -rf Documents'`,
+          unparseableBlock,
+        ],
+      ],
+      { cwd: paths.cwd },
+    ),
     {
       name: 'blocks a delete after a cd into a directory whose mkdir may have failed',
       command: `mkdir -p ${tempParent}/fresh || true; cd ${tempParent}/fresh; rm -rf build`,

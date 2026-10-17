@@ -152,3 +152,45 @@ test('a literal for list records the later segments once per forked state', () =
     'custom-rules-check',
   ]);
 });
+
+const segmentSteps = (result: Record<string, unknown>) =>
+  (
+    result.trace as { segments: { index: number; steps: { type: string; rule?: string }[] }[] }
+  ).segments.map((segment) => [
+    segment.index,
+    segment.steps.map((step) => (step.rule ? `${step.type} ${step.rule}` : step.type)),
+  ]);
+
+test('a POSIX reading of a PowerShell guess traces only the POSIX reading', () => {
+  const result = compareSides(fixture(), 'Get-Content x; cat <(rm -rf ~)');
+  expect(result.result).toBe('blocked');
+  expect(
+    (result.trace as { steps: { type: string }[] }).steps.map((step) => step.type),
+  ).toStrictEqual(['parse']);
+  expect(segmentSteps(result)).toStrictEqual([
+    [0, ['fallback-scan', 'custom-rules-check']],
+    [2, ['tmpdir-check', 'rule-check analyzer/rm.ts:analyzeRmMatch']],
+  ]);
+});
+
+test('a POSIX reading of a PowerShell guess hides a value already marked secret', () => {
+  const result = compareSides(
+    fixture(),
+    'Get-Content local-private-value; PASSWORD=local-private-value true',
+  );
+  expect(JSON.stringify((result.trace as { segments: unknown }).segments)).not.toContain(
+    'local-private-value',
+  );
+});
+
+test('a PowerShell decision kept over an unverified POSIX reading traces only the PowerShell reading', () => {
+  const powerShellMatch =
+    'rule-check analyzer/powershell/remove-item.ts:analyzePowerShellCommandViewMatch';
+  const result = compareSides(fixture(), "Get-Content x; W='rm -rf ~'; $W");
+  expect(result.ruleId).toBe('raw-text.dangerous-command');
+  expect(segmentSteps(result)).toStrictEqual([
+    [0, [powerShellMatch, 'fallback-scan', 'custom-rules-check']],
+    [1, [powerShellMatch, 'dangerous-text']],
+    [2, ['segment-skipped']],
+  ]);
+});

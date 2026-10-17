@@ -26,13 +26,10 @@ describe('core/shell/parse', () => {
     expect(program.issues.map((issue) => issue.code)).toContain('ambiguous-heredoc-delimiter');
   });
 
-  test('a quoted CRLF continuation joins one literal argument', () => {
+  test('refuses a quoted CRLF continuation, because bash keeps the backslash and the CR', () => {
     const program = parseCommand('printf "first\\\r\nsecond"', 'posix');
-    expect(program.status).toBe('complete');
-    expect(projectCommandViews(program)[0]?.words.map((word) => word.text)).toEqual([
-      'printf',
-      'firstsecond',
-    ]);
+    expect(program.status).toBe('invalid');
+    expect(program.issues.map((issue) => issue.code)).toContain('unsupported-blank');
   });
 
   test.each(['echo; f() { :; }', 'echo > output'])(
@@ -56,7 +53,7 @@ describe('core/shell/parse', () => {
   });
 
   test('parses a command into segments, words and nested programs', () => {
-    const program = parseCommand('echo "\u{1F600}" && git reset --hard\r\nrm -rf /tmp/x', 'posix');
+    const program = parseCommand('echo "\u{1F600}" && git reset --hard\nrm -rf /tmp/x', 'posix');
     expect(program.status).toBe('complete');
     expect(
       projectCommandViews(program).map((view) => view.words.map((word) => word.text)),
@@ -66,7 +63,7 @@ describe('core/shell/parse', () => {
       ['rm', '-rf', '/tmp/x'],
     ]);
     expect(
-      parseCommand('echo "\u{1F600}" && git reset --hard\r\nrm -rf /tmp/x', 'posix'),
+      parseCommand('echo "\u{1F600}" && git reset --hard\nrm -rf /tmp/x', 'posix'),
     ).toStrictEqual(program);
   });
 
@@ -142,6 +139,52 @@ describe('core/shell/parse', () => {
       'unsupported-function-substitution',
     );
   });
+
+  test.each([
+    ['vertical tab', '\v', 'invalid'],
+    ['form feed', '\f', 'invalid'],
+    ['carriage return', '\r', 'invalid'],
+    ['no-break space', '\u00a0', 'complete'],
+    ['ogham space mark', '\u1680', 'complete'],
+    ['en quad', '\u2000', 'complete'],
+    ['figure space', '\u2007', 'complete'],
+    ['hair space', '\u200a', 'complete'],
+    ['line separator', '\u2028', 'complete'],
+    ['paragraph separator', '\u2029', 'complete'],
+    ['narrow no-break space', '\u202f', 'complete'],
+    ['medium mathematical space', '\u205f', 'complete'],
+    ['ideographic space', '\u3000', 'complete'],
+    ['byte order mark', '\ufeff', 'complete'],
+  ] as const)(
+    'rejects an unquoted %s, which bash and zsh read as part of a word, and reads a quoted one as %s',
+    (_name, blank, quotedStatus) => {
+      for (const source of [
+        `cd /tmp${blank}; rm -rf x`,
+        `echo a${blank}b`,
+        `cat <<EOF${blank}x\nEOF${blank}x\nEOF`,
+        `echo "$(echo a${blank}b)"`,
+      ]) {
+        const program = parseCommand(source, 'posix');
+        expect(program.status).toBe('invalid');
+        expect(program.issues.map((issue) => issue.code)).toContain('unsupported-blank');
+      }
+      for (const source of [
+        `echo 'a${blank}b'`,
+        `git commit -m "a${blank}b"`,
+        `cat <<'EOF'\na${blank}b\nEOF`,
+        `cat <<EOF\na${blank}b\nEOF`,
+      ]) {
+        expect(parseCommand(source, 'posix').status).toBe(quotedStatus);
+      }
+    },
+  );
+
+  test.each(['echo a b\tc\nd', 'echo \u0085 \u200b é 日本語'])(
+    'leaves space, tab, newline and non-blank Unicode alone: %s',
+    (source) => {
+      expect(parseCommand(source, 'posix').status).toBe('complete');
+    },
+  );
 
   test.each([
     'echo ${HOME} ${x:-a b} ${#x}',
@@ -448,6 +491,18 @@ describe('core/shell/parse', () => {
       expect(program.status, source).toBe('complete');
       expect(program).toStrictEqual(parseCommand(source, 'auto'));
     }
+  });
+
+  test.each([
+    'echo \\`; rm -rf ~; Get-Content x',
+    'Get-Content README.md # use `code` in docs',
+    'Get-Content x#; rm -rf ~',
+    'echo \\"; rm -rf ~; echo \\"; Get-Content x',
+    "echo \\'; rm -rf ~; echo \\'; Get-Content x",
+    'Get-Content x; r\\\nm -rf ~',
+    'Get-Content x # note',
+  ])('an auto parse that picks PowerShell is the PowerShell parse: %s', (source) => {
+    expect(parseCommand(source, 'auto')).toStrictEqual(parseCommand(source, 'powershell'));
   });
 });
 

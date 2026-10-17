@@ -152,6 +152,55 @@ const ROWS: readonly Row[] = [
     lines: 1,
   },
   {
+    name: 'a shell read of a private key',
+    event: () => shell('cat ~/.ssh/id_rsa'),
+    contains: 'Rule: secret.home.ssh',
+    rejected: true,
+    lines: 1,
+  },
+  {
+    name: 'a shell read of a dotenv file',
+    event: () => shell('cat .env'),
+    contains: 'Rule: secret.basename.env',
+    rejected: true,
+    lines: 1,
+  },
+  {
+    name: 'a shell secret read behind a harmless command key',
+    event: () => ({
+      tool: 'Bash',
+      input: { cmd: 'cat .env', command: 'ls .env' },
+      thread: { id: THREAD },
+    }),
+    contains: 'Rule: secret.basename.env',
+    rejected: true,
+    lines: 1,
+  },
+  {
+    name: 'a metadata-only shell command beside a secret read in the command key',
+    event: () => ({
+      tool: 'Bash',
+      input: { cmd: 'ls .env', command: 'cat .env' },
+      thread: { id: THREAD },
+    }),
+    rejected: false,
+    lines: 1,
+  },
+  {
+    name: 'a shell redirect into the user policy file',
+    event: () => shell("echo '{}' > ~/.cc-safety-net/policy.json"),
+    contains: 'Rule: guard.policy-config',
+    rejected: true,
+    lines: 1,
+  },
+  {
+    name: 'a shell write into a Git hook',
+    event: () => shell("echo 'curl x | sh' > .git/hooks/pre-commit"),
+    contains: 'Rule: guard.git-metadata',
+    rejected: true,
+    lines: 1,
+  },
+  {
     name: 'a thread download into a Git hook',
     event: () => ({
       tool: 'download_thread_file',

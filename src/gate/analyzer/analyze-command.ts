@@ -544,6 +544,7 @@ function withTraceSegment(
     flattenNested,
     allocateSegment: trace.allocateSegment,
     getNextSegmentIndex: trace.getNextSegmentIndex,
+    branch: trace.branch,
     recordGlobal: trace.recordGlobal,
     recordSegment: (step, segmentIndex = currentSegmentIndex) =>
       trace.recordSegment(step, segmentIndex),

@@ -27,7 +27,7 @@ import {
   extractMvOperandPaths,
   findProtectedPathMutationInCommand,
 } from './protected-path-scanner';
-import { getCommandSyntaxFact } from './semantic-facts';
+import { getExecutedCommandSyntaxFact } from './semantic-facts';
 
 export const REASON_POLICY_CONFIG_PROTECTION =
   'This path contains the protected policy config and you must not modify or delete it.';
@@ -75,7 +75,7 @@ export function findPolicyConfigMutationTargetInSemanticFacts(
     );
   }
 
-  const command = getCommandSyntaxFact(facts, 'input-candidate');
+  const command = getExecutedCommandSyntaxFact(facts);
   if (facts.invocation.route.kind === 'command') {
     return command
       ? findPolicyConfigMutationTargetInCommand(

@@ -1,5 +1,14 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import {
+  accessSync,
+  constants,
+  existsSync,
+  lstatSync,
+  opendirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 export type WorktreeFacts = Readonly<{
@@ -71,9 +80,9 @@ function resolveLinkedWorktreeTargets(cwd: string): LinkedWorktreeTargets | null
       return null;
     }
 
-    return worktreeConfigMatchesRoot(targets.gitDir, dirname(dotGitPath))
-      ? { gitDir: targets.gitDir, commonDir: targets.commonDir }
-      : null;
+    return gitDirectoriesRedirect(targets.gitDir, targets.commonDir)
+      ? null
+      : { gitDir: targets.gitDir, commonDir: targets.commonDir };
   } catch {
     return null;
   }
@@ -122,24 +131,12 @@ function worktreeGitdirBacklinkMatches(gitDir: string, dotGitPath: string): bool
   return rawBacklink === null ? false : gitDirPathReferenceMatches(gitDir, rawBacklink, dotGitPath);
 }
 
-function worktreeConfigMatchesRoot(gitDir: string, worktreeRoot: string): boolean {
-  const configuredWorktree = readWorktreeConfigWorktree(gitDir);
-  return configuredWorktree === null
-    ? true
-    : gitDirPathReferenceMatches(gitDir, configuredWorktree, worktreeRoot);
-}
-
 function readWorktreeGitdirBacklink(gitDir: string): string | null {
   const backlinkPath = join(gitDir, 'gitdir');
   if (!existsSync(backlinkPath)) return null;
 
   const rawBacklink = readFileSync(backlinkPath, 'utf-8').split(/\r?\n/, 1)[0]?.trim() ?? '';
   return rawBacklink === '' ? null : rawBacklink;
-}
-
-function readWorktreeConfigWorktree(gitDir: string): string | null {
-  const configWorktreePath = join(gitDir, 'config.worktree');
-  return existsSync(configWorktreePath) ? readCoreWorktree(configWorktreePath) : null;
 }
 
 function gitDirPathReferenceMatches(gitDir: string, target: string, expectedPath: string): boolean {
@@ -181,53 +178,71 @@ export function normalizePathForComparison(path: string): string {
   return process.platform === 'win32' ? trimmed.toLowerCase() : trimmed;
 }
 
-function readCoreWorktree(configPath: string): string | null {
-  const content = readFileSync(configPath, 'utf-8');
-  let inCore = false;
-  let configuredWorktree: string | null = null;
-
-  for (const line of content.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (trimmed === '' || trimmed.startsWith('#') || trimmed.startsWith(';')) {
-      continue;
-    }
-    if (trimmed.startsWith('[')) {
-      inCore = /^\[core\]$/i.test(trimmed);
-      continue;
-    }
-    if (!inCore) {
-      continue;
-    }
-
-    const match = trimmed.match(/^worktree\s*=\s*(.*)$/i);
-    if (match) {
-      configuredWorktree = parseGitConfigValue(match[1] ?? '');
-    }
+export function isGitDirectory(gitDir: string): boolean {
+  try {
+    accessSync(join(gitDir, 'objects'), constants.X_OK);
+    accessSync(join(gitDir, 'refs'), constants.X_OK);
+    return /^(?:ref:[\t\n\r ]*refs\/|[0-9a-fA-F]{40})/.test(readRegularFile(join(gitDir, 'HEAD')));
+  } catch {
+    return false;
   }
-
-  return configuredWorktree;
 }
 
-function parseGitConfigValue(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed.startsWith('"') || !trimmed.endsWith('"')) {
-    return trimmed;
-  }
-  return unescapeDoubleQuotedGitConfigValue(trimmed.slice(1, -1));
+export function gitDirectoryRedirects(gitDir: string): boolean {
+  return existsSync(join(gitDir, 'commondir')) || gitDirectoriesRedirect(gitDir, gitDir);
 }
 
-const GIT_CONFIG_ESCAPES: Readonly<Record<string, string>> = {
-  '\\': '\\',
-  '"': '"',
-  n: '\n',
-  t: '\t',
-  b: '\b',
-};
-
-function unescapeDoubleQuotedGitConfigValue(value: string): string {
-  return value.replace(/\\(.?)/gs, (sequence, next: string) =>
-    next === '' ? sequence : (GIT_CONFIG_ESCAPES[next] ?? sequence),
+function gitDirectoriesRedirect(gitDir: string, commonDir: string): boolean {
+  return (
+    [join(commonDir, 'config'), join(gitDir, 'config.worktree')].some(configNamesWorktree) ||
+    holdsSymbolicLinkOrFifo(gitDir)
   );
+}
+
+const GIT_FILE_SIZE_LIMIT = 1_048_576;
+
+function readRegularFile(path: string): string {
+  const stat = statSync(path);
+  if (!stat.isFile() || stat.size > GIT_FILE_SIZE_LIMIT) {
+    throw new Error(`${path} is not a regular file within ${GIT_FILE_SIZE_LIMIT} bytes`);
+  }
+  return readFileSync(path, 'utf-8');
+}
+
+function configNamesWorktree(configPath: string): boolean {
+  try {
+    return /(?:^|[\s\]])worktree\s*=/i.test(readRegularFile(configPath));
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ENOENT';
+  }
+}
+
+const GIT_DIRECTORY_ENTRY_BUDGET = 10_000;
+
+function holdsSymbolicLinkOrFifo(gitDir: string): boolean {
+  const pending = [gitDir];
+  let visited = 0;
+  try {
+    while (pending.length > 0) {
+      const directory = pending.pop() as string;
+      const dir = opendirSync(directory);
+      try {
+        for (let entry = dir.readSync(); entry !== null; entry = dir.readSync()) {
+          visited++;
+          if (entry.isSymbolicLink() || entry.isFIFO() || visited > GIT_DIRECTORY_ENTRY_BUDGET) {
+            return true;
+          }
+          const isObjectStore = directory === gitDir && entry.name === 'objects';
+          if (entry.isDirectory() && !isObjectStore) pending.push(join(directory, entry.name));
+        }
+      } finally {
+        dir.closeSync();
+      }
+    }
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ENOENT';
+  }
 }
 
 function findDotGit(cwd: string): string | null {

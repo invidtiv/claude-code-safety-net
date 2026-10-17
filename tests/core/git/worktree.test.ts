@@ -6,7 +6,6 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -21,20 +20,6 @@ import { createLinkedWorktreeFixture, withLinkedWorktreeFixture } from '../../he
 
 const fixture = createLinkedWorktreeFixture();
 let scratch = '';
-
-const ODD_LINK_NAME = process.platform === 'win32' ? 'odd name' : 'odd "\\\t\n\bname';
-
-const GIT_CONFIG_ESCAPED: Readonly<Record<string, string>> = {
-  '\\': '\\\\',
-  '"': '\\"',
-  '\t': '\\t',
-  '\n': '\\n',
-  '\b': '\\b',
-};
-
-function quoteForGitConfig(path: string): string {
-  return `"${path.replace(/[\\"\t\n\b]/g, (char) => GIT_CONFIG_ESCAPED[char] ?? char)}"`;
-}
 
 function linkedGitDir(): string {
   return resolveDotGitFileTargets(join(fixture.linkedWorktree, '.git'))?.gitDir ?? '';
@@ -51,7 +36,6 @@ beforeAll(() => {
   scratch = mkdtempSync(join(tmpdir(), 'next-worktree-'));
   mkdirSync(join(fixture.linkedWorktree, 'nested'));
   writeFileSync(join(scratch, 'file'), 'x');
-  symlinkSync(fixture.linkedWorktree, join(scratch, ODD_LINK_NAME));
 });
 
 afterAll(() => {
@@ -117,27 +101,20 @@ describe('linked worktree facts', () => {
     }
   });
 
-  test('reads quoted and escaped core.worktree values like the shipped parser', () => {
+  test('a config.worktree that names any worktree leaves the linked worktree unverified', () => {
     const configPath = join(linkedGitDir(), 'config.worktree');
-    const quoted = quoteForGitConfig(realpathSync(fixture.linkedWorktree));
-    const escaped = quoted.slice(1, -1);
-    const accepted: readonly (readonly [string, boolean])[] = [
-      [quoted, true],
-      [`"${escaped}\\n"`, false],
-      [`"${escaped}\\t"`, false],
-      [`"${escaped}\\"`, true],
-      [`'${escaped}'`, false],
-      [escaped, true],
-      ['"', false],
-      [`"${escaped}\\q"`, false],
-      [fixture.mainWorktree, false],
-      [quoteForGitConfig(join(scratch, ODD_LINK_NAME)), true],
+    const root = realpathSync(fixture.linkedWorktree);
+    const rows: readonly (readonly [string, boolean])[] = [
+      [`[core]\n\tworktree = ${root}\n`, false],
+      [`[core] worktree = ${fixture.mainWorktree}\n`, false],
+      [`[CORE]\n\tWorkTree = ${root}\n`, false],
+      ['[core]\n\tsparseCheckout = true\n', true],
     ];
 
     try {
-      for (const [value, linked] of accepted) {
-        writeFileSync(configPath, `[core]\n\tworktree = ${value}\n`);
-        expect(resolveWorktreeFacts(fixture.linkedWorktree, null) !== null, value).toBe(linked);
+      for (const [config, linked] of rows) {
+        writeFileSync(configPath, config);
+        expect(resolveWorktreeFacts(fixture.linkedWorktree, null) !== null, config).toBe(linked);
       }
     } finally {
       rmSync(configPath, { force: true });

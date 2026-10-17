@@ -29,6 +29,7 @@ import { extractGitSubcommandAndRest } from './git/parse';
 import { GIT_RULE_SUBCOMMANDS } from './git/rules';
 import { extractInterpreterExecutableSources } from './interpreters';
 import { analyzeRmMatch } from './rm';
+import { dynamicShellSourceMatch } from './reasons';
 import { hasRecursiveForceFlags } from './rm-flags';
 import {
   extractPositionalShellSource,
@@ -36,7 +37,11 @@ import {
   quoteShellWord,
   shellSourceHasUnresolvedDynamicExecutionCarrier,
 } from './shell-execution';
-import { extractDashCArg, isShellSyntaxCheck } from './shell-wrappers';
+import {
+  extractDashCArg,
+  hasUnidentifiableCommandString,
+  isShellSyntaxCheck,
+} from './shell-wrappers';
 import { extractXargsChildCommandWithInfo } from './xargs';
 
 export const REASON_PARALLEL_RM =
@@ -278,6 +283,7 @@ function analyzeParallelChildWords(
       );
     };
     if (isShellSyntaxCheck(childTokens)) return analyzeExpandedShellArgv();
+    if (hasUnidentifiableCommandString(childTokens)) return dynamicShellSourceMatch();
     const dashCArg = extractDashCArg(childTokens);
     if (dashCArg) {
       if (isOnlyParallelPlaceholder(dashCArg)) {

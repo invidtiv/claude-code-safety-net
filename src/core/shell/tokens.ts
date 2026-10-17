@@ -62,13 +62,11 @@ export function scanShellShortOptions(
   followingValues: number;
   commandSelected: boolean;
   stdinMode: boolean;
-  syntaxCheck: boolean;
 } {
   let interactive = false;
   let followingValues = 0;
   let commandSelected = false;
   let stdinMode = false;
-  let syntaxCheck = false;
   for (let optionIndex = 1; optionIndex < token.length; optionIndex++) {
     const option = token[optionIndex];
     if (option === undefined) break;
@@ -95,20 +93,18 @@ export function scanShellShortOptions(
     if (shell === 'zsh' && option === 'o' && optionIndex + 1 < token.length) break;
     if (mode === 'startup' && option === 'i') interactive = token[0] === '-';
     if (mode === 'argv' && token[0] === '-' && option === 'c') commandSelected = true;
-    if (mode === 'argv' && option === 'n') syntaxCheck = token[0] === '-';
     if (mode === 'argv' && option === 's') stdinMode = token[0] === '-';
     if (!SHELL_SHORT_VALUE_OPTIONS[shell]?.includes(option)) continue;
     if (optionIndex + 1 === token.length) followingValues++;
     break;
   }
-  return { interactive, followingValues, commandSelected, stdinMode, syntaxCheck };
+  return { interactive, followingValues, commandSelected, stdinMode };
 }
 
 export function parseShellArgv(tokens: readonly string[]) {
   const shell = getBasename(tokens[0] ?? '').toLowerCase();
   let commandSelected = false;
   let stdinMode = false;
-  let syntaxCheck = false;
 
   for (let index = 1; index < tokens.length; index++) {
     const token = tokens[index];
@@ -121,7 +117,6 @@ export function parseShellArgv(tokens: readonly string[]) {
         scriptIndex:
           !commandSelected && !stdinMode && tokens[index + 1] !== undefined ? index + 1 : null,
         readsStdinAsCommands: !commandSelected && (stdinMode || tokens[index + 1] === undefined),
-        syntaxCheck,
       };
     }
     if (token === '-' || (token[0] !== '-' && token[0] !== '+')) {
@@ -130,7 +125,6 @@ export function parseShellArgv(tokens: readonly string[]) {
         commandIndex: commandSelected ? index : null,
         scriptIndex: !commandSelected && !stdinMode && token !== '-' ? index : null,
         readsStdinAsCommands: !commandSelected && (stdinMode || token === '-'),
-        syntaxCheck,
       };
     }
     if (token.startsWith('--')) {
@@ -141,7 +135,6 @@ export function parseShellArgv(tokens: readonly string[]) {
 
     const shortScan = scanShellShortOptions(shell, token, tokens[index + 1], 'argv');
     if (shortScan.commandSelected) commandSelected = true;
-    if (shortScan.syntaxCheck) syntaxCheck = true;
     if (shortScan.stdinMode) stdinMode = true;
     index += shortScan.followingValues;
   }
@@ -151,7 +144,6 @@ export function parseShellArgv(tokens: readonly string[]) {
     commandIndex: null,
     scriptIndex: null,
     readsStdinAsCommands: !commandSelected,
-    syntaxCheck,
   };
 }
 
