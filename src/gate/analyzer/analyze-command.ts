@@ -54,10 +54,12 @@ import {
   applyShellGitContextEnvSegment,
   cloneShellGitContextEnvState,
   createShellGitContextEnvState,
+  expandHomeTildeWord,
   expandKnownVariableWord,
   getSegmentGitContextEnvAssignments,
   type ShellGitContextEnvState,
   segmentTokensWithExpandedAssignments,
+  withImplicitShellVariables,
 } from './shell-git-env';
 import { isShellSyntaxCheck } from './shell-wrappers';
 import { stripWrapperWords } from './wrapper-prelude';
@@ -888,8 +890,15 @@ function finalizeAnalyzedCommandView(
     state,
     options.environment.paths,
     options.budget,
+    options.environment.home,
   );
-  trackCreatedDirectories(commandView, state, options.environment.paths, options.budget);
+  trackCreatedDirectories(
+    commandView,
+    state,
+    options.environment.paths,
+    options.budget,
+    options.environment.home,
+  );
   updateCwdAfterCommandView(
     commandView,
     state,
@@ -901,6 +910,7 @@ function finalizeAnalyzedCommandView(
 }
 
 const FILE_NONTRUNCATING_WRITE_REDIRECTIONS = new Set(['>>', '<>']);
+const SHELL_ASSIGNMENT_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
 const FILE_CONTENT_PRESERVING_COMMANDS = new Set([
   ':',
   'true',
@@ -922,11 +932,16 @@ const FILE_CONTENT_PRESERVING_COMMANDS = new Set([
 
 function leavesFileContentsUnchanged(commandView: CommandView): boolean {
   const head = commandView.words[0];
-  return (
-    commandView.nested.length === 0 &&
+  const runsPreservingCommand =
     head !== undefined &&
     FILE_CONTENT_PRESERVING_COMMANDS.has(head.text) &&
-    isBareCommandWord(head, head.text) &&
+    isBareCommandWord(head, head.text);
+  const onlyAssigns =
+    commandView.words.length > 0 &&
+    commandView.words.every((word) => SHELL_ASSIGNMENT_WORD_RE.test(word.raw));
+  return (
+    commandView.nested.length === 0 &&
+    (runsPreservingCommand || onlyAssigns) &&
     commandView.redirections.every(writesNoFile)
   );
 }
@@ -995,6 +1010,7 @@ function trackLiteralHeredocFiles(
   state: AnalysisState,
   paths: PathResolver,
   budget: Budget,
+  home: string,
 ): void {
   if (heredocReason) return;
   const heredoc = commandView.redirections.find(
@@ -1004,7 +1020,11 @@ function trackLiteralHeredocFiles(
 
   for (const target of getLiteralHeredocOutputTargets(
     commandView,
-    state.shellGitContextState.shellAssignments,
+    withImplicitShellVariables(state.shellGitContextState.shellAssignments, {
+      home,
+      cwd: state.effectiveCwd,
+    }),
+    home,
   )) {
     const path = resolveTrackedHeredocPath(target, state.effectiveCwd, paths, budget);
     if (!path || !isPersistentHeredocFilePath(path)) continue;
@@ -1021,10 +1041,12 @@ function trackLiteralHeredocFiles(
 function getLiteralHeredocOutputTargets(
   commandView: CommandView,
   assignments: ReadonlyMap<string, string>,
+  home: string,
 ): string[] {
   const stdoutTarget = fileWordPath(
     getFinalStdoutRedirection(commandView.redirections)?.target,
     assignments,
+    home,
   );
   const stdoutTargets = stdoutTarget === undefined ? [] : [stdoutTarget];
   if (isBareCommandWord(commandView.words[0], 'cat')) {
@@ -1034,7 +1056,9 @@ function getLiteralHeredocOutputTargets(
 
   const teeArguments = getTeeArguments(commandView.words.slice(1), assignments);
   if (!teeArguments || teeArguments.append || teeArguments.hasUnsupportedOptions) return [];
-  const operandPaths = teeArguments.operands.map((operand) => fileWordPath(operand, assignments));
+  const operandPaths = teeArguments.operands.map((operand) =>
+    fileWordPath(operand, assignments, home),
+  );
   if (!operandPaths.every((path): path is string => path !== undefined)) return [];
   return [...operandPaths, ...stdoutTargets];
 }
@@ -1042,9 +1066,11 @@ function getLiteralHeredocOutputTargets(
 function fileWordPath(
   word: CommandWord | undefined,
   assignments: ReadonlyMap<string, string>,
+  home: string,
 ): string | undefined {
   if (isTrackableLiteralFileWord(word)) return word.text;
-  return (word && expandKnownVariableWord(word, assignments)) ?? undefined;
+  if (!word) return undefined;
+  return expandHomeTildeWord(word, home) ?? expandKnownVariableWord(word, assignments) ?? undefined;
 }
 
 function withCreatedDirectories(
@@ -1073,6 +1099,7 @@ function trackCreatedDirectories(
   state: AnalysisState,
   paths: PathResolver,
   budget: Budget,
+  home: string,
 ): void {
   if (
     state.shellGitContextState.bodyDepth > 0 ||
@@ -1082,7 +1109,7 @@ function trackCreatedDirectories(
   }
   const args = commandView.words
     .slice(1)
-    .map((word) => fileWordPath(word, state.shellGitContextState.shellAssignments));
+    .map((word) => fileWordPath(word, state.shellGitContextState.shellAssignments, home));
   if (!args.every((arg): arg is string => arg !== undefined)) return;
   const optionEnd = args.findIndex((arg) => arg === '--' || arg === '-' || !arg.startsWith('-'));
   const options = args.slice(0, optionEnd);

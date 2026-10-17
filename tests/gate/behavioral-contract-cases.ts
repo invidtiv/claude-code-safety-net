@@ -2250,6 +2250,50 @@ export function behavioralContractCases(paths: {
       },
     },
     {
+      name: 'blocks a heredoc script written through $HOME and run through an alias of it',
+      command: `cat > $HOME/ccsn-cleanup.sh <<'EOF'\nrm -rf ~\nEOF\nZ=$HOME; bash $Z/ccsn-cleanup.sh`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'rm.recursive-force-root-or-home',
+        intent: 'hard_stop',
+        reasonIncludes: 'rm -rf',
+      },
+    },
+    {
+      name: 'blocks a heredoc script written and run through an unquoted ~ path',
+      command: `cat > ~/ccsn-cleanup.sh <<'EOF'\nrm -rf ~\nEOF\nbash ~/ccsn-cleanup.sh`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'rm.recursive-force-root-or-home',
+        intent: 'hard_stop',
+        reasonIncludes: 'rm -rf',
+      },
+    },
+    {
+      name: 'blocks a heredoc script written through $PWD and run through an alias of it',
+      command: `cat > $PWD/cleanup.sh <<'EOF'\nrm -rf ~\nEOF\nK=$PWD; bash $K/cleanup.sh`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'rm.recursive-force-root-or-home',
+        intent: 'hard_stop',
+        reasonIncludes: 'rm -rf',
+      },
+    },
+    {
+      name: 'blocks a heredoc script written and run through a quoted ~ directory',
+      command: `cat > '~/cleanup.sh' <<'EOF'\nrm -rf ~\nEOF\nbash '~/cleanup.sh'`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'rm.recursive-force-root-or-home',
+        intent: 'hard_stop',
+        reasonIncludes: 'rm -rf',
+      },
+    },
+    {
       name: 'blocks sourcing a file whose path expands from an unbound variable',
       command: 'source $S/env.sh',
       options: options({ cwd: paths.cwd }),

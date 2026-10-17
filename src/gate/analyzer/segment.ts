@@ -60,7 +60,11 @@ import {
   isVerifiableLocalGeneratorSource,
   shellSourceHasUnresolvedDynamicExecutionCarrier,
 } from './shell-execution';
-import { expandKnownVariableWord } from './shell-git-env';
+import {
+  expandHomeTildeWord,
+  expandKnownVariableWord,
+  withImplicitShellVariables,
+} from './shell-git-env';
 import {
   extractDashCArg,
   extractShellStartupLoaderMetadata,
@@ -361,7 +365,13 @@ export function analyzeSegment(
 
       const scriptSource = extractShellScriptOperandSource(
         words,
-        options.strict ? undefined : options.shellAssignments,
+        options.environment.home,
+        options.strict
+          ? undefined
+          : withImplicitShellVariables(options.shellAssignments ?? new Map(), {
+              home: options.environment.home,
+              cwd: nestedEffectiveCwd,
+            }),
       );
       if (scriptSource.kind === 'dynamic') return dynamicShellSourceResult(trace);
       if (scriptSource.kind === 'literal') {
@@ -409,7 +419,7 @@ export function analyzeSegment(
       stripped[sourceCandidateIndex] === '--' ? sourceCandidateIndex + 1 : sourceCandidateIndex;
     const source = options.commandView ? words[sourceOperandIndex] : undefined;
     if (!source) return null;
-    const sourcePath = literalOrAssignedPath(source, options);
+    const sourcePath = literalOrAssignedPath(source, options, nestedEffectiveCwd);
     if (sourcePath !== null) {
       return analyzeTrackedHeredocScript(
         sourcePath,
@@ -431,7 +441,7 @@ export function analyzeSegment(
 
   const executable = words[0];
   if (!child && executable && head.includes('/') && options.literalHeredocFiles?.size) {
-    const executablePath = literalOrAssignedPath(executable, options);
+    const executablePath = literalOrAssignedPath(executable, options, nestedEffectiveCwd);
     const scriptResult =
       executablePath === null
         ? null
@@ -886,11 +896,21 @@ function analyzeShellStartupSources(
   );
 }
 
-function literalOrAssignedPath(word: CommandWord, options: InternalOptions): string | null {
+function literalOrAssignedPath(
+  word: CommandWord,
+  options: InternalOptions,
+  cwd: string | null | undefined,
+): string | null {
+  const home = options.environment.home;
+  const tildePath = expandHomeTildeWord(word, home);
+  if (tildePath !== null) return tildePath;
   if (word.provenance === 'literal') return word.text;
   return options.strict
     ? null
-    : expandKnownVariableWord(word, options.shellAssignments ?? new Map());
+    : expandKnownVariableWord(
+        word,
+        withImplicitShellVariables(options.shellAssignments ?? new Map(), { home, cwd }),
+      );
 }
 
 function analyzeTrackedHeredocScript(

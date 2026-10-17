@@ -42,20 +42,34 @@ const UNQUOTED_ASSIGNMENT_TILDE_RE = /^[A-Za-z_][A-Za-z0-9_]*=~(?:\/|$)/;
 
 const SHELL_VARIABLE_RE = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
 
+type ShellLocation = { home: string; cwd: string | null | undefined };
+
+export function withImplicitShellVariables(
+  assignments: ReadonlyMap<string, string>,
+  location: ShellLocation,
+): Map<string, string> {
+  return new Map([
+    ['HOME', location.home],
+    ...(typeof location.cwd === 'string' ? [['PWD', location.cwd] as const] : []),
+    ...assignments,
+  ]);
+}
+
+export function expandHomeTildeWord(word: CommandWord, home: string): string | null {
+  return word.provenance === 'literal' &&
+    !word.quoted &&
+    word.raw === word.text &&
+    word.raw.startsWith('~/')
+    ? `${home}${word.raw.slice(1)}`
+    : null;
+}
+
 export function segmentTokensWithExpandedAssignments(
   words: readonly CommandWord[],
   state: ShellGitContextEnvState,
-  location: {
-    home: string;
-    cwd: string | null | undefined;
-    darwinUserTempDir: () => string | null;
-  },
+  location: ShellLocation & { darwinUserTempDir: () => string | null },
 ): string[] {
-  const knownVariables = new Map([
-    ['HOME', location.home],
-    ...(typeof location.cwd === 'string' ? [['PWD', location.cwd] as const] : []),
-    ...state.shellAssignments,
-  ]);
+  const knownVariables = withImplicitShellVariables(state.shellAssignments, location);
   return words.map((word) => {
     if (!isEnvAssignmentToken(word.text)) return analysisWordText(word);
     if (word.provenance === 'variable') {
