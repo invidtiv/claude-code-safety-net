@@ -2142,6 +2142,81 @@ export function behavioralContractCases(paths: {
       },
     },
     {
+      name: 'allows sourcing a file whose path expands from a literal assignment',
+      command: `S=${tempParent}; source $S/env.sh; . "$S/env.sh"`,
+      options: options({ cwd: paths.cwd }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'blocks a heredoc script written and sourced through a literal-assignment path',
+      command: `S=${tempParent}; cat > $S/env.sh <<'EOF'\nrm -rf ~\nEOF\n. $S/env.sh`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'rm.recursive-force-root-or-home',
+        intent: 'hard_stop',
+        reasonIncludes: 'rm -rf',
+      },
+    },
+    {
+      name: 'allows scripts whose literal-assignment path starts at $PWD, $HOME or ~',
+      command:
+        'K=$PWD/kit; bash $K/run.sh; Z=$HOME/.zsh; source $Z/functions.zsh; N=~/bin/w.sh; bash $N',
+      options: options({ cwd: paths.cwd }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'blocks a heredoc script written through a $PWD assignment and run by its relative path',
+      command: `K=$PWD; cat > $K/cleanup.sh <<'EOF'\nrm -rf ~\nEOF\nbash ./cleanup.sh`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'rm.recursive-force-root-or-home',
+        intent: 'hard_stop',
+        reasonIncludes: 'rm -rf',
+      },
+    },
+    {
+      name: 'allows scripts named through the macOS per-user temp directory from getconf',
+      command:
+        'D=$(getconf DARWIN_USER_TEMP_DIR)ccsn-probe; bash $D/run.sh; T="$(getconf DARWIN_USER_TEMP_DIR)"; source ${T}env.sh',
+      options: options({ cwd: paths.cwd }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'blocks a heredoc script written and run through the getconf temp directory',
+      command: `D=$(getconf DARWIN_USER_TEMP_DIR); cat > $D/cleanup.sh <<'EOF'\nrm -rf ~\nEOF\nsh $D/cleanup.sh`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'rm.recursive-force-root-or-home',
+        intent: 'hard_stop',
+        reasonIncludes: 'rm -rf',
+      },
+    },
+    {
+      name: 'blocks a script operand that runs getconf itself, since the heredoc it may name is untracked by then',
+      command: 'sh "$(getconf DARWIN_USER_TEMP_DIR)probe.sh"',
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'analysis.dynamic-shell-source',
+        intent: 'stop_and_explain',
+        reasonIncludes: 'shell execution source cannot be verified',
+      },
+    },
+    {
+      name: 'blocks sourcing a file whose path expands from an unbound variable',
+      command: 'source $S/env.sh',
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'analysis.dynamic-shell-source',
+        intent: 'stop_and_explain',
+        reasonIncludes: 'shell execution source cannot be verified',
+      },
+    },
+    {
       name: 'allows a shell script whose assignment starts an && chain that crosses a pipeline',
       command: `S=${tempParent} && git status | head -1 && bash $S/make-fixture.sh`,
       options: options({ cwd: paths.cwd }),

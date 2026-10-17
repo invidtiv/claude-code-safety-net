@@ -718,7 +718,11 @@ function analyzeCommandView(
   const words = analyzedViewWords(commandView.dialect, commandView.words);
   const segment = words.map(analysisWordText);
   const segmentStr = commandView.displayText;
-  const envSegment = segmentTokensWithExpandedAssignments(words, state.shellGitContextState);
+  const envSegment = segmentTokensWithExpandedAssignments(words, state.shellGitContextState, {
+    home: options.environment.home,
+    cwd: state.effectiveCwd,
+    darwinUserTempDir: options.environment.darwinUserTempDir,
+  });
   const segmentEnvAssignments = getSegmentGitContextEnvAssignments(
     envSegment,
     state.shellGitContextState,

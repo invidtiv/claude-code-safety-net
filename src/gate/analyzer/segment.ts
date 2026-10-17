@@ -409,9 +409,15 @@ export function analyzeSegment(
       stripped[sourceCandidateIndex] === '--' ? sourceCandidateIndex + 1 : sourceCandidateIndex;
     const source = options.commandView ? words[sourceOperandIndex] : undefined;
     if (!source) return null;
-    if (source.provenance === 'literal') {
+    const sourcePath =
+      source.provenance === 'literal'
+        ? source.text
+        : options.strict
+          ? null
+          : expandKnownVariableWord(source, options.shellAssignments ?? new Map());
+    if (sourcePath !== null) {
       return analyzeTrackedHeredocScript(
-        source.text,
+        sourcePath,
         nestedEffectiveCwd,
         envAssignments,
         options,
