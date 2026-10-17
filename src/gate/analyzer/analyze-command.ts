@@ -911,22 +911,12 @@ function finalizeAnalyzedCommandView(
 
 const FILE_NONTRUNCATING_WRITE_REDIRECTIONS = new Set(['>>', '<>']);
 const SHELL_ASSIGNMENT_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
-const FILE_CONTENT_PRESERVING_COMMANDS = new Set([
-  ':',
-  'true',
-  'chmod',
-  'test',
-  '[',
-  'cd',
-  'mkdir',
-]);
+const OUTPUT_FREE_COMMANDS = new Set([':', 'true']);
 
 function leavesFileContentsUnchanged(commandView: CommandView): boolean {
   const head = commandView.words[0];
   const runsPreservingCommand =
-    head !== undefined &&
-    FILE_CONTENT_PRESERVING_COMMANDS.has(head.text) &&
-    isBareCommandWord(head, head.text);
+    head !== undefined && OUTPUT_FREE_COMMANDS.has(head.text) && isBareCommandWord(head, head.text);
   const onlyAssigns =
     commandView.words.length > 0 &&
     commandView.words.every((word) => SHELL_ASSIGNMENT_WORD_RE.test(word.raw));

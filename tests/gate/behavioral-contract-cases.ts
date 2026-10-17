@@ -2206,8 +2206,8 @@ export function behavioralContractCases(paths: {
       },
     },
     {
-      name: 'blocks a heredoc script run after intervening commands that leave files unchanged',
-      command: `cat > ${tempParent}/later.sh <<'EOF'\nrm -rf ~\nEOF\ntrue; chmod +x ${tempParent}/later.sh; bash ${tempParent}/later.sh`,
+      name: 'blocks a heredoc script run after intervening commands that print nothing',
+      command: `cat > ${tempParent}/later.sh <<'EOF'\nrm -rf ~\nEOF\ntrue; ready=1; bash ${tempParent}/later.sh`,
       options: options({ cwd: paths.cwd }),
       expected: {
         kind: 'block',
@@ -2336,6 +2336,28 @@ export function behavioralContractCases(paths: {
     {
       name: 'keeps $PWD in a script operand dynamic when a wrapper changes the working directory',
       command: `cat > $PWD/cleanup.sh <<'EOF'\nrm -rf ~\nEOF\nenv -C ${tempParent} bash $PWD/cleanup.sh`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'analysis.dynamic-shell-source',
+        intent: 'stop_and_explain',
+        reasonIncludes: 'shell execution source cannot be verified',
+      },
+    },
+    {
+      name: 'forgets a heredoc rcfile once a cd that may print runs after an exec redirection',
+      command: `exec > ${tempParent}/rc5.sh; CDPATH=${tempParent}; cat > ${tempParent}/rc5.sh <<'EOF'\necho hi\nEOF\ncd 'x; rm -rf ~'; bash --rcfile ${tempParent}/rc5.sh -i -c 'echo hi'`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'analysis.dynamic-shell-source',
+        intent: 'stop_and_explain',
+        reasonIncludes: 'shell execution source cannot be verified',
+      },
+    },
+    {
+      name: 'forgets a heredoc rcfile once a verbose chmod runs after an exec redirection',
+      command: `exec > ${tempParent}/rc6.sh; cat > ${tempParent}/rc6.sh <<'EOF'\necho hi\nEOF\nchmod -v +x ${tempParent}/rc6.sh; bash --rcfile ${tempParent}/rc6.sh -i -c 'echo hi'`,
       options: options({ cwd: paths.cwd }),
       expected: {
         kind: 'block',
