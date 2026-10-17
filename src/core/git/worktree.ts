@@ -4,7 +4,7 @@ import {
   constants,
   existsSync,
   lstatSync,
-  readdirSync,
+  opendirSync,
   readFileSync,
   realpathSync,
   statSync,
@@ -225,13 +225,18 @@ function holdsSymbolicLinkOrFifo(gitDir: string): boolean {
   try {
     while (pending.length > 0) {
       const directory = pending.pop() as string;
-      for (const entry of readdirSync(directory, { withFileTypes: true })) {
-        visited++;
-        if (entry.isSymbolicLink() || entry.isFIFO() || visited > GIT_DIRECTORY_ENTRY_BUDGET) {
-          return true;
+      const dir = opendirSync(directory);
+      try {
+        for (let entry = dir.readSync(); entry !== null; entry = dir.readSync()) {
+          visited++;
+          if (entry.isSymbolicLink() || entry.isFIFO() || visited > GIT_DIRECTORY_ENTRY_BUDGET) {
+            return true;
+          }
+          const isObjectStore = directory === gitDir && entry.name === 'objects';
+          if (entry.isDirectory() && !isObjectStore) pending.push(join(directory, entry.name));
         }
-        const isObjectStore = directory === gitDir && entry.name === 'objects';
-        if (entry.isDirectory() && !isObjectStore) pending.push(join(directory, entry.name));
+      } finally {
+        dir.closeSync();
       }
     }
     return false;
