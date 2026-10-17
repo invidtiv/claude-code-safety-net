@@ -55,8 +55,16 @@ export function isShellSyntaxCheck(tokens: readonly string[]): boolean {
     .some((word) => word.includes('n'));
 }
 
+const OPTION_CLUSTER_TAKING_NO_VALUE = /^-[abcefhiklmnprstuvx]+$/;
+
 export function hasUnidentifiableCommandString(tokens: readonly string[]): boolean {
-  const words = tokens.slice(1);
+  const operandIndex = tokens.findIndex(
+    (word, index) => index > 0 && !OPTION_CLUSTER_TAKING_NO_VALUE.test(word),
+  );
+  const words =
+    operandIndex === -1 || /^[-+]/.test(tokens[operandIndex] ?? '')
+      ? tokens.slice(1)
+      : tokens.slice(1, operandIndex + 1);
   if (words.some((word) => word.startsWith('+'))) return true;
   const dashCClusters = words.filter(
     (word) => word.startsWith('-') && !word.startsWith('--') && word.includes('c'),

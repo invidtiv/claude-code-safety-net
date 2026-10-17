@@ -706,6 +706,26 @@ export function behavioralContractCases(paths: {
           "bash -o pipefail -c 'echo ok'",
           { kind: 'allow' },
         ],
+        [
+          'allows a script whose own arguments are property options',
+          'bash ./gradlew -Dorg.gradle.console=plain build',
+          { kind: 'allow' },
+        ],
+        [
+          'allows a script whose own arguments hold c and o',
+          'bash ./scripts/ci.sh -config ci.yml',
+          { kind: 'allow' },
+        ],
+        [
+          'allows a script whose own argument starts with +',
+          'bash scripts/release.sh +1',
+          { kind: 'allow' },
+        ],
+        [
+          'allows a positional argument starting with + after the command string',
+          `bash -c 'date "$1"' _ +%Y-%m-%d`,
+          { kind: 'allow' },
+        ],
       ],
       { cwd: paths.cwd },
     ),
