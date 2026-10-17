@@ -190,6 +190,7 @@ export function analyzeSegment(
   const cwdForRm = prelude.cwd === null ? undefined : (prelude.cwd ?? baseCwdForRm);
   const originalCwdForRm = prelude.cwd === null ? undefined : originalCwd;
   const nestedEffectiveCwd = prelude.cwd === undefined ? options.effectiveCwd : prelude.cwd;
+  const operandShellCwd = prelude.cwd === undefined ? options.effectiveCwd : null;
 
   const allowTmpdirVar = child
     ? child.allowTmpdirVar
@@ -370,7 +371,7 @@ export function analyzeSegment(
           ? undefined
           : withImplicitShellVariables(options.shellAssignments ?? new Map(), {
               home: options.environment.home,
-              cwd: nestedEffectiveCwd,
+              cwd: operandShellCwd,
             }),
       );
       if (scriptSource.kind === 'dynamic') return dynamicShellSourceResult(trace);
@@ -419,7 +420,7 @@ export function analyzeSegment(
       stripped[sourceCandidateIndex] === '--' ? sourceCandidateIndex + 1 : sourceCandidateIndex;
     const source = options.commandView ? words[sourceOperandIndex] : undefined;
     if (!source) return null;
-    const sourcePath = literalOrAssignedPath(source, options, nestedEffectiveCwd);
+    const sourcePath = literalOrAssignedPath(source, options, operandShellCwd);
     if (sourcePath !== null) {
       return analyzeTrackedHeredocScript(
         sourcePath,
@@ -441,7 +442,7 @@ export function analyzeSegment(
 
   const executable = words[0];
   if (!child && executable && head.includes('/') && options.literalHeredocFiles?.size) {
-    const executablePath = literalOrAssignedPath(executable, options, nestedEffectiveCwd);
+    const executablePath = literalOrAssignedPath(executable, options, operandShellCwd);
     const scriptResult =
       executablePath === null
         ? null
@@ -452,6 +453,8 @@ export function analyzeSegment(
             options,
             trace,
             depth,
+            false,
+            true,
           );
     if (scriptResult) return scriptResult;
   }
@@ -913,6 +916,8 @@ function literalOrAssignedPath(
       );
 }
 
+const SHELL_SHEBANG_RE = /^#!\s*(?:\S*\/)?(?:env\s+(?:-\S+\s+)*)?(?:ba|z|da|k)?sh(?:\s|$)/;
+
 function analyzeTrackedHeredocScript(
   source: string,
   effectiveCwd: string | null | undefined,
@@ -921,6 +926,7 @@ function analyzeTrackedHeredocScript(
   trace: CommandTraceContext | undefined,
   depth: number,
   failClosed = false,
+  runsByPath = false,
 ): AnalyzeBlockResult | null {
   if (failClosed && /[$`*?[\]]/.test(source)) return dynamicShellSourceResult(trace);
   const path = resolveTrackedHeredocPath(
@@ -931,6 +937,7 @@ function analyzeTrackedHeredocScript(
   );
   const body = path ? options.literalHeredocFiles?.get(path) : undefined;
   if (body === undefined) return failClosed ? dynamicShellSourceResult(trace) : null;
+  if (runsByPath && body.startsWith('#!') && !SHELL_SHEBANG_RE.test(body)) return null;
 
   options.budget.charge('derivedTokens', 1);
   trace?.recordSegment({
@@ -939,7 +946,22 @@ function analyzeTrackedHeredocScript(
     innerCommand: body,
     depth: depth + 1,
   });
-  return options.analyzeNested(body, { effectiveCwd, envAssignments });
+  if (!runsByPath) return options.analyzeNested(body, { effectiveCwd, envAssignments });
+  const result = nestedResultWithinLimits(() =>
+    options.analyzeNested(body, { effectiveCwd, envAssignments }),
+  );
+  return result?.intent === 'stop_and_explain' ? null : result;
+}
+
+function nestedResultWithinLimits(
+  analyze: () => AnalyzeBlockResult | null,
+): AnalyzeBlockResult | null {
+  try {
+    return analyze();
+  } catch (cause) {
+    if (cause instanceof AnalysisLimit) return null;
+    throw cause;
+  }
 }
 
 function unwrapTraceQuotes(command: string): string {

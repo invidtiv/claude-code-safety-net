@@ -2294,6 +2294,57 @@ export function behavioralContractCases(paths: {
       },
     },
     {
+      name: 'allows a heredoc Python script run by its path in strict mode',
+      command: `cat > ${tempParent}/check.py <<'EOF'\n#!/usr/bin/env python3\nprint("hello")\nEOF\nchmod +x ${tempParent}/check.py; ${tempParent}/check.py`,
+      options: options({ cwd: paths.cwd, strict: true }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'allows a heredoc zsh script run by its path when its body cannot be parsed',
+      command: `cat > ${tempParent}/rebuild.sh <<'EOF'\n#!/bin/zsh\nfiles=(\${(f)"$(git diff --name-only HEAD~1 HEAD)"})\nprint -l $files\nEOF\nchmod +x ${tempParent}/rebuild.sh && ${tempParent}/rebuild.sh`,
+      options: options({ cwd: paths.cwd }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'allows a heredoc script run by its path when its body exceeds analysis limits',
+      command: `SP=${tempParent}; cat > $SP/repeat.sh <<'EOF'\n#!/bin/zsh\nSP=\${0:h}; SK=/opt/skills/video\ntt=$(printf "%05.2f" $2)\nfor d in orig new; do\n  cd $SP/$d-film\n  for i in 1 2 3; do\n    uv run --project $SK python $SK/scripts/render.py stills . $2 --scene $1 >/dev/null 2>&1\n    cp build/story-$1/t$tt.png $SP/r-$d$i.png\n  done\ndone\nfor a in orig1 orig2 orig3 new1 new2 new3; do echo "$a: $(magick compare -metric AE $SP/r-orig1.png $SP/r-$a.png null: 2>&1)"; done\nEOF\nchmod +x $SP/repeat.sh; $SP/repeat.sh shelter 11`,
+      options: options({ cwd: paths.cwd }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'forgets a heredoc rcfile once an earlier exec points stdout at it',
+      command: `exec >${tempParent}/rc3.sh; cat >${tempParent}/rc3.sh <<'EOF'\necho hi\nEOF\nprintf 'rm -rf ~\\n'; bash --rcfile ${tempParent}/rc3.sh -i -c 'echo hi'`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'analysis.dynamic-shell-source',
+        intent: 'stop_and_explain',
+        reasonIncludes: 'shell execution source cannot be verified',
+      },
+    },
+    {
+      name: 'forgets a heredoc rcfile once a later command writes to a descriptor opened on it',
+      command: `exec 3>${tempParent}/rc4.sh; cat >${tempParent}/rc4.sh <<'EOF'\necho hi\nEOF\nprintf 'rm -rf ~\\n' >&3; bash --rcfile ${tempParent}/rc4.sh -i -c 'echo hi'`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'analysis.dynamic-shell-source',
+        intent: 'stop_and_explain',
+        reasonIncludes: 'shell execution source cannot be verified',
+      },
+    },
+    {
+      name: 'keeps $PWD in a script operand dynamic when a wrapper changes the working directory',
+      command: `cat > $PWD/cleanup.sh <<'EOF'\nrm -rf ~\nEOF\nenv -C ${tempParent} bash $PWD/cleanup.sh`,
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'analysis.dynamic-shell-source',
+        intent: 'stop_and_explain',
+        reasonIncludes: 'shell execution source cannot be verified',
+      },
+    },
+    {
       name: 'blocks sourcing a file whose path expands from an unbound variable',
       command: 'source $S/env.sh',
       options: options({ cwd: paths.cwd }),

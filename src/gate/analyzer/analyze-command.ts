@@ -914,19 +914,10 @@ const SHELL_ASSIGNMENT_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
 const FILE_CONTENT_PRESERVING_COMMANDS = new Set([
   ':',
   'true',
-  'echo',
-  'printf',
   'chmod',
-  'ls',
-  'cat',
-  'head',
-  'tail',
-  'wc',
-  'grep',
   'test',
   '[',
   'cd',
-  'pwd',
   'mkdir',
 ]);
 
@@ -948,12 +939,7 @@ function leavesFileContentsUnchanged(commandView: CommandView): boolean {
 
 function writesNoFile(redirection: CommandRedirection): boolean {
   if (!redirection.operator.includes('>')) return true;
-  const target = redirection.target;
-  return (
-    target?.provenance === 'literal' &&
-    (target.text === '/dev/null' ||
-      (redirection.operator.endsWith('&') && /^(?:[0-9]+|-)$/.test(target.text)))
-  );
+  return redirection.target?.provenance === 'literal' && redirection.target.text === '/dev/null';
 }
 
 function invalidateLiteralHeredocFiles(

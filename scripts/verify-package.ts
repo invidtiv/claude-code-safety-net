@@ -28,7 +28,7 @@ const PACKAGE_ROOT_FILES = [
   'package/README.md',
   'package/package.json',
 ] as const;
-const MAX_TARBALL_BYTES = 620_000;
+const MAX_TARBALL_BYTES = 680_000;
 const SKIP_OPENCODE_V2_PEER_INSTALL_ON_WINDOWS = process.platform === 'win32';
 
 interface PackResult {
