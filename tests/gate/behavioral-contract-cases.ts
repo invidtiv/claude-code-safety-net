@@ -1020,6 +1020,16 @@ export function behavioralContractCases(paths: {
           rsyncDeleteBlock,
         ],
         [
+          'blocks rsync delete when an unlisted option value follows the destination',
+          'rsync -a --delete src/ ../sibling/ --compress-threads 4',
+          rsyncDeleteBlock,
+        ],
+        [
+          'blocks rsync delete onto root followed by an empty brace expansion',
+          'rsync -a --delete / / {,}',
+          rsyncRootBlock,
+        ],
+        [
           'blocks rsync delete with operands after a double dash',
           'rsync -a --delete -e ssh -- src/ ~/mirror/',
           rsyncDeleteBlock,
@@ -1062,6 +1072,17 @@ export function behavioralContractCases(paths: {
         policy: { destructiveCommandRuleOverrides: { 'rsync.delete': 'off' } },
       }),
       expected: { kind: 'allow' },
+    },
+    {
+      name: 'blocks find delete of an empty brace expansion',
+      command: 'find {,} -delete',
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'find.delete',
+        intent: 'scope_down',
+        reasonIncludes: 'Use -print first',
+      },
     },
     {
       name: 'blocks rsync delete onto root when the rsync delete rule is off',

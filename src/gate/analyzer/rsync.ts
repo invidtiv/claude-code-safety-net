@@ -2,6 +2,7 @@ import { filterDestructiveCommandMatch } from '@/core/policy/effective-rules';
 import { destructiveCommandMatch } from '@/core/rules/destructive';
 import type { DestructiveCommandRuleMatch } from '@/core/rules/types';
 import type { CommandWord } from '@/core/shell/model';
+import { REASON_GIT_METADATA_PROTECTION } from '@/gate/guards/git-metadata-protection';
 import { analysisWordText } from './command-words';
 import {
   classifyRecursiveDeleteTarget,
@@ -106,29 +107,36 @@ export function analyzeRsyncMatch(
     if (text.slice(1).search(VALUE_SHORT_OPTION) === text.length - 2) index++;
   }
 
-  const destination = operands.at(-1);
-  if (!deletes || !destination || isRemoteOperand(analysisWordText(destination))) return null;
+  const destinations = operands
+    .slice(1)
+    .filter((operand) => !isRemoteOperand(analysisWordText(operand)));
+  if (!deletes || destinations.length === 0) return null;
 
-  const facts = deleteTargetWordFacts(destination);
   const ctx = createRecursiveDeleteTargetContext({
     ...context,
     allowPaths: context.policy?.destructiveCommandAllowPaths,
     posixShell: true,
   });
-  const targetsRootOrHome = (facts.expandedTargets ?? [analysisWordText(destination)]).some(
-    (target) =>
-      classifyRecursiveDeleteTarget(target, ctx, {
-        targetIsLiteral: facts.expandedTargets !== undefined || facts.targetIsLiteral,
-        tmpdirWordSplittingProtected: facts.tmpdirWordSplittingProtected,
-      }).kind === 'root_or_home_target',
-  );
-  if (targetsRootOrHome) {
+  const kinds = destinations.flatMap((destination) => {
+    const facts = deleteTargetWordFacts(destination);
+    return (facts.expandedTargets ?? [analysisWordText(destination)]).map(
+      (target) =>
+        classifyRecursiveDeleteTarget(target, ctx, {
+          targetIsLiteral: facts.expandedTargets !== undefined || facts.targetIsLiteral,
+          tmpdirWordSplittingProtected: facts.tmpdirWordSplittingProtected,
+        }).kind,
+    );
+  });
+  if (kinds.includes('root_or_home_target')) {
     return destructiveCommandMatch(
       'rm.recursive-force-root-or-home',
       REASON_RSYNC_DELETE_ROOT_HOME,
     );
   }
-  if (hasOnlyScopedDeleteTargets([destination], context)) return null;
+  if (kinds.includes('git_metadata_target')) {
+    return destructiveCommandMatch('rm.git-metadata', REASON_GIT_METADATA_PROTECTION);
+  }
+  if (hasOnlyScopedDeleteTargets(destinations, context)) return null;
   return filterDestructiveCommandMatch(
     destructiveCommandMatch('rsync.delete', REASON_RSYNC_DELETE),
     context.policy,

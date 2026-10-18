@@ -787,7 +787,7 @@ export function hasOnlyScopedDeleteTargets(
 
   return targets.every((target) => {
     const facts = deleteTargetWordFacts(target);
-    if (facts.unsafeBraceExpansion) return false;
+    if (facts.unsafeBraceExpansion || facts.expandedTargets?.length === 0) return false;
     return (facts.expandedTargets ?? [analysisWordText(target)]).every((expandedTarget) => {
       const trackedCwd = /^\.\/*$/.test(expandedTarget) ? cwdOutsideWorkspace : undefined;
       const startingPoint = trackedCwd ?? expandedTarget;
