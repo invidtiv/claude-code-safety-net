@@ -97,6 +97,18 @@ export function behavioralContractCases(paths: {
     intent: 'hard_stop',
     reasonIncludes: 'targeting root or home',
   };
+  const rsyncRootBlock: BehavioralContractCase['expected'] = {
+    kind: 'block',
+    ruleId: 'rm.recursive-force-root-or-home',
+    intent: 'hard_stop',
+    reasonIncludes: 'rsync --delete targeting root or home',
+  };
+  const rsyncDeleteBlock: BehavioralContractCase['expected'] = {
+    kind: 'block',
+    ruleId: 'rsync.delete',
+    intent: 'scope_down',
+    reasonIncludes: 'rsync --delete permanently removes',
+  };
   const everydayCommands = [
     'git status',
     'git add -A',
@@ -946,6 +958,140 @@ export function behavioralContractCases(paths: {
         reasonIncludes: 'Use -print first',
         segment: 'find build/../.. -delete',
       },
+    },
+    ...atStandardAndStrict(
+      [
+        ['blocks rsync delete mirroring onto root', 'rsync -a --delete / /', rsyncRootBlock],
+        ['blocks rsync delete mirroring onto home', 'rsync -a --delete ~/ ~/', rsyncRootBlock],
+        [
+          'blocks rsync delete mirroring onto $HOME',
+          'rsync -a --delete $HOME $HOME',
+          rsyncRootBlock,
+        ],
+        [
+          'blocks rsync delete onto root through a wrapper and an absolute path',
+          'timeout 600 /opt/homebrew/bin/rsync -a --delete / /',
+          rsyncRootBlock,
+        ],
+        [
+          'blocks rsync delete onto root inside a shell wrapper',
+          'bash -c "rsync -a --delete / /"',
+          rsyncRootBlock,
+        ],
+        [
+          'blocks rsync delete onto a variable destination',
+          'rsync -a --delete "$SRC/" "$DST/"',
+          rsyncDeleteBlock,
+        ],
+        [
+          'blocks rsync delete onto a required-variable destination',
+          'rsync -a --delete "${SRC:?}/" "${DST:?}/"',
+          rsyncDeleteBlock,
+        ],
+        [
+          'blocks rsync delete onto a destination outside the workspace',
+          'rsync -a --del src/ ../sibling/',
+          rsyncDeleteBlock,
+        ],
+        [
+          'blocks rsync delete onto the workspace itself',
+          'rsync -a --delete src/ .',
+          rsyncDeleteBlock,
+        ],
+        ['blocks rsync delete onto a temp root', 'rsync -a --delete src/ /tmp/', rsyncDeleteBlock],
+        [
+          'blocks an abbreviated rsync delete option',
+          'rsync -a --delete-af src/ ~/mirror/',
+          rsyncDeleteBlock,
+        ],
+        [
+          'blocks rsync delete-excluded outside the workspace',
+          'rsync -a --delete-excluded src/ ~/mirror/',
+          rsyncDeleteBlock,
+        ],
+        [
+          'blocks an rsync delete option placed after the operands',
+          'rsync -a src/ ~/mirror/ --delete',
+          rsyncDeleteBlock,
+        ],
+        [
+          'blocks rsync delete when an option value follows the destination',
+          'rsync -a --delete src/ ~/mirror/ --exclude node_modules',
+          rsyncDeleteBlock,
+        ],
+        [
+          'blocks rsync delete when an unlisted option value follows the destination',
+          'rsync -a --delete src/ ../sibling/ --compress-threads 4',
+          rsyncDeleteBlock,
+        ],
+        [
+          'blocks rsync delete onto root followed by an empty brace expansion',
+          'rsync -a --delete / / {,}',
+          rsyncRootBlock,
+        ],
+        [
+          'blocks rsync delete with operands after a double dash',
+          'rsync -a --delete -e ssh -- src/ ~/mirror/',
+          rsyncDeleteBlock,
+        ],
+        [
+          'allows rsync delete between workspace directories',
+          'rsync -a --delete ./build/ ./out/',
+          { kind: 'allow' },
+        ],
+        [
+          'allows rsync delete inside a trusted temp root',
+          'rsync -a --delete /tmp/a/ /tmp/b/',
+          { kind: 'allow' },
+        ],
+        ['allows rsync without a delete option', 'rsync -a src/ ~/mirror/', { kind: 'allow' }],
+        [
+          'allows rsync delay-updates, which deletes nothing',
+          'rsync -a --delay-updates src/ ~/mirror/',
+          { kind: 'allow' },
+        ],
+        [
+          'allows rsync delete onto a remote destination',
+          'rsync -avz --delete -e ssh ./dist/ user@server:/var/www/app/',
+          { kind: 'allow' },
+        ],
+      ],
+      { cwd: paths.cwd },
+    ),
+    {
+      name: 'blocks rsync delete between workspace directories under paranoid rm',
+      command: 'rsync -a --delete ./build/ ./out/',
+      options: options({ cwd: paths.cwd, paranoidRm: true }),
+      expected: rsyncDeleteBlock,
+    },
+    {
+      name: 'allows rsync delete outside the workspace when its rule is off',
+      command: 'rsync -a --delete src/ ~/mirror/',
+      options: options({
+        cwd: paths.cwd,
+        policy: { destructiveCommandRuleOverrides: { 'rsync.delete': 'off' } },
+      }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'blocks find delete of an empty brace expansion',
+      command: 'find {,} -delete',
+      options: options({ cwd: paths.cwd }),
+      expected: {
+        kind: 'block',
+        ruleId: 'find.delete',
+        intent: 'scope_down',
+        reasonIncludes: 'Use -print first',
+      },
+    },
+    {
+      name: 'blocks rsync delete onto root when the rsync delete rule is off',
+      command: 'rsync -a --delete / /',
+      options: options({
+        cwd: paths.cwd,
+        policy: { destructiveCommandRuleOverrides: { 'rsync.delete': 'off' } },
+      }),
+      expected: rsyncRootBlock,
     },
     {
       name: 'blocks a destructive command inside interpreter code',

@@ -6,7 +6,7 @@ import {
 } from '@/core/rules/constants';
 import { getBasename, normalizeCommandToken } from '@/core/shell/tokens';
 
-export const BUILTIN_ANALYZED_COMMANDS = new Set(['rm', 'find', 'xargs', 'parallel']);
+export const BUILTIN_ANALYZED_COMMANDS = new Set(['rm', 'find', 'rsync', 'xargs', 'parallel']);
 const RESERVED_TRANSPARENT_WRAPPERS = new Set([
   'git',
   'busybox',

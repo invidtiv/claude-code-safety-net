@@ -17,6 +17,7 @@ import { analyzeGitMatch } from './git';
 import { analyzeParallel } from './parallel';
 import { analyzePowerShellWrapperMatch } from './powershell-wrapper';
 import { analyzeRmMatch } from './rm';
+import { analyzeRsyncMatch } from './rsync';
 import { analyzeXargs } from './xargs';
 
 export type InternalOptions = AnalyzeInput &
@@ -117,6 +118,14 @@ export const ANALYZER_RULES: readonly AnalyzerRule[] = [
         ...recursiveDeleteAnalyzeOptions(context),
         envAssignments: context.envAssignments,
         analyzeTokens: context.analyzeChildTokens,
+      }),
+  },
+  {
+    heads: new Set(['rsync']),
+    analyze: (context) =>
+      analyzeRsyncMatch(context.words, {
+        ...recursiveDeleteAnalyzeOptions(context),
+        envAssignments: context.envAssignments,
       }),
   },
   {

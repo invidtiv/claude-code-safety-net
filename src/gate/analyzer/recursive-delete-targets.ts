@@ -4,24 +4,34 @@ import {
   isUnsupportedWindowsNamespacePath,
   resolveExistingPath,
 } from '@/core/paths/canonicalization';
-import { isTrustedTempPath, isTrustedTempRootPath } from '@/core/paths/tmpdir';
+import {
+  getEffectiveTmpdirValue,
+  hasUnsafeTmpdirWordSplitting,
+  isPathOrSubpath,
+  isTmpdirOverriddenToNonTemp,
+  isTmpdirValueTrusted,
+  isTrustedTempPath,
+  isTrustedTempRootPath,
+} from '@/core/paths/tmpdir';
 import { expandAllowPathHome, getAllowPathHomeConflictError } from '@/core/policy/allow-paths';
 import {
   type DestructiveCommandRulePolicy,
   destructiveCommandRuleIsEnabled,
 } from '@/core/policy/effective-rules';
+import type { EffectivePolicy } from '@/core/policy/types';
 import { type DestructiveCommandRuleId, destructiveCommandMatch } from '@/core/rules/destructive';
 import type { DestructiveCommandRuleMatch } from '@/core/rules/types';
 import type { CommandWord } from '@/core/shell/model';
 import { expandPosixLiteralBraceWord } from '@/core/shell/posix';
 import type { EnvironmentContext, PathResolver, ProtectedGitMetadata } from '@/gate/analysis';
 import { isProtectedGitDeleteTarget } from '@/gate/guards/git-metadata-protection';
+import { analysisWordText } from './command-words';
 
 const IS_WINDOWS = process.platform === 'win32';
 const BRACE_EXPANSION_LIMIT = 64;
 const BRACE_EXPANDED_LENGTH_LIMIT = 16_384;
 
-export interface RecursiveDeleteTargetTrustOptions {
+interface RecursiveDeleteTargetTrustOptions {
   environment: EnvironmentContext;
   cwd?: string;
   originalCwd?: string;
@@ -61,7 +71,7 @@ export interface RecursiveDeleteTargetClassificationOptions {
   skipCwdSelf?: boolean;
 }
 
-export interface TrustedTempDescendantTargetOptions extends RecursiveDeleteTargetClassificationOptions {
+interface TrustedTempDescendantTargetOptions extends RecursiveDeleteTargetClassificationOptions {
   containmentTarget?: string;
 }
 
@@ -317,6 +327,7 @@ function isTrustedTempDescendantAfterCd(
   return isTrustedTempPath(resolve(ctx.resolvedCwd, normalized), ctx.environment);
 }
 
+/** @internal */
 export function isTrustedTempDescendantTarget(
   target: string,
   ctx: RecursiveDeleteTargetContext,
@@ -727,4 +738,88 @@ function isNormalizedPathWithin(target: string, cwd: string): boolean {
   return (
     normalizedTarget.startsWith(`${normalizedCwd}${sep}`) || normalizedTarget === normalizedCwd
   );
+}
+
+export interface ScopedDeleteTargetOptions extends RecursiveDeleteTargetTrustOptions {
+  paranoid?: boolean;
+  budget?: Budget;
+  envAssignments?: ReadonlyMap<string, string>;
+  policy?: DestructiveCommandRulePolicy &
+    Partial<Pick<EffectivePolicy, 'destructiveCommandAllowPaths'>>;
+}
+
+export function hasOnlyScopedDeleteTargets(
+  targets: readonly CommandWord[],
+  context: ScopedDeleteTargetOptions,
+): boolean {
+  const envAssignments = context.envAssignments ?? new Map();
+  const effectiveTmpdirValue = getEffectiveTmpdirValue(envAssignments, context.environment);
+  const trustedTmpdirValue =
+    context.trustedTmpdirValue ?? isTmpdirValueTrusted(envAssignments, context.environment);
+  const allowTmpdirVar =
+    context.allowTmpdirVar ?? !isTmpdirOverriddenToNonTemp(envAssignments, context.environment);
+  const targetOptions = {
+    environment: context.environment,
+    protectedGitMetadata: context.protectedGitMetadata,
+    cwd: context.cwd,
+    originalCwd: context.originalCwd,
+    strict: context.strict,
+    allowTmpdirVar: allowTmpdirVar && trustedTmpdirValue && Boolean(effectiveTmpdirValue),
+    allowPaths: context.policy?.destructiveCommandAllowPaths,
+    posixShell: true,
+    tmpdirWordSplittingUnsafe:
+      context.tmpdirWordSplittingUnsafe ??
+      hasUnsafeTmpdirWordSplitting(envAssignments, context.environment),
+    trustedTmpdirValue,
+    budget: context.budget,
+  };
+  const targetContext = createRecursiveDeleteTargetContext(targetOptions);
+  const workspaceContext = createRecursiveDeleteTargetContext({
+    ...targetOptions,
+    cwd: context.originalCwd ?? context.cwd,
+  });
+  const workspace = context.originalCwd && context.environment.paths.realpath(context.originalCwd);
+  const enteredDirectory = context.cwd && context.environment.paths.realpath(context.cwd);
+  const cwdOutsideWorkspace =
+    workspace && enteredDirectory && !isPathOrSubpath(enteredDirectory, workspace)
+      ? context.cwd
+      : undefined;
+
+  return targets.every((target) => {
+    const facts = deleteTargetWordFacts(target);
+    if (facts.unsafeBraceExpansion || facts.expandedTargets?.length === 0) return false;
+    return (facts.expandedTargets ?? [analysisWordText(target)]).every((expandedTarget) => {
+      const trackedCwd = /^\.\/*$/.test(expandedTarget) ? cwdOutsideWorkspace : undefined;
+      const startingPoint = trackedCwd ?? expandedTarget;
+      const classificationOptions = {
+        targetIsLiteral: facts.expandedTargets !== undefined || facts.targetIsLiteral,
+        tmpdirWordSplittingProtected: facts.tmpdirWordSplittingProtected,
+      };
+      if (
+        !destructiveCommandRuleIsEnabled(
+          context.policy,
+          'rm.recursive-force-paranoid',
+          context.paranoid ?? false,
+        ) &&
+        !trackedCwd &&
+        classifyRecursiveDeleteTarget(startingPoint, targetContext, classificationOptions).kind ===
+          'within_anchored_cwd'
+      ) {
+        return true;
+      }
+      return isTrustedTempDescendantTarget(
+        startingPoint,
+        trackedCwd ? workspaceContext : targetContext,
+        {
+          ...classificationOptions,
+          containmentTarget: expandTmpdirTarget(startingPoint, effectiveTmpdirValue),
+        },
+      );
+    });
+  });
+}
+
+function expandTmpdirTarget(target: string, tmpdirValue: string | undefined): string {
+  if (!tmpdirValue) return target;
+  return target.replace(/^(?:\$TMPDIR|\$\{TMPDIR\})/, () => tmpdirValue);
 }

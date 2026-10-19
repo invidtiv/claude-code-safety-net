@@ -236,6 +236,18 @@ export function pipelineContractCases(paths: {
       },
     },
     {
+      name: 'denies rsync delete mirroring onto the Git directory',
+      ...bash('rsync -a --delete empty/ .git/'),
+      cwd: 'repo',
+      expected: {
+        kind: 'block',
+        stage: 'command-analysis',
+        ruleId: 'rm.git-metadata',
+        intent: 'hard_stop',
+        reasonIncludes: 'Git',
+      },
+    },
+    {
       name: 'denies a shell redirection into a Git hook',
       ...bash('echo x > .git/hooks/pre-commit'),
       cwd: 'repo',

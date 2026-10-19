@@ -1,18 +1,6 @@
-import { type Budget, createBudget } from '@/core/budget';
+import { createBudget } from '@/core/budget';
 import type { ProtectedGitMetadata } from '@/core/git/metadata';
-import {
-  getEffectiveTmpdirValue,
-  hasUnsafeTmpdirWordSplitting,
-  isPathOrSubpath,
-  isTmpdirOverriddenToNonTemp,
-  isTmpdirValueTrusted,
-} from '@/core/paths/tmpdir';
-import {
-  type DestructiveCommandRulePolicy,
-  destructiveCommandRuleIsEnabled,
-  filterDestructiveCommandMatch,
-} from '@/core/policy/effective-rules';
-import type { EffectivePolicy } from '@/core/policy/types';
+import { filterDestructiveCommandMatch } from '@/core/policy/effective-rules';
 import { SHELL_WRAPPERS } from '@/core/rules/constants';
 import { destructiveCommandMatch } from '@/core/rules/destructive';
 import type { DestructiveCommandRuleMatch } from '@/core/rules/types';
@@ -29,8 +17,8 @@ import {
   classifyRecursiveDeleteTarget,
   createRecursiveDeleteTargetContext,
   deleteTargetWordFacts,
-  isTrustedTempDescendantTarget,
-  type RecursiveDeleteTargetTrustOptions,
+  hasOnlyScopedDeleteTargets,
+  type ScopedDeleteTargetOptions,
 } from './recursive-delete-targets';
 import { hasRecursiveForceFlags, hasRecursiveOption } from './rm-flags';
 import { extractDashCArg } from './shell-wrappers';
@@ -93,12 +81,7 @@ const FIND_PRIMARY_ARITY = new Map<string, number>([
   ['-fprintf', 2],
 ]);
 
-export interface AnalyzeFindContext extends RecursiveDeleteTargetTrustOptions {
-  paranoid?: boolean;
-  budget?: Budget;
-  envAssignments?: ReadonlyMap<string, string>;
-  policy?: DestructiveCommandRulePolicy &
-    Partial<Pick<EffectivePolicy, 'destructiveCommandAllowPaths'>>;
+export interface AnalyzeFindContext extends ScopedDeleteTargetOptions {
   analyzeTokens?: (
     tokens: readonly string[],
     cwd: string | null | undefined,
@@ -113,7 +96,7 @@ export function analyzeFindMatch(
   const catastrophicMatch = findCatastrophicDeleteMatch(words, tokens, context);
   if (catastrophicMatch) return catastrophicMatch;
 
-  if (findHasDelete(tokens, 1) && !hasOnlyScopedDeleteTargets(words, tokens, context)) {
+  if (findHasDelete(tokens, 1) && !hasOnlyScopedFindStartingPoints(words, tokens, context)) {
     const match = filterDestructiveCommandMatch(
       destructiveCommandMatch('find.delete', REASON_FIND_DELETE),
       context.policy,
@@ -324,84 +307,14 @@ function findSelectsHooksByName(tokens: readonly string[]): boolean {
   });
 }
 
-function hasOnlyScopedDeleteTargets(
+function hasOnlyScopedFindStartingPoints(
   words: readonly CommandWord[],
   tokens: readonly string[],
   context: AnalyzeFindContext,
 ): boolean {
   if (tokens.includes('-L') || tokens.includes('-f') || tokens.includes('-follow')) return false;
   const targets = getFindStartingPoints(words);
-  if (!targets) return false;
-  const envAssignments = context.envAssignments ?? new Map();
-  const effectiveTmpdirValue = getEffectiveTmpdirValue(envAssignments, context.environment);
-  const trustedTmpdirValue =
-    context.trustedTmpdirValue ?? isTmpdirValueTrusted(envAssignments, context.environment);
-  const allowTmpdirVar =
-    context.allowTmpdirVar ?? !isTmpdirOverriddenToNonTemp(envAssignments, context.environment);
-  const targetOptions = {
-    environment: context.environment,
-    protectedGitMetadata: context.protectedGitMetadata,
-    cwd: context.cwd,
-    originalCwd: context.originalCwd,
-    strict: context.strict,
-    allowTmpdirVar: allowTmpdirVar && trustedTmpdirValue && Boolean(effectiveTmpdirValue),
-    allowPaths: context.policy?.destructiveCommandAllowPaths,
-    posixShell: true,
-    tmpdirWordSplittingUnsafe:
-      context.tmpdirWordSplittingUnsafe ??
-      hasUnsafeTmpdirWordSplitting(envAssignments, context.environment),
-    trustedTmpdirValue,
-    budget: context.budget,
-  };
-  const targetContext = createRecursiveDeleteTargetContext(targetOptions);
-  const workspaceContext = createRecursiveDeleteTargetContext({
-    ...targetOptions,
-    cwd: context.originalCwd ?? context.cwd,
-  });
-  const workspace = context.originalCwd && context.environment.paths.realpath(context.originalCwd);
-  const enteredDirectory = context.cwd && context.environment.paths.realpath(context.cwd);
-  const cwdOutsideWorkspace =
-    workspace && enteredDirectory && !isPathOrSubpath(enteredDirectory, workspace)
-      ? context.cwd
-      : undefined;
-
-  return targets.every((target) => {
-    const facts = deleteTargetWordFacts(target);
-    if (facts.unsafeBraceExpansion) return false;
-    return (facts.expandedTargets ?? [analysisWordText(target)]).every((expandedTarget) => {
-      const trackedCwd = /^\.\/*$/.test(expandedTarget) ? cwdOutsideWorkspace : undefined;
-      const startingPoint = trackedCwd ?? expandedTarget;
-      const classificationOptions = {
-        targetIsLiteral: facts.expandedTargets !== undefined || facts.targetIsLiteral,
-        tmpdirWordSplittingProtected: facts.tmpdirWordSplittingProtected,
-      };
-      if (
-        !destructiveCommandRuleIsEnabled(
-          context.policy,
-          'rm.recursive-force-paranoid',
-          context.paranoid ?? false,
-        ) &&
-        !trackedCwd &&
-        classifyRecursiveDeleteTarget(startingPoint, targetContext, classificationOptions).kind ===
-          'within_anchored_cwd'
-      ) {
-        return true;
-      }
-      return isTrustedTempDescendantTarget(
-        startingPoint,
-        trackedCwd ? workspaceContext : targetContext,
-        {
-          ...classificationOptions,
-          containmentTarget: expandTmpdirTarget(startingPoint, effectiveTmpdirValue),
-        },
-      );
-    });
-  });
-}
-
-function expandTmpdirTarget(target: string, tmpdirValue: string | undefined): string {
-  if (!tmpdirValue) return target;
-  return target.replace(/^(?:\$TMPDIR|\$\{TMPDIR\})/, () => tmpdirValue);
+  return targets !== null && hasOnlyScopedDeleteTargets(targets, context);
 }
 
 export function getFindStartingPoints(words: readonly CommandWord[]): CommandWord[] | null {
