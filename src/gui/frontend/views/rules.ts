@@ -1,5 +1,5 @@
+import { t } from '../i18n';
 import { rulePromptText } from '../rule-prompt';
-import { plural } from '../format';
 import { errorText, escapeHtml, notify, qs, requestJson, runRefresh } from '../ui';
 
 type CustomRule = {
@@ -22,6 +22,11 @@ let requested = false;
 let scope = 'project';
 let pendingFocus: string | null = null;
 let directoryPickerFailed = false;
+const exampleRequests: Record<string, string> = {
+  suggest: t.exampleSuggestRequest,
+  block: t.exampleBlockRequest,
+  verify: t.exampleVerifyRequest,
+};
 
 const showPathEnd = () => {
   const input = qs<HTMLInputElement>('rules-project-path');
@@ -41,16 +46,16 @@ const render = () => {
   qs('rules-list').innerHTML =
     loaded.rulebooks.length === 0
       ? loaded.errors.length > 0
-        ? '<p class="empty">Every rulebook was skipped because of errors, so no custom rule is enforced. See Problems above.</p>'
-        : '<p class="empty">No custom rules yet. Use <strong>Create a rule</strong> below, or run <code>npx -y cc-safety-net rule init</code>.</p>'
+        ? `<p class="empty">${escapeHtml(t.allRulebooksSkipped)}</p>`
+        : `<p class="empty">${t.noCustomRules}</p>`
       : loaded.rulebooks
           .map(
             (rulebook) => `<section class="rulebook">
     <div class="rulebook-head">
       <strong>${escapeHtml(rulebook.name)}</strong>
       <span class="count">v${escapeHtml(rulebook.version)}</span>
-      <span>${rulebook.source === 'user' ? 'All projects' : 'This project'}</span>
-      <span>${plural(rulebook.rules.length, 'rule')}</span>
+      <span>${rulebook.source === 'user' ? t.allProjects : t.thisProject}</span>
+      <span>${t.ruleCount(rulebook.rules.length)}</span>
       ${rulebook.spec === rulebook.name ? '' : `<code>${escapeHtml(rulebook.spec)}</code>`}
     </div>
     <ul class="card rows">${rulebook.rules
@@ -60,7 +65,7 @@ const render = () => {
         ) => `<li class="setting-row rulebook-rule${pendingFocus === rule.name ? ' focused' : ''}">
       <div class="rulebook-rule-head"><code class="command">${escapeHtml([rule.command, rule.subcommand].filter(Boolean).join(' '))}</code><code class="rule-id">custom.${escapeHtml(rule.name)}</code></div>
       <p>${escapeHtml(rule.reason)}</p>
-      <p class="muted">Blocks when any of these arguments is present: ${rule.block_args.map((arg) => `<code>${escapeHtml(arg)}</code>`).join(' ')}</p>
+      <p class="muted">${t.blocksWhenArgument} ${rule.block_args.map((arg) => `<code>${escapeHtml(arg)}</code>`).join(' ')}</p>
     </li>`,
       )
       .join('')}</ul>
@@ -76,7 +81,7 @@ const render = () => {
   if (!pendingFocus) return;
   const focused = qs('rules-list').querySelector('.focused');
   if (focused) focused.scrollIntoView({ block: 'center' });
-  if (!focused) notify(`custom.${pendingFocus} is not in any rulebook`, 'error');
+  if (!focused) notify(t.customRuleMissing(`custom.${pendingFocus}`), 'error');
   pendingFocus = null;
 };
 
@@ -85,7 +90,7 @@ const loadRules = async () => {
   const result = await requestJson('/api/rules');
   if (!result.ok || !Array.isArray(result.data?.rulebooks)) {
     qs('rules-list').innerHTML =
-      `<p class="empty">Could not load rules: ${escapeHtml(errorText(result))}</p>`;
+      `<p class="empty">${escapeHtml(t.couldNotLoadRules(errorText(result)))}</p>`;
     rulesData = null;
     requested = false;
     qs('rules-diagnostics-panel').hidden = true;
@@ -136,9 +141,9 @@ const chooseProjectDirectory = async (button: HTMLButtonElement) => {
   qs<HTMLInputElement>('rules-project-path').readOnly = false;
   button.hidden = true;
   notify(
-    'The folder picker is not available',
+    t.folderPickerUnavailable,
     'error',
-    `${result.ok ? result.data.error : errorText(result)}. Type the project folder instead.`,
+    t.typeFolderInstead(result.ok ? result.data.error : errorText(result)),
   );
 };
 
@@ -146,15 +151,15 @@ const copyRulePrompt = async (button: HTMLButtonElement) => {
   const request = qs<HTMLTextAreaElement>('rules-composer-input').value;
   const projectPath = qs<HTMLInputElement>('rules-project-path').value;
   if (!rulesData) {
-    notify('Rules have not loaded yet', 'error', 'Click Refresh and try again.');
+    notify(t.rulesNotLoaded, 'error', t.refreshAndRetry);
     return;
   }
   if (!request.trim()) {
-    notify('Describe what should be blocked first', 'error');
+    notify(t.describeRuleFirst, 'error');
     return;
   }
   if (scope === 'project' && !projectPath.trim()) {
-    notify('Enter the project folder the rule belongs to', 'error');
+    notify(t.enterProjectFolder, 'error');
     return;
   }
   button.disabled = true;
@@ -166,11 +171,11 @@ const copyRulePrompt = async (button: HTMLButtonElement) => {
     );
   button.disabled = false;
   if (!copied) {
-    notify('Copy failed', 'error');
+    notify(t.copyFailed, 'error');
     return;
   }
   qs<HTMLTextAreaElement>('rules-composer-input').value = '';
-  notify('Prompt copied', 'ok', 'Paste it into your coding agent.');
+  notify(t.promptCopied, 'ok', t.pasteIntoAgent);
 };
 
 export const initRules = () => {
@@ -193,6 +198,7 @@ export const initRules = () => {
     }
     const example = target.closest<HTMLElement>('[data-rules-example]');
     if (example)
-      qs<HTMLTextAreaElement>('rules-composer-input').value = example.dataset.rulesExample ?? '';
+      qs<HTMLTextAreaElement>('rules-composer-input').value =
+        exampleRequests[example.dataset.rulesExample ?? ''] ?? '';
   });
 };

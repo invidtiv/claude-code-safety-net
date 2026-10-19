@@ -1,4 +1,5 @@
 import { groupIntegrations } from '../health';
+import { t } from '../i18n';
 import type { IntegrationRow } from '../types';
 import { emit, errorText, escapeHtml, notify, qs, requestJson, runRefresh } from '../ui';
 
@@ -9,10 +10,10 @@ export const integrationTargets = () => targets;
 
 const statusText = (row: IntegrationRow) =>
   ({
-    active: 'Hook installed',
-    disabled: 'Hook disabled',
+    active: t.hookInstalled,
+    disabled: t.hookDisabled,
     'not-installed': '',
-    'not-inspected': 'Status unknown: its settings file could not be read',
+    'not-inspected': t.hookStatusUnknown,
   })[row.status];
 
 const rowHtml = (row: IntegrationRow) => {
@@ -23,17 +24,17 @@ const rowHtml = (row: IntegrationRow) => {
       : `<button type="button" data-integration-action="${uninstall ? 'uninstall' : 'install'}" data-integration-target="${escapeHtml(row.target)}"${busy.has(row.target) ? ' disabled' : ''}>${
           busy.has(row.target)
             ? uninstall
-              ? 'Uninstalling…'
-              : 'Installing…'
+              ? t.uninstalling
+              : t.installing
             : uninstall
-              ? 'Uninstall'
+              ? t.uninstall
               : row.status === 'disabled'
-                ? 'Enable'
-                : 'Install'
+                ? t.enable
+                : t.install
         }</button>`;
   return `<li class="setting-row agent-row">
     <span class="agent-name">${escapeHtml(row.label)}</span>
-    <span class="agent-version"${row.version === null ? '' : ` title="v${escapeHtml(row.version)}"`}>${row.version === null ? 'Not detected' : `v${escapeHtml(row.version)}`}</span>
+    <span class="agent-version"${row.version === null ? '' : ` title="v${escapeHtml(row.version)}"`}>${row.version === null ? t.notDetected : `v${escapeHtml(row.version)}`}</span>
     <span class="agent-status ${row.status}">${statusText(row)}</span>
     <span class="agent-action">${action}</span>
     ${row.note ? `<p class="notice ${row.note.kind}">${escapeHtml(row.note.text)}</p>` : ''}
@@ -49,28 +50,26 @@ const render = () => {
   if (!targets) return;
   const groups = groupIntegrations(targets);
   qs('integrations-list').innerHTML =
-    groupHtml('Installed', groups.installed) +
+    groupHtml(t.installedAgents, groups.installed) +
     groupHtml(
-      'Detected on this machine',
+      t.detectedAgents,
       groups.available,
-      groups.installed.length === 0
-        ? 'No agent has the hook yet. Install it for each agent you use; until then its commands are not checked.'
-        : '',
+      groups.installed.length === 0 ? t.noHookYet : '',
     ) +
     (groups.missing.length === 0
       ? ''
-      : `<details class="section missing-agents"><summary>Not detected on this machine <span class="count">${groups.missing.length}</span></summary><ul class="card rows">${groups.missing.map(rowHtml).join('')}</ul></details>`);
+      : `<details class="section missing-agents"><summary>${t.missingAgents} <span class="count">${groups.missing.length}</span></summary><ul class="card rows">${groups.missing.map(rowHtml).join('')}</ul></details>`);
 };
 
 export const loadIntegrations = async () => {
   const result = await requestJson('/api/integrations');
   if (!result.ok || !Array.isArray(result.data?.targets)) {
     qs('integrations-list').innerHTML =
-      `<p class="empty">Could not check agents: ${escapeHtml(errorText(result))}</p>`;
+      `<p class="empty">${escapeHtml(t.couldNotCheckAgents(errorText(result)))}</p>`;
     return;
   }
   targets = result.data.targets;
-  qs('integrations-node-version').textContent = result.data.system.nodeVersion ?? 'unknown';
+  qs('integrations-node-version').textContent = result.data.system.nodeVersion ?? t.unknownValue;
   qs('integrations-platform').textContent = result.data.system.platform;
   render();
   emit('integrations');
@@ -95,7 +94,7 @@ const runAction = async (button: HTMLElement) => {
     kind: ok ? 'ok' : 'error',
     text: ok ? result.data.output : result.data?.output || errorText(result),
   };
-  if (!ok) notify(action === 'install' ? 'Install failed' : 'Uninstall failed', 'error');
+  if (!ok) notify(action === 'install' ? t.installFailed : t.uninstallFailed, 'error');
   render();
   emit('integrations');
 };

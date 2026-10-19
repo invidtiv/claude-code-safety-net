@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { attentionItems, groupIntegrations } from '@/gui/frontend/health';
+import { en } from '@/gui/frontend/locales/en';
 
 const row = (
   label: string,
@@ -32,37 +33,46 @@ const target = (label: string, status: 'active' | 'disabled' | 'not-installed') 
 describe('the overview attention list', () => {
   test('is empty when a hook is active and nothing went wrong', () => {
     expect(
-      attentionItems({
-        targets: [target('Claude Code', 'active')],
-        update: null,
-        errors: 0,
-        suspects: 0,
-        days: 7,
-      }),
+      attentionItems(
+        {
+          targets: [target('Claude Code', 'active')],
+          update: null,
+          errors: 0,
+          suspects: 0,
+          days: 7,
+        },
+        en,
+      ),
     ).toEqual([]);
   });
 
   test('leaves a missing hook to the status card above it', () => {
     expect(
-      attentionItems({
-        targets: [target('Codex', 'not-installed')],
-        update: null,
-        errors: 0,
-        suspects: 0,
-        days: 7,
-      }),
+      attentionItems(
+        {
+          targets: [target('Codex', 'not-installed')],
+          update: null,
+          errors: 0,
+          suspects: 0,
+          days: 7,
+        },
+        en,
+      ),
     ).toEqual([]);
   });
 
   test('links each problem to the place that fixes it', () => {
     expect(
-      attentionItems({
-        targets: [target('Claude Code', 'disabled'), target('Codex', 'not-installed')],
-        update: { latestVersion: '9.9.9', updateAvailable: true },
-        errors: 2,
-        suspects: 1,
-        days: 7,
-      }),
+      attentionItems(
+        {
+          targets: [target('Claude Code', 'disabled'), target('Codex', 'not-installed')],
+          update: { latestVersion: '9.9.9', updateAvailable: true },
+          errors: 2,
+          suspects: 1,
+          days: 7,
+        },
+        en,
+      ),
     ).toEqual([
       { text: 'Claude Code is detected but its hook is disabled.', href: '#integrations' },
       {

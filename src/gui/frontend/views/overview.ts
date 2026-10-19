@@ -1,7 +1,9 @@
-import { findSuspectEntries, formatRelativeTime } from '@/audit/display';
+import { findSuspectEntries } from '@/audit/display';
 import { SAFETY_LEVEL_CAPABILITIES } from '@/core/policy/safety-level';
-import { dayCount, formatCount, plural, repoUrl } from '../format';
+import { repoUrl } from '../format';
 import { attentionItems } from '../health';
+import { formatCount, formatRelativeTime, t } from '../i18n';
+import { levelName } from '../policy-summary';
 import type { ActivityFeed, UpdateStatus } from '../types';
 import { agentLabels, errorText, escapeHtml, on, qs, requestJson, shared } from '../ui';
 import { retentionDays } from './activity';
@@ -19,19 +21,20 @@ const renderStatusCard = () => {
   const active = (targets ?? []).filter((row) => row.status === 'active');
   const policy = loaded.policy;
   const off = [
-    policy.destructive_command_protection.enabled ? null : 'Command protection is off',
-    policy.secret_protection.enabled ? null : 'Secret protection is off',
+    policy.destructive_command_protection.enabled ? null : t.commandProtectionIsOff,
+    policy.secret_protection.enabled ? null : t.secretProtectionIsOff,
   ].filter((text) => text !== null);
+  const noAgent = loaded.errors.length === 0 && targets !== null && active.length === 0;
   const headline =
     loaded.errors.length > 0
-      ? 'Your policy file needs repair'
+      ? t.statusRepair
       : !targets
-        ? 'Checking your agents…'
-        : active.length === 0
-          ? 'Not checking any agent yet'
+        ? t.statusCheckingAgents
+        : noAgent
+          ? t.statusNoAgent
           : off.length > 0
-            ? 'Partly protected'
-            : 'Protected';
+            ? t.statusPartlyProtected
+            : t.statusProtected;
   const customized =
     (loaded.preview?.counts.effectiveCustomizations ?? 0) > 0 ||
     Object.entries(policy.safety.overrides).some(
@@ -41,50 +44,55 @@ const renderStatusCard = () => {
           key as keyof typeof SAFETY_LEVEL_CAPABILITIES.standard
         ],
     );
-  const level = policy.safety.level[0]?.toUpperCase() + policy.safety.level.slice(1);
   const facts = [
-    `${level} preset${customized ? ', customized' : ''}`,
+    t.presetFact(levelName(policy.safety.level, t), customized),
     ...(off.length > 0
       ? off
       : [
-          loaded.preview ? `${loaded.preview.counts.enabled} command rules on` : null,
-          'Secret protection on',
+          loaded.preview ? t.commandRulesOn(loaded.preview.counts.enabled) : null,
+          t.secretProtectionIsOn,
         ]),
     active.length > 0
-      ? `Hook active in ${active.length <= 3 ? active.map((row) => row.label).join(', ') : plural(active.length, 'agent')}`
+      ? t.hookActiveIn(
+          active.length <= 3
+            ? active.map((row) => row.label).join(t.listSeparator)
+            : t.agentCount(active.length),
+        )
       : null,
   ].filter((text) => text !== null);
-  const [actionHref, actionLabel] =
-    headline === 'Not checking any agent yet'
-      ? ['#integrations', 'Install a hook']
-      : ['#policy', loaded.errors.length > 0 ? 'Repair' : 'Configure'];
+  const [actionHref, actionLabel] = noAgent
+    ? ['#integrations', t.installHook]
+    : ['#policy', loaded.errors.length > 0 ? t.repair : t.configure];
   qs('status-card').innerHTML = `<div>
       <p class="status-headline">${escapeHtml(headline)}</p>
       <p class="status-facts">${facts.map(escapeHtml).join(' · ')}</p>
     </div>
-    <a class="link-button" href="${actionHref}">${actionLabel}</a>`;
+    <a class="link-button" href="${actionHref}">${escapeHtml(actionLabel)}</a>`;
 };
 
 const renderAttention = () => {
-  const items = attentionItems({
-    targets: integrationTargets(),
-    update,
-    errors: feed?.counts.errors ?? 0,
-    suspects: feed ? findSuspectEntries(feed.entries).size : 0,
-    days: feed?.days ?? OVERVIEW_DAYS,
-  });
+  const items = attentionItems(
+    {
+      targets: integrationTargets(),
+      update,
+      errors: feed?.counts.errors ?? 0,
+      suspects: feed ? findSuspectEntries(feed.entries).size : 0,
+      days: feed?.days ?? OVERVIEW_DAYS,
+    },
+    t,
+  );
   qs('attention').hidden = items.length === 0;
   qs('attention-list').innerHTML = items
     .map(
       (item) =>
-        `<li><a class="list-row attention-row" href="${escapeHtml(item.href)}"${item.href.startsWith('#') ? '' : ' target="_blank" rel="noopener"'}><span>${escapeHtml(item.text)}</span><span class="row-action">${item.href.startsWith('#activity') ? 'Review' : item.href.startsWith('#') ? 'Fix' : 'Release notes'}</span></a></li>`,
+        `<li class="list-row attention-row"><span>${escapeHtml(item.text)}</span><a class="link-button" href="${escapeHtml(item.href)}"${item.href.startsWith('#') ? '' : ' target="_blank" rel="noopener"'}>${escapeHtml(item.href.startsWith('#activity') ? t.review : item.href.startsWith('#') ? t.fix : t.releaseNotes)}</a></li>`,
     )
     .join('');
 };
 
 const sparkline = (byDay: number[], noun: string) => {
   const max = Math.max(...byDay, 1);
-  return `<div class="tile-spark" role="img" aria-label="${escapeHtml(`${noun} per day, oldest to newest: ${byDay.join(', ')}`)}">${byDay
+  return `<div class="tile-spark" role="img" aria-label="${escapeHtml(t.perDayChart(noun, byDay.map(formatCount).join(t.listSeparator)))}">${byDay
     .map(
       (count) =>
         `<span class="spark-bar${count === 0 ? ' spark-zero' : ''}" style="height:${count === 0 ? 2 : Math.max(3, Math.round((count / max) * 36))}px" title="${formatCount(count)}"></span>`,
@@ -101,18 +109,18 @@ const renderActivity = () => {
   if (!feed) return;
   const loaded = feed;
   qs('overview-tiles').innerHTML = [
-    [loaded.counts.blocked, 'Blocked', loaded.counts.blockedByDay],
-    [loaded.totalInWindow, 'Commands checked', loaded.counts.analyzedByDay],
+    [loaded.counts.blocked, t.tileBlocked, loaded.counts.blockedByDay],
+    [loaded.totalInWindow, t.tileChecked, loaded.counts.analyzedByDay],
   ]
     .map(
       ([value, label, byDay]) =>
-        `<div class="tile"><div><strong>${formatCount(value as number)}</strong><span>${label} · last ${dayCount(loaded.days)}</span></div>${sparkline(byDay as number[], label as string)}</div>`,
+        `<div class="tile"><div><strong>${formatCount(value as number)}</strong><span>${escapeHtml(`${label} · ${t.lastDays(loaded.days)}`)}</span></div>${sparkline(byDay as number[], label as string)}</div>`,
     )
     .join('');
   const blocks = loaded.entries.filter((entry) => entry.decision !== 'allow').slice(0, 8);
   qs('recent-blocks').innerHTML =
     blocks.length === 0
-      ? `<p class="empty">Nothing was blocked in the last ${dayCount(loaded.days)}.</p>`
+      ? `<p class="empty">${escapeHtml(t.nothingBlocked(loaded.days))}</p>`
       : `<ul class="card list">${blocks
           .map(
             (
@@ -120,23 +128,23 @@ const renderActivity = () => {
             ) => `<li><a class="list-row compact-row" href="${entry.ruleId ? ruleHref(entry.ruleId) : '#activity'}">
               <time datetime="${escapeHtml(entry.ts)}">${escapeHtml(formatRelativeTime(entry.ts))}</time>
               <span class="feed-agent">${escapeHtml(entry.agent && entry.agent !== 'unknown' ? (agentLabels[entry.agent] ?? entry.agent) : '')}</span>
-              <code class="feed-command">${escapeHtml(entry.segment || entry.command || '(no command recorded)')}</code>
-              <span class="feed-rule">${escapeHtml(entry.failureStage ? 'guard error' : (entry.ruleId ?? ''))}</span>
+              <code class="feed-command">${escapeHtml(entry.segment || entry.command || t.noCommandRecorded)}</code>
+              <span class="feed-rule">${escapeHtml(entry.failureStage ? t.guardError : (entry.ruleId ?? ''))}</span>
             </a></li>`,
           )
           .join('')}</ul>`;
   const top = Object.entries(loaded.counts.rules)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
-  qs('top-rules-title').textContent = `Most-triggered rules · last ${dayCount(loaded.days)}`;
+  qs('top-rules-title').textContent = `${t.topRules} · ${t.lastDays(loaded.days)}`;
   qs('top-rules').innerHTML =
     top.length === 0
-      ? '<p class="empty">No rule has blocked anything yet.</p>'
+      ? `<p class="empty">${escapeHtml(t.noRuleBlocked)}</p>`
       : `<ul class="card list">${top
           .map(
             ([ruleId, count]) => `<li><a class="list-row rule-count-row" href="${ruleHref(ruleId)}">
               <code class="rule-label">${escapeHtml(ruleId)}</code>
-              <span class="count">${plural(count, 'block')}</span>
+              <span class="count">${escapeHtml(t.blockCount(count))}</span>
             </a></li>`,
           )
           .join('')}</ul>`;
@@ -148,7 +156,7 @@ export const loadOverview = async () => {
   );
   if (!result.ok || !result.data) {
     qs('recent-blocks').innerHTML =
-      `<p class="empty">Could not load activity: ${escapeHtml(errorText(result))}</p>`;
+      `<p class="empty">${escapeHtml(t.couldNotLoadActivity(errorText(result)))}</p>`;
     return;
   }
   feed = result.data as ActivityFeed;
@@ -177,18 +185,16 @@ const starCountHtml = (count: number | null) =>
     : '';
 const renderStarPitch = (starred: boolean) => {
   const evidence =
-    starContext.blockedTotal > 0
-      ? `CC Safety Net has blocked <strong>${formatCount(starContext.blockedTotal)}</strong> risky ${starContext.blockedTotal === 1 ? 'command' : 'commands'} on this machine in the last ${escapeHtml(dayCount(retentionDays()))}.`
-      : '';
+    starContext.blockedTotal > 0 ? t.starEvidence(starContext.blockedTotal, retentionDays()) : '';
   qs('star-pitch-text').innerHTML = starred
     ? evidence
     : evidence
-      ? `${evidence} If it saved your work, star it on GitHub.`
-      : 'If CC Safety Net is useful to you, star it on GitHub.';
+      ? `${evidence} ${t.starIfSaved}`
+      : t.starIfUseful;
 };
 const renderStarLink = (href: string) => {
   qs('star-slot').innerHTML =
-    `<a class="star-cta" href="${escapeHtml(href)}" target="_blank" rel="noopener" aria-label="Star CC Safety Net on GitHub (opens github.com)"><span class="star-icon" aria-hidden="true">${starIcons.outline}</span><span class="star-label">Star on GitHub</span>${starCountHtml(starContext.starCount)}</a>`;
+    `<a class="star-cta" href="${escapeHtml(href)}" target="_blank" rel="noopener" aria-label="${escapeHtml(t.starLinkLabel)}"><span class="star-icon" aria-hidden="true">${starIcons.outline}</span><span class="star-label">${escapeHtml(t.starOnGitHub)}</span>${starCountHtml(starContext.starCount)}</a>`;
   qs('star-row').hidden = false;
 };
 export const loadStarContext = async () => {
@@ -196,7 +202,7 @@ export const loadStarContext = async () => {
   starContext = result.ok && result.data ? result.data : { starCount: null, blockedTotal: 0 };
   renderStarPitch(false);
   qs('star-slot').innerHTML =
-    `<button type="button" class="star-cta" aria-label="Star CC Safety Net on GitHub"><span class="star-icon" aria-hidden="true">${starIcons.outline}</span><span class="star-label">Star on GitHub</span>${starCountHtml(starContext.starCount)}</button>`;
+    `<button type="button" class="star-cta" aria-label="${escapeHtml(t.starButtonLabel)}"><span class="star-icon" aria-hidden="true">${starIcons.outline}</span><span class="star-label">${escapeHtml(t.starOnGitHub)}</span>${starCountHtml(starContext.starCount)}</button>`;
   qs('star-row').hidden = false;
 };
 const starRepo = async (button: HTMLButtonElement) => {
@@ -207,8 +213,8 @@ const starRepo = async (button: HTMLButtonElement) => {
     return;
   }
   (button.querySelector('.star-icon') as HTMLElement).innerHTML = starIcons.filled;
-  (button.querySelector('.star-label') as HTMLElement).textContent = 'Starred. Thank you.';
-  button.setAttribute('aria-label', 'CC Safety Net starred on GitHub');
+  (button.querySelector('.star-label') as HTMLElement).textContent = t.starred;
+  button.setAttribute('aria-label', t.starredLabel);
   button.classList.add('starred');
   renderStarPitch(true);
 };

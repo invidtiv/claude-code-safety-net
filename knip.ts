@@ -11,6 +11,7 @@ const config: KnipConfig = {
     'src/entries/deepseek-harness/index.ts!',
     'src/entries/amp.ts!',
     'src/entries/openclaw.ts!',
+    'src/gui/frontend/head.ts!',
     'src/gui/frontend/main.ts!',
     'scripts/build.ts!',
     'scripts/build-plugin-tree.ts!',

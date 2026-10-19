@@ -36,21 +36,23 @@ import {
   shared,
   showPath,
 } from '../ui';
-import { plural } from '../format';
+import { t } from '../i18n';
 import { isSearchShortcut } from '../shortcuts';
 
 type Capability = SafetyLevelCapability;
 
 const secretCategoryNames: Record<string, string> = {
-  Basename: 'Sensitive file names',
-  Pattern: 'Sensitive file name patterns',
-  'Home path': 'Sensitive home folders',
-  Variant: 'Key file name variants',
-  Extension: 'Sensitive file extensions',
-  'Extension pattern': 'Sensitive extension patterns',
-  'Coding CLI credential': 'Coding agent credentials',
-  'Coding CLI config': 'Coding agent settings',
+  Basename: t.secretCategoryBasename,
+  Pattern: t.secretCategoryPattern,
+  'Home path': t.secretCategoryHomePath,
+  Variant: t.secretCategoryVariant,
+  Extension: t.secretCategoryExtension,
+  'Extension pattern': t.secretCategoryExtensionPattern,
+  'Coding CLI credential': t.secretCategoryCredential,
+  'Coding CLI config': t.secretCategoryConfig,
 };
+const presets = safetyLevels(t);
+const capabilities = capabilityNames(t);
 
 type ProjectDraftState = {
   path: string;
@@ -140,8 +142,9 @@ const requestPolicyPreview = (policy: unknown) =>
 
 const projectFieldChip = (field: string) => {
   if (!projectDraft) return '';
-  if (!markedFields.has(field)) return '<span class="project-chip inherited">Inherited</span>';
-  return `<button type="button" class="project-chip" data-unmark-field="${escapeHtml(field)}" title="Set by this project. Click to stop setting it." aria-label="Set by project: ${escapeHtml(field)}. Activate to inherit again.">Project</button>`;
+  if (!markedFields.has(field))
+    return `<span class="project-chip inherited">${escapeHtml(t.inheritedChip)}</span>`;
+  return `<button type="button" class="project-chip" data-unmark-field="${escapeHtml(field)}" title="${escapeHtml(t.projectChipTitle)}" aria-label="${escapeHtml(t.projectChipLabel(field))}">${escapeHtml(t.projectChip)}</button>`;
 };
 const projectChipSlots: [string, string][] = [
   ['destructive-enabled-chip', 'destructive_command_protection.enabled'],
@@ -187,20 +190,18 @@ const setBanner = () => {
   const saved = state;
   const notices = [
     saved && !saved.policy.destructive_command_protection.enabled
-      ? 'Command protection is off: built-in destructive command rules are not enforced. Catastrophic and custom rules still apply.'
+      ? t.commandProtectionOffBanner
       : null,
-    saved && !saved.policy.secret_protection.enabled
-      ? 'Secret protection is off: sensitive files and deny paths are not blocked.'
-      : null,
+    saved && !saved.policy.secret_protection.enabled ? t.secretProtectionOffBanner : null,
     saved?.configState && saved.configState.state !== 'ready'
-      ? `A fallback configuration is being enforced: ${saved.configState.reason}`
+      ? t.fallbackConfigBanner(saved.configState.reason)
       : null,
   ].filter((notice) => notice !== null);
   qs('protection-banner').innerHTML = notices
     .map((notice) => `<p>${escapeHtml(notice)}</p>`)
     .concat(
       notices.length > 0 && !location.hash.startsWith('#policy')
-        ? ['<a href="#policy">Open Protections</a>']
+        ? [`<a href="#policy">${escapeHtml(t.openProtections)}</a>`]
         : [],
     )
     .join('');
@@ -217,13 +218,14 @@ const savedComparisonPolicy = () =>
 
 const renderSavebar = () => {
   qs('policy-savebar').hidden = !shared.dirty;
-  qs('save').textContent = projectDraft ? 'Review and apply' : 'Save';
+  qs('save').textContent = projectDraft ? t.reviewAndApply : t.save;
   if (!shared.dirty || !state) return;
-  const changes = policyChanges(savedComparisonPolicy(), draftPolicy, ruleLabels());
+  const changes = policyChanges(savedComparisonPolicy(), draftPolicy, ruleLabels(), t);
   qs('savebar-title').textContent =
-    changes.length === 0 ? 'Unsaved changes' : plural(changes.length, 'unsaved change');
+    changes.length === 0 ? t.unsavedChanges : t.unsavedChangeCount(changes.length);
   qs('savebar-summary').textContent =
-    changes.slice(0, 3).join('; ') + (changes.length > 3 ? `; and ${changes.length - 3} more` : '');
+    changes.slice(0, 3).join(t.changeSeparator) +
+    (changes.length > 3 ? t.moreChanges(changes.length - 3) : '');
 };
 
 const syncRawFromForm = () => {
@@ -234,8 +236,8 @@ const syncRawFromForm = () => {
     2,
   )}\n`;
   qs('raw-source').textContent = projectDraft
-    ? `Only the fields set by this project. Written to ${projectDraft.path}.`
-    : 'Read-only. Mirrors the settings above.';
+    ? t.rawProjectFields(projectDraft.path)
+    : t.rawReadOnly;
 };
 
 const updateDirtyStatus = () => {
@@ -342,7 +344,8 @@ const ruleRowHtml = (row: {
     ${row.info}
   </li>`;
 
-const offCount = (off: number) => (off > 0 ? ` · <span class="off-count">${off} off</span>` : '');
+const offCount = (off: number) =>
+  off > 0 ? ` · <span class="off-count">${escapeHtml(t.offCount(off))}</span>` : '';
 
 const renderDestructiveCommands = () => {
   if (!state || !preview) return;
@@ -353,8 +356,8 @@ const renderDestructiveCommands = () => {
     (rule) => rule.catastrophic,
   ).length;
   qs('destructive-command-summary').textContent = disabled
-    ? 'Off. Built-in rules are not enforced; catastrophic and custom rules still apply. Your rule settings are kept.'
-    : `${preview.counts.enabled} on · ${preview.counts.disabled} off · ${catastrophicCount} always on`;
+    ? t.commandProtectionOffSummary
+    : t.commandRuleSummary(preview.counts.enabled, preview.counts.disabled, catastrophicCount);
   qs('destructive-panel').classList.toggle('is-off', disabled);
   const visible = state.destructiveCommandRules.filter(
     (rule) =>
@@ -362,12 +365,12 @@ const renderDestructiveCommands = () => {
       (!showChangedOnly || destructiveChanged(rule)),
   );
   const rowHtml = (rule: DestructiveRule) => {
-    const info = `<button type="button" class="info-button" data-rule-example="${escapeHtml(rule.id)}" aria-label="${escapeHtml(`About ${rule.label}`)}" aria-haspopup="dialog" aria-controls="rule-example-popover">${icons.info}</button>`;
-    const heading = `<span class="rule-name">${escapeHtml(rule.label)}</span><code class="rule-id">${escapeHtml(rule.id)}</code>${tierForRule(rule) === 'normal' ? '' : `<span class="tier-badge ${tierForRule(rule)}">${tierForRule(rule) === 'strict' ? 'Strict' : 'Paranoid'}</span>`}`;
+    const info = `<button type="button" class="info-button" data-rule-example="${escapeHtml(rule.id)}" aria-label="${escapeHtml(t.aboutRule(rule.label))}" aria-haspopup="dialog" aria-controls="rule-example-popover">${icons.info}</button>`;
+    const heading = `<span class="rule-name">${escapeHtml(rule.label)}</span><code class="rule-id">${escapeHtml(rule.id)}</code>${tierForRule(rule) === 'normal' ? '' : `<span class="tier-badge ${tierForRule(rule)}">${escapeHtml(tierForRule(rule) === 'strict' ? t.presetStrict : t.presetParanoid)}</span>`}`;
     if (rule.catastrophic)
       return ruleRowHtml({
         id: rule.id,
-        control: `<span class="lock" title="Always on">${icons.lock}</span>`,
+        control: `<span class="lock" title="${escapeHtml(t.alwaysOn)}">${icons.lock}</span>`,
         heading,
         note: null,
         noteTone: '',
@@ -383,14 +386,14 @@ const renderDestructiveCommands = () => {
       id: rule.id,
       control: `<input type="checkbox" class="switch" data-destructive-command-active="${escapeHtml(rule.id)}" ${effective.enabled ? 'checked' : ''} ${disabled ? 'disabled' : ''} aria-label="${escapeHtml(rule.label)}">`,
       heading,
-      note: ruleNote(rule, effective, effectiveState.capabilities),
+      note: ruleNote(rule, effective, effectiveState.capabilities, t),
       noteTone:
         effective.source === 'rule_override'
           ? 'changed'
           : effective.source === 'capability_override' || effective.source === 'environment'
             ? ''
             : tierForRule(rule),
-      actions: `${override ? `<button type="button" class="quiet small" data-use-inherited="${escapeHtml(rule.id)}">Reset</button>` : ''}${projectFieldChip(`destructive_command_protection.overrides.${rule.id}`)}`,
+      actions: `${override ? `<button type="button" class="quiet small" data-use-inherited="${escapeHtml(rule.id)}">${escapeHtml(t.reset)}</button>` : ''}${projectFieldChip(`destructive_command_protection.overrides.${rule.id}`)}`,
       description: rule.description,
       info,
       disabled,
@@ -398,11 +401,11 @@ const renderDestructiveCommands = () => {
   };
   qs('destructive-command-rules').innerHTML =
     visible.length === 0
-      ? '<p class="empty">No command protections match.</p>'
-      : commandRuleGroups(visible)
+      ? `<p class="empty">${escapeHtml(t.noCommandProtectionMatch)}</p>`
+      : commandRuleGroups(visible, t)
           .map((group) => {
             const all =
-              commandRuleGroups(state?.destructiveCommandRules ?? []).find(
+              commandRuleGroups(state?.destructiveCommandRules ?? [], t).find(
                 (entry) => entry.key === group.key,
               )?.rules ?? [];
             const off = all.filter(
@@ -413,8 +416,8 @@ const renderDestructiveCommands = () => {
               title: group.title,
               counts:
                 group.key === 'always-on'
-                  ? `${plural(all.length, 'rule')} · can't be turned off`
-                  : `${plural(all.length, 'rule')}${offCount(off)}`,
+                  ? escapeHtml(`${t.ruleCount(all.length)} · ${t.cannotTurnOff}`)
+                  : `${escapeHtml(t.ruleCount(all.length))}${offCount(off)}`,
               bulkSwitch: '',
               rowsHtml: group.rules.map(rowHtml).join(''),
             });
@@ -432,8 +435,8 @@ const renderSecretPatterns = () => {
     (rule) => !secretRuleIsActive(rule, overrides),
   ).length;
   qs('secret-summary').textContent = disabled
-    ? 'Off. Sensitive files and deny paths are not blocked. Your rule settings and paths are kept.'
-    : `${loaded.secretPatterns.length - offTotal} on · ${offTotal} off`;
+    ? t.secretProtectionOffSummary
+    : t.secretRuleSummary(loaded.secretPatterns.length - offTotal, offTotal);
   qs('secret-panel').classList.toggle('is-off', disabled);
   const visible = loaded.secretPatterns.filter(
     (rule) =>
@@ -454,19 +457,19 @@ const renderSecretPatterns = () => {
       id: rule.id,
       control: `<input type="checkbox" class="switch" data-secret-active="${escapeHtml(rule.id)}" ${active ? 'checked' : ''} ${disabled ? 'disabled' : ''} aria-label="${escapeHtml(rule.label)}">`,
       heading: `<span class="rule-name">${escapeHtml(rule.label)}</span>`,
-      note: override ? 'Changed by you' : rule.defaultOff ? 'Off by default' : null,
+      note: override ? t.changedByYou : rule.defaultOff ? t.offByDefault : null,
       noteTone: override ? 'changed' : '',
-      actions: `${override ? `<button type="button" class="quiet small" data-secret-reset="${escapeHtml(rule.id)}">Reset</button>` : ''}${projectFieldChip(`secret_protection.overrides.${rule.id}`)}`,
-      description: rule.description ?? (rule.paths ? plural(rule.paths.length, 'path') : ''),
+      actions: `${override ? `<button type="button" class="quiet small" data-secret-reset="${escapeHtml(rule.id)}">${escapeHtml(t.reset)}</button>` : ''}${projectFieldChip(`secret_protection.overrides.${rule.id}`)}`,
+      description: rule.description ?? (rule.paths ? t.pathCount(rule.paths.length) : ''),
       info: rule.paths
-        ? `<button type="button" class="info-button" data-secret-paths="${escapeHtml(rule.id)}" aria-label="${escapeHtml(`Protected paths for ${rule.label}`)}" aria-haspopup="dialog" aria-controls="rule-example-popover">${icons.info}</button>`
+        ? `<button type="button" class="info-button" data-secret-paths="${escapeHtml(rule.id)}" aria-label="${escapeHtml(t.protectedPathsFor(rule.label))}" aria-haspopup="dialog" aria-controls="rule-example-popover">${icons.info}</button>`
         : '<span class="info-spacer"></span>',
       disabled,
     });
   };
   qs('secret-patterns').innerHTML =
     visible.length === 0
-      ? '<p class="empty">No secret protections match.</p>'
+      ? `<p class="empty">${escapeHtml(t.noSecretProtectionMatch)}</p>`
       : groupRules(visible)
           .map((group) => {
             const all = loaded.secretPatterns.filter((rule) => rule.category === group.category);
@@ -475,8 +478,8 @@ const renderSecretPatterns = () => {
             return categoryHtml({
               key: `secret:${group.category}`,
               title,
-              counts: `${plural(all.length, 'rule')}${offCount(on === 0 ? 0 : all.length - on)}`,
-              bulkSwitch: `<input type="checkbox" class="switch" data-secret-group-active="${escapeHtml(group.category)}" ${on > 0 ? 'checked' : ''} ${disabled ? 'disabled' : ''} aria-label="${escapeHtml(`Turn all ${title} on or off`)}" title="Turn all on or off">`,
+              counts: `${escapeHtml(t.ruleCount(all.length))}${offCount(on === 0 ? 0 : all.length - on)}`,
+              bulkSwitch: `<input type="checkbox" class="switch" data-secret-group-active="${escapeHtml(group.category)}" ${on > 0 ? 'checked' : ''} ${disabled ? 'disabled' : ''} aria-label="${escapeHtml(t.toggleGroup(title))}" title="${escapeHtml(t.toggleAll)}">`,
               rowsHtml: group.rules.map(rowHtml).join(''),
             });
           })
@@ -511,29 +514,29 @@ const renderSafety = () => {
     : [];
   qs('environment-overrides').hidden = environmentSources.length === 0;
   qs('environment-overrides').textContent = environmentSources.length
-    ? `An environment variable raises protection beyond these settings: ${environmentSources.map((source) => source.slice(4)).join(', ')}`
+    ? t.environmentRaises(environmentSources.map((source) => source.slice(4)).join(', '))
     : '';
-  qs('safety-level').innerHTML = (Object.entries(safetyLevels) as [SafetyLevel, [string, string]][])
+  qs('safety-level').innerHTML = (Object.entries(presets) as [SafetyLevel, [string, string]][])
     .map(
       ([level, meta]) =>
-        `<label class="preset-card preset-${level}"><input type="radio" name="safety-level" value="${level}" ${draftPolicy.safety.level === level ? 'checked' : ''}><span class="preset-name">${meta[0]}</span><span class="preset-description">${meta[1]}</span></label>`,
+        `<label class="preset-card preset-${level}"><input type="radio" name="safety-level" value="${level}" ${draftPolicy.safety.level === level ? 'checked' : ''}><span class="preset-name">${escapeHtml(meta[0])}</span><span class="preset-description">${escapeHtml(meta[1])}</span></label>`,
     )
     .join('');
   const inherited = SAFETY_LEVEL_CAPABILITIES[draftPolicy.safety.level];
   qs('safety-overrides').innerHTML = (
-    Object.entries(capabilityNames) as [Capability, [string, string]][]
+    Object.entries(capabilities) as [Capability, [string, string]][]
   )
     .map(([key, meta]) => {
       const value = draftPolicy.safety.overrides[key];
-      return `<div class="setting-row"><label class="setting-text" for="override-${key}"><strong>${meta[0]}</strong><small>${meta[1]}</small></label>${projectFieldChip(`safety.overrides.${key}`)}<select id="override-${key}" data-safety-override="${key}">
-      <option value="inherit" ${value === undefined ? 'selected' : ''}>From preset (${inherited[key] ? 'on' : 'off'})</option>
-      <option value="true" ${value === true ? 'selected' : ''}>Always on</option>
-      <option value="false" ${value === false ? 'selected' : ''}>Always off</option>
+      return `<div class="setting-row"><label class="setting-text" for="override-${key}"><strong>${escapeHtml(meta[0])}</strong><small>${escapeHtml(meta[1])}</small></label>${projectFieldChip(`safety.overrides.${key}`)}<select id="override-${key}" data-safety-override="${key}">
+      <option value="inherit" ${value === undefined ? 'selected' : ''}>${escapeHtml(t.fromPresetOption(inherited[key]))}</option>
+      <option value="true" ${value === true ? 'selected' : ''}>${escapeHtml(t.alwaysOn)}</option>
+      <option value="false" ${value === false ? 'selected' : ''}>${escapeHtml(t.alwaysOff)}</option>
     </select></div>`;
     })
     .join('');
   qs('workflow').innerHTML =
-    `<div class="setting-row"><label class="setting-text" for="workflow-worktree"><strong>Allow discarding local changes in linked git worktrees</strong><small>Only relaxes the discard checks inside linked worktrees.</small></label>${projectFieldChip('workflow.worktree_mode')}<input type="checkbox" class="switch" id="workflow-worktree" data-workflow-worktree ${draftPolicy.workflow.worktree_mode ? 'checked' : ''}></div>`;
+    `<div class="setting-row"><label class="setting-text" for="workflow-worktree"><strong>${escapeHtml(t.worktreeDiscard)}</strong><small>${escapeHtml(t.worktreeDiscardHelp)}</small></label>${projectFieldChip('workflow.worktree_mode')}<input type="checkbox" class="switch" id="workflow-worktree" data-workflow-worktree ${draftPolicy.workflow.worktree_mode ? 'checked' : ''}></div>`;
   const customized =
     (preview?.counts.effectiveCustomizations ?? 0) > 0 ||
     Object.entries(draftPolicy.safety.overrides).some(
@@ -541,7 +544,7 @@ const renderSafety = () => {
         value !== SAFETY_LEVEL_CAPABILITIES[draftPolicy.safety.level][key as Capability],
     );
   qs('safety-preset-status').textContent = customized
-    ? `${levelName(draftPolicy.safety.level)}, customized`
+    ? t.presetCustomized(levelName(draftPolicy.safety.level, t))
     : '';
 };
 
@@ -596,7 +599,7 @@ const createPathList = (
       .map(
         (path, index) => `<li class="path-item${disabled ? ' row-disabled' : ''}">
           <code>${escapeHtml(path)}</code>
-          <button type="button" class="quiet icon-only" data-path-list="${prefix}" data-path-remove="${index}" ${disabled ? 'disabled' : ''} aria-label="Remove ${escapeHtml(path)}">${icons.remove}</button>
+          <button type="button" class="quiet icon-only" data-path-list="${prefix}" data-path-remove="${index}" ${disabled ? 'disabled' : ''} aria-label="${escapeHtml(t.removePath(path))}">${icons.remove}</button>
         </li>`,
       )
       .join('');
@@ -634,7 +637,7 @@ const createPathList = (
       });
       if (projectDraft !== scope) return;
       if (error) {
-        setHint(`Not added: ${additions.join(', ')}. ${error}`);
+        setHint(t.notAdded(additions.join(', '), error));
         if (claimed) {
           markedFields.delete(config.field);
           config.setPaths(previousPaths);
@@ -648,7 +651,7 @@ const createPathList = (
     config.setPaths([...current, ...additions.filter((entry) => !current.includes(entry))]);
     if (qs<HTMLInputElement>(`${prefix}-input`).value === submitted)
       qs<HTMLInputElement>(`${prefix}-input`).value = '';
-    setHint(duplicates.length ? `Already listed: ${duplicates.join(', ')}` : '');
+    setHint(duplicates.length ? t.alreadyListed(duplicates.join(', ')) : '');
     render();
     afterEdit(false);
     qs(`${prefix}-input`).focus();
@@ -732,7 +735,7 @@ const refreshPolicyPreview = async () => {
   const result = await requestPolicyPreview(effectivePreviewPolicy(collectFormPolicy()));
   if (requestId !== previewRequestId) return;
   if (!result.ok || !result.data?.preview) {
-    notify('Preview failed', 'error', errorText(result));
+    notify(t.previewFailed, 'error', errorText(result));
     return;
   }
   preview = result.data.preview;
@@ -757,24 +760,24 @@ const runCommandTest = async () => {
   el.hidden = false;
   if (!result.ok) {
     el.className = 'notice error';
-    el.textContent = `Could not test this command: ${errorText(result)}`;
+    el.textContent = t.couldNotTest(errorText(result));
     return;
   }
   if (result.data.result === 'allowed') {
     el.className = 'notice ok';
-    el.innerHTML = `<strong>Allowed.</strong> No rule blocks this command. <a href="#rules?compose=${encodeURIComponent(command)}">Create a rule to block it</a>`;
+    el.innerHTML = `${t.testerAllowed} <a href="#rules?compose=${encodeURIComponent(command)}">${escapeHtml(t.createRuleToBlock)}</a>`;
     return;
   }
   const ruleId = result.data.customRule?.id ?? result.data.ruleId;
   const ruleHtml = !ruleId
     ? ''
     : result.data.customRule
-      ? ` by <a class="rule-id" href="#rules?focus=${encodeURIComponent(ruleId)}">${escapeHtml(ruleId)}</a>`
-      : ` by <a class="rule-id" href="#policy?q=${encodeURIComponent(ruleId)}">${escapeHtml(ruleId)}</a>`;
+      ? `<a class="rule-id" href="#rules?focus=${encodeURIComponent(ruleId)}">${escapeHtml(ruleId)}</a>`
+      : `<a class="rule-id" href="#policy?q=${encodeURIComponent(ruleId)}">${escapeHtml(ruleId)}</a>`;
   el.className = 'notice error';
-  el.innerHTML = `<strong>Blocked</strong>${ruleHtml}. ${escapeHtml(result.data.reason || '')}${
+  el.innerHTML = `${t.testerBlocked(ruleHtml)} ${escapeHtml(result.data.reason || '')}${
     result.data.segment && result.data.segment !== command
-      ? `<div class="tester-segment">Blocked part: <code>${escapeHtml(result.data.segment)}</code></div>`
+      ? `<div class="tester-segment">${escapeHtml(t.blockedPart)} <code>${escapeHtml(result.data.segment)}</code></div>`
       : ''
   }`;
 };
@@ -786,13 +789,13 @@ const render = () => {
   preview = loaded.preview;
   shared.dirty = false;
   qs('policy-savebar').hidden = true;
-  showPath('policy-path', loaded.path, loaded.exists ? '' : ' (not created yet)');
+  showPath('policy-path', loaded.path, loaded.exists ? '' : t.notCreatedYet);
   const projectPolicy = loaded.projectPolicy;
   qs('project-policy-row').hidden = !projectPolicy;
   showPath('project-policy-path', projectPolicy?.path ?? '');
   qs('project-policy-notice').hidden = !projectPolicy || projectPolicy.weakenings.length === 0;
   qs('project-policy-notice').textContent = projectPolicy
-    ? ['The project policy changes these settings:', ...projectPolicy.weakenings].join('\n')
+    ? [t.projectPolicyChanges, ...projectPolicy.weakenings].join('\n')
     : '';
   qs('app-version').textContent = loaded.version;
   qs<HTMLTextAreaElement>('raw').value = loaded.errors.length
@@ -806,7 +809,7 @@ const render = () => {
   renderPathLists();
   syncProjectChips();
   syncRawFromForm();
-  if (loaded.errors.length) qs('raw-source').textContent = 'The file as it is on disk.';
+  if (loaded.errors.length) qs('raw-source').textContent = t.rawOnDisk;
   updateActions();
   setBanner();
   emit('dirty');
@@ -834,7 +837,7 @@ const restoreDraft = () => {
     isRecordField(parsed) &&
     isRecordField(parsed.safety) &&
     typeof parsed.safety.level === 'string' &&
-    Object.hasOwn(safetyLevels, parsed.safety.level) &&
+    Object.hasOwn(presets, parsed.safety.level) &&
     isRecordField(parsed.safety.overrides) &&
     isRecordField(parsed.workflow) &&
     isRecordField(parsed.destructive_command_protection) &&
@@ -856,20 +859,20 @@ const restoreDraft = () => {
   draftPolicy = draft;
   renderPolicySections();
   void refreshPolicyPreview();
-  notify('Restored your unsaved changes', 'ok');
+  notify(t.restoredDraft, 'ok');
 };
 
 export const loadPolicy = async () => {
   const result = await requestJson('/api/policy');
   if (!result.ok || !result.data) {
-    notify('Could not load your policy', 'error', errorText(result));
+    notify(t.couldNotLoadPolicy, 'error', errorText(result));
     return false;
   }
   state = result.data as PolicyState;
   shared.policy = state;
   render();
   restoreDraft();
-  if (state.errors.length) notify('Your policy file needs repair', 'error');
+  if (state.errors.length) notify(t.statusRepair, 'error');
   return true;
 };
 
@@ -889,7 +892,7 @@ const renderProjectDraftBar = () => {
   qs('scope-user').setAttribute('aria-pressed', String(projectDraft === null));
   qs('project-draft-enter').setAttribute('aria-pressed', String(projectDraft !== null));
   qs('project-draft-bar').hidden = projectDraft === null;
-  qs('save').textContent = projectDraft ? 'Review and apply' : 'Save';
+  qs('save').textContent = projectDraft ? t.reviewAndApply : t.save;
   if (!projectDraft) return;
   qs('project-draft-path').textContent = projectDraft.path;
   qs('project-draft-change').hidden = !projectDraft.canPickDirectory;
@@ -909,7 +912,7 @@ const exitProjectDraft = () => {
 const ingestProjectState = async (okStatus: string) => {
   const result = await requestJson('/api/policy/project');
   if (!result.ok || !result.data) {
-    notify('Project policy unavailable', 'error', errorText(result));
+    notify(t.projectPolicyUnavailable, 'error', errorText(result));
     return false;
   }
   const seeded = seedProjectDraft(result.data);
@@ -917,10 +920,10 @@ const ingestProjectState = async (okStatus: string) => {
     exitProjectDraft();
     await loadPolicy();
     notify(
-      'Repair your policy first',
+      t.repairFirst,
       'error',
       [
-        'Your own policy file must be repaired before you can edit a project policy.',
+        t.repairBeforeProject,
         ...(Array.isArray(result.data.userPolicyDiagnostics)
           ? (result.data.userPolicyDiagnostics as string[])
           : []),
@@ -949,19 +952,19 @@ const ingestProjectState = async (okStatus: string) => {
 const enterProjectDraft = async () => {
   if (projectDraft) return;
   if (!state) {
-    notify('Your policy has not loaded yet', 'error', 'Reload the page.');
+    notify(t.policyNotLoaded, 'error', t.reloadPage);
     return;
   }
   if (state.errors.length) {
-    notify('Repair your policy first', 'error');
+    notify(t.repairFirst, 'error');
     return;
   }
   if (shared.dirty) {
     if (
       !(await confirmDialog({
-        title: 'Discard unsaved changes?',
-        body: 'A project policy starts from your saved policy. Save your changes first, or discard them here.',
-        confirmLabel: 'Discard changes',
+        title: t.discardUnsavedTitle,
+        body: t.discardBeforeProject,
+        confirmLabel: t.discardChanges,
         confirmClass: '',
       }))
     )
@@ -969,21 +972,21 @@ const enterProjectDraft = async () => {
     sessionStorage.removeItem('cc-safety-net-draft');
     if (!(await loadPolicy())) return;
   }
-  await ingestProjectState('Editing the project policy');
+  await ingestProjectState(t.editingProjectPolicy);
 };
 const confirmDiscardProjectDraft = async (body: string) =>
   !shared.dirty ||
   (await confirmDialog({
-    title: 'Discard this project draft?',
+    title: t.discardDraftTitle,
     body,
-    confirmLabel: 'Discard draft',
+    confirmLabel: t.discardDraft,
     confirmClass: '',
   }));
 const changeProjectDirectory = async () => {
-  if (!(await confirmDiscardProjectDraft('Switching folders discards this draft.'))) return;
+  if (!(await confirmDiscardProjectDraft(t.switchFolderDiscards))) return;
   const result = await requestJson('/api/policy/project/choose-directory', { method: 'POST' });
   if (!result.ok) {
-    notify('Could not open the folder picker', 'error', errorText(result));
+    notify(t.folderPickerFailed, 'error', errorText(result));
     return;
   }
   if (result.data.error) {
@@ -991,23 +994,20 @@ const changeProjectDirectory = async () => {
     return;
   }
   if (result.data.cancelled) return;
-  await ingestProjectState('Editing the project policy');
+  await ingestProjectState(t.editingProjectPolicy);
 };
 const leaveProjectDraft = async () => {
   if (!projectDraft) return;
-  if (
-    !(await confirmDiscardProjectDraft('Your project changes have not been written anywhere yet.'))
-  )
-    return;
+  if (!(await confirmDiscardProjectDraft(t.projectChangesUnwritten))) return;
   exitProjectDraft();
-  if (await loadPolicy()) notify('Back to your own policy', 'ok');
+  if (await loadPolicy()) notify(t.backToOwnPolicy, 'ok');
 };
 const discardProjectDraft = async (draft: ProjectDraftState) => {
   if (
     !(await confirmDialog({
-      title: 'Discard changes to this draft?',
-      body: 'The draft goes back to the settings this project already has.',
-      confirmLabel: 'Discard changes',
+      title: t.discardDraftChangesTitle,
+      body: t.discardDraftChangesBody,
+      confirmLabel: t.discardChanges,
       confirmClass: '',
     }))
   )
@@ -1017,15 +1017,11 @@ const discardProjectDraft = async (draft: ProjectDraftState) => {
   draftPolicy = overlayProjectProposal(draft.baseline, snapshot);
   renderPolicySections();
   void refreshPolicyPreview();
-  notify('Changes discarded', 'ok');
+  notify(t.changesDiscarded, 'ok');
 };
 const handleStaleProjectDraft = async () => {
-  if (!(await ingestProjectState('Project draft reloaded'))) return;
-  notify(
-    'The project folder changed',
-    'error',
-    'The draft was reloaded for the new folder. Review it again before applying.',
-  );
+  if (!(await ingestProjectState(t.projectDraftReloaded))) return;
+  notify(t.projectFolderChanged, 'error', t.projectFolderChangedBody);
 };
 const projectDiffHtml = (data: {
   rows?: { field: string; before?: string; after?: string }[];
@@ -1034,18 +1030,16 @@ const projectDiffHtml = (data: {
 }) => {
   const rows = Array.isArray(data.rows) ? data.rows : [];
   const warnings = [
-    ...(data.existingFileDiagnostics?.length
-      ? ['The existing project policy file is invalid and will be replaced.']
-      : []),
+    ...(data.existingFileDiagnostics?.length ? [t.invalidProjectFile] : []),
     ...(data.weakenings ?? []),
   ];
   return (
     (rows.length === 0
-      ? '<p class="empty">No change to the effective policy.</p>'
-      : `<table class="diff-table"><thead><tr><th>Setting</th><th>Now</th><th>After</th></tr></thead><tbody>${rows
+      ? `<p class="empty">${escapeHtml(t.noEffectiveChange)}</p>`
+      : `<table class="diff-table"><thead><tr><th>${escapeHtml(t.diffSetting)}</th><th>${escapeHtml(t.diffNow)}</th><th>${escapeHtml(t.diffAfter)}</th></tr></thead><tbody>${rows
           .map(
             (row) =>
-              `<tr><td><code>${escapeHtml(row.field)}</code></td><td class="diff-before">${escapeHtml(row.before ?? '(unset)')}</td><td class="diff-after">${escapeHtml(row.after ?? '(unset)')}</td></tr>`,
+              `<tr><td><code>${escapeHtml(row.field)}</code></td><td class="diff-before">${escapeHtml(row.before ?? t.unset)}</td><td class="diff-after">${escapeHtml(row.after ?? t.unset)}</td></tr>`,
           )
           .join('')}</tbody></table>`) +
     warnings.map((text) => `<p class="notice warn">${escapeHtml(text)}</p>`).join('')
@@ -1062,46 +1056,46 @@ const reviewProjectDraft = async (draft: ProjectDraftState) => {
     return;
   }
   if (!diff.ok) {
-    notify('Review failed', 'error', errorText(diff));
+    notify(t.reviewFailed, 'error', errorText(diff));
     return;
   }
   if (JSON.stringify(collectProjectProposal(markedFields, draftPolicy)) !== serialized) {
-    notify('Review again', 'error', 'The draft changed while the review was loading.');
+    notify(t.reviewAgain, 'error', t.draftChangedDuringReview);
     return;
   }
   if (
     !(await confirmDialog({
-      title: 'Apply this project policy?',
-      body: 'Everyone who works in this project gets these settings on top of their own policy.',
+      title: t.applyProjectTitle,
+      body: t.applyProjectBody,
       detail: draft.path,
       rowsHtml: projectDiffHtml(diff.data),
-      confirmLabel: 'Apply project policy',
+      confirmLabel: t.applyProject,
       confirmClass: 'primary',
     }))
   )
     return;
-  await runExclusive('Applying…', async () => {
+  await runExclusive(t.applyingStatus, async () => {
     const applied = await requestJson('/api/policy/project/apply', { method: 'POST', body });
     if (applied.status === 409) {
       await handleStaleProjectDraft();
       return;
     }
     if (!isWriteSuccess(applied)) {
-      notify('Apply failed', 'error', errorText(applied));
+      notify(t.applyFailed, 'error', errorText(applied));
       return;
     }
     exitProjectDraft();
-    if (await loadPolicy()) notify('Project policy applied', 'ok', applied.data.path);
+    if (await loadPolicy()) notify(t.projectApplied, 'ok', applied.data.path);
   });
 };
 
 const save = () => {
   if (!state) {
-    notify('Your policy has not loaded yet', 'error', 'Reload the page.');
+    notify(t.policyNotLoaded, 'error', t.reloadPage);
     return;
   }
   if (state.errors.length) {
-    notify('Repair your policy before saving', 'error');
+    notify(t.repairBeforeSaving, 'error');
     return;
   }
   if (projectDraft) {
@@ -1110,9 +1104,9 @@ const save = () => {
   }
   if (!shared.dirty) return;
   const policy = collectFormPolicy();
-  void runExclusive('Saving…', async () => {
-    const result = await writePolicy('/api/policy', JSON.stringify(policy), 'Save failed');
-    if (result && (await reloadAfterWrite())) notify('Policy saved', 'ok', result.data.path);
+  void runExclusive(t.savingStatus, async () => {
+    const result = await writePolicy('/api/policy', JSON.stringify(policy), t.saveFailed);
+    if (result && (await reloadAfterWrite())) notify(t.policySaved, 'ok', result.data.path);
   });
 };
 
@@ -1123,16 +1117,16 @@ const discard = async () => {
   }
   if (
     !(await confirmDialog({
-      title: 'Discard unsaved changes?',
-      body: 'Every change since your last save will be undone.',
-      confirmLabel: 'Discard changes',
+      title: t.discardUnsavedTitle,
+      body: t.discardUnsavedBody,
+      confirmLabel: t.discardChanges,
       confirmClass: '',
     }))
   )
     return;
-  await runExclusive('Discarding…', async () => {
+  await runExclusive(t.discardingStatus, async () => {
     sessionStorage.removeItem('cc-safety-net-draft');
-    if (await loadPolicy()) notify('Changes discarded', 'ok');
+    if (await loadPolicy()) notify(t.changesDiscarded, 'ok');
   });
 };
 
@@ -1140,30 +1134,30 @@ const repair = async () => {
   if (!state?.errors.length) return;
   if (
     !(await confirmDialog({
-      title: 'Repair your policy file?',
-      body: 'Valid settings are kept and invalid ones are dropped. If the JSON cannot be read at all, defaults are restored.',
+      title: t.repairTitle,
+      body: t.repairBody,
       detail: state.path,
-      confirmLabel: 'Repair',
+      confirmLabel: t.repair,
       confirmClass: 'primary',
     }))
   )
     return;
-  await runExclusive('Repairing…', async () => {
-    const result = await writePolicy('/api/repair', '{}', 'Repair failed');
-    if (result && (await reloadAfterWrite())) notify('Policy repaired', 'ok', result.data.path);
+  await runExclusive(t.repairingStatus, async () => {
+    const result = await writePolicy('/api/repair', '{}', t.repairFailed);
+    if (result && (await reloadAfterWrite())) notify(t.policyRepaired, 'ok', result.data.path);
   });
 };
 
 const resetOverrides = async (section: 'destructive_command_protection' | 'secret_protection') => {
   if (Object.keys(draftPolicy[section].overrides).length === 0) {
-    notify('Nothing to reset: every rule already uses its default', 'ok');
+    notify(t.nothingToReset, 'ok');
     return;
   }
   if (
     !(await confirmDialog({
-      title: 'Reset every rule to its default?',
-      body: `All ${section === 'secret_protection' ? 'secret' : 'command'} rules go back to the setting their preset gives them. You can still discard before saving.`,
-      confirmLabel: 'Reset rules',
+      title: t.resetRulesTitle,
+      body: t.resetRulesBody(section === 'secret_protection'),
+      confirmLabel: t.resetRules,
     }))
   )
     return;
@@ -1206,12 +1200,10 @@ const toggleProtection = async (input: HTMLInputElement) => {
   if (
     !input.checked &&
     !(await confirmDialog({
-      title: secret ? 'Turn off secret protection?' : 'Turn off command protection?',
-      body: secret
-        ? 'Sensitive files, coding agent credentials, and deny paths stop being blocked until you turn this back on.'
-        : 'Built-in destructive git, filesystem, and execution rules stop blocking commands until you turn this back on.',
-      detail: secret ? undefined : 'Catastrophic and custom rules still apply.',
-      confirmLabel: 'Turn off',
+      title: secret ? t.turnOffSecretTitle : t.turnOffCommandTitle,
+      body: secret ? t.turnOffSecretBody : t.turnOffCommandBody,
+      detail: secret ? undefined : t.catastrophicStillApply,
+      confirmLabel: t.turnOff,
     }))
   ) {
     input.checked = true;
@@ -1308,7 +1300,7 @@ const handleClick = (target: Element) => {
   );
   if (example) {
     showRulePopover(target.closest('[data-rule-example]') as HTMLElement, {
-      label: example.catastrophic ? 'Always on' : example.category,
+      label: example.catastrophic ? t.alwaysOn : example.category,
       title: example.label,
       description: example.description,
       body: example.example,
@@ -1320,7 +1312,7 @@ const handleClick = (target: Element) => {
   );
   if (secretPaths?.paths) {
     showRulePopover(target.closest('[data-secret-paths]') as HTMLElement, {
-      label: 'Protected paths',
+      label: t.protectedPaths,
       title: secretPaths.label,
       description: '',
       body: secretPaths.paths.join('\n'),
@@ -1377,7 +1369,7 @@ export const showPolicy = (params: URLSearchParams) => {
 };
 
 const setRawCopyLabel = () => {
-  qs('raw-copy').innerHTML = `${icons.copy}<span>Copy</span>`;
+  qs('raw-copy').innerHTML = `${icons.copy}<span>${escapeHtml(t.copy)}</span>`;
 };
 
 export const initPolicy = () => {
