@@ -60,6 +60,26 @@ describe('the gui preferences', () => {
     expect(await servedPreferences()).toStrictEqual({ language: 'ja' });
   });
 
+  test('a language and a theme saved at the same moment are both kept', async () => {
+    const home = join(createTempRoot('gui-preferences-'), 'home');
+    mkdirSync(home, { recursive: true });
+    const server = await createPolicyGuiServer(() => environmentFor(home, isolationEnv(home)));
+    const post = (body: unknown) =>
+      fetch(`${server.origin}/api/preferences?token=${encodeURIComponent(server.token)}`, {
+        method: 'POST',
+        headers: { 'x-cc-safety-net-token': server.token },
+        body: JSON.stringify(body),
+      }).then((response) => response.status);
+
+    const statuses = await Promise.all([post({ language: 'ja' }), post({ theme: 'dark' })]);
+    const page = await fetch(`${server.origin}/?token=${encodeURIComponent(server.token)}`)
+      .then((response) => response.text())
+      .finally(server.close);
+
+    expect(statuses).toStrictEqual([200, 200]);
+    expect(pagePayload(page).preferences).toStrictEqual({ language: 'ja', theme: 'dark' });
+  });
+
   test('a first launch serves no preference and writes nothing', async () => {
     const row = await runGuiRow({ seed: {}, requests: [{ path: '/' }] });
 

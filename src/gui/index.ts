@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { dirname, join } from 'node:path';
 import { Writable } from 'node:stream';
@@ -10,6 +9,7 @@ import { getActivitySummary } from '@/cli/doctor/activity';
 import { checkForUpdates } from '@/cli/doctor/updates';
 import { type RunInstallCommandOptions, runInstallCommand } from '@/cli/install/index';
 import { createProcessEnvironment, type Environment } from '@/core/environment';
+import { atomicWriteFile } from '@/core/io/atomic-write';
 import {
   bindPolicyFilesystemScope,
   getPolicyFilesystemTargetForPath,
@@ -228,7 +228,7 @@ async function handleRequest(
   }
 
   if (request.method === 'GET' && url.pathname === '/') {
-    const preferences = await readGuiPreferences(guiPreferencesPath(environment, options));
+    const preferences = readGuiPreferences(guiPreferencesPath(environment, options));
     await Promise.resolve(options.buildDocument?.()).then(
       (document) => sendHtml(response, renderPolicyGuiHtml({ token, preferences }, document)),
       (buildError: unknown) =>
@@ -253,14 +253,13 @@ async function handleRequest(
       return;
     }
     const path = guiPreferencesPath(environment, options);
-    const preferences = applyPreferenceUpdate(await readGuiPreferences(path), update);
-    const written = await mkdir(dirname(path), { recursive: true })
-      .then(() => writeFile(path, `${JSON.stringify(preferences, null, 2)}\n`))
-      .then(
-        () => null,
-        (error: unknown) => (error instanceof Error ? error.message : String(error)),
-      );
-    sendJson(response, written ? 500 : 200, written ? { errors: [written] } : { preferences });
+    const preferences = applyPreferenceUpdate(readGuiPreferences(path), update);
+    const writeError = writeGuiPreferences(path, preferences);
+    sendJson(
+      response,
+      writeError ? 500 : 200,
+      writeError ? { errors: [writeError] } : { preferences },
+    );
     return;
   }
 
@@ -521,10 +520,23 @@ function guiPreferencesPath(environment: Environment, options: PolicyGuiServerOp
   return join(dirname(getUserRulesDir(environment, options)), 'gui.json');
 }
 
-function readGuiPreferences(path: string): Promise<GuiPreferences> {
-  return readFile(path, 'utf-8')
-    .then((text) => JSON.parse(text) as unknown)
-    .then(parseGuiPreferences, () => ({}));
+function readGuiPreferences(path: string): GuiPreferences {
+  if (!existsSync(path)) return {};
+  try {
+    return parseGuiPreferences(JSON.parse(readFileSync(path, 'utf-8')) as unknown);
+  } catch {
+    return {};
+  }
+}
+
+function writeGuiPreferences(path: string, preferences: GuiPreferences): string | null {
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    atomicWriteFile(path, `${JSON.stringify(preferences, null, 2)}\n`);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
 }
 
 function loaderOptions(options: PolicyGuiServerOptions): RulesPolicyOptions {
