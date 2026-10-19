@@ -2,9 +2,9 @@ import { join } from 'node:path';
 
 const frontendDir = join(import.meta.dir, 'frontend');
 const readAsset = (name: string) => Bun.file(join(frontendDir, name)).text();
-const buildPageScript = async () => {
+const buildScript = async (entry: string) => {
   const result = await Bun.build({
-    entrypoints: [join(frontendDir, 'main.ts')],
+    entrypoints: [join(frontendDir, entry)],
     target: 'browser',
     minify: false,
     sourcemap: 'none',
@@ -19,12 +19,17 @@ const buildPageScript = async () => {
 };
 
 export const buildGuiDocument = async () => {
-  const [pageHtml, faviconSvg, customCss, logoSvg, pageScriptJs] = await Promise.all([
+  const [pageHtml, faviconSvg, customCss, logoSvg, headScriptJs, pageScriptJs] = await Promise.all([
     readAsset('page.html'),
     readAsset('favicon.svg'),
     readAsset('custom.css'),
     readAsset('logo.svg'),
-    buildPageScript(),
+    buildScript('head.ts'),
+    buildScript('main.ts'),
+  ]);
+  const scripts = new Map([
+    ['./head.ts', headScriptJs],
+    ['./main.ts', pageScriptJs],
   ]);
 
   return new HTMLRewriter()
@@ -45,7 +50,9 @@ export const buildGuiDocument = async () => {
     })
     .on('script[src]', {
       element(script) {
-        script.replace(`<script>\n${pageScriptJs}\n  </script>`, { html: true });
+        script.replace(`<script>\n${scripts.get(script.getAttribute('src') ?? '')}\n  </script>`, {
+          html: true,
+        });
       },
     })
     .transform(pageHtml);

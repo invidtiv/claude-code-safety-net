@@ -1,4 +1,7 @@
 import { integrationDisplayNames } from '@/hosts/catalog';
+import { guiData } from './gui-data';
+import { t } from './i18n';
+import type { PreferenceUpdate } from './preferences';
 import type { PolicyState } from './types';
 
 export const agentLabels: Record<string, string> = integrationDisplayNames;
@@ -16,12 +19,9 @@ export const on = (name: 'policy' | 'dirty' | 'integrations', listener: () => vo
 export const qs = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
 
-const sessionToken = () =>
-  (JSON.parse(qs('ccsn-data').textContent as string) as { token: string }).token;
-
 type ApiRequestInit = Omit<RequestInit, 'headers'> & { headers?: Record<string, string> };
 export const requestJson = async (path: string, init: ApiRequestInit = {}) => {
-  const token = sessionToken();
+  const token = guiData.token;
   try {
     const response = await fetch(
       `${path}${path.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`,
@@ -57,7 +57,7 @@ export const errorText = (result: RequestResult) =>
     ? result.data.errors.join('\n')
     : null) ??
   result.data?.error ??
-  `Request failed (status ${result.status}).`;
+  t.requestFailed(result.status);
 export const isWriteSuccess = (result: RequestResult) =>
   result.ok && !(Array.isArray(result.data?.errors) && result.data.errors.length > 0);
 
@@ -84,6 +84,16 @@ export const notify = (title: string, kind: 'info' | 'ok' | 'error' = 'info', de
   if (kind === 'ok') notifyTimer = setTimeout(() => notify(''), 4000);
 };
 
+export const savePreference = async (update: PreferenceUpdate) => {
+  const result = await requestJson('/api/preferences', {
+    method: 'POST',
+    body: JSON.stringify(update),
+  });
+  const saved = isWriteSuccess(result);
+  if (!saved) notify(t.preferenceSaveFailed, 'error', errorText(result));
+  return saved;
+};
+
 export const icons = {
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2h8c1.1 0 2 .9 2 2"></path></svg>',
   check:
@@ -101,13 +111,13 @@ export const copyText = async (button: HTMLElement, text: string) => {
     () => false,
   );
   if (!copied) {
-    notify('Copy failed', 'error');
+    notify(t.copyFailed, 'error');
     return;
   }
   if (showingCopied.has(button)) return;
   showingCopied.add(button);
   const label = button.innerHTML;
-  button.innerHTML = `${icons.check}<span>Copied</span>`;
+  button.innerHTML = `${icons.check}<span>${escapeHtml(t.copied)}</span>`;
   setTimeout(() => {
     button.innerHTML = label;
     showingCopied.delete(button);

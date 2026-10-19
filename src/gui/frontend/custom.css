@@ -244,6 +244,33 @@ strong {
   color: var(--ink);
 }
 
+.language-picker {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--faint);
+}
+
+.language-picker:hover,
+.language-picker:focus-within {
+  color: var(--ink);
+}
+
+.language-picker svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.language-picker select {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+
 .app-foot {
   display: none;
 }
@@ -569,8 +596,7 @@ button.icon-only {
   padding: 0;
 }
 
-.link-button,
-.row-action {
+.link-button {
   flex: none;
   color: var(--muted);
   font-size: 13px;
@@ -579,13 +605,11 @@ button.icon-only {
   white-space: nowrap;
 }
 
-.link-button::after,
-.row-action::after {
+.link-button::after {
   content: ' →';
 }
 
-.link-button:hover,
-.list-row:hover .row-action {
+.link-button:hover {
   color: var(--ink);
 }
 
@@ -1397,16 +1421,23 @@ details[open] > summary::before,
   cursor: pointer;
 }
 
-.master-state::after {
-  content: 'Off';
+.master-state {
   color: var(--err-fg);
   font-size: 13px;
   font-weight: 500;
 }
 
-.master-switch:has(:checked) .master-state::after {
-  content: 'On';
+.master-state .state-on,
+.master-switch:has(:checked) .master-state .state-off {
+  display: none;
+}
+
+.master-switch:has(:checked) .master-state {
   color: var(--muted);
+}
+
+.master-switch:has(:checked) .master-state .state-on {
+  display: inline;
 }
 
 .is-off .section-sub {

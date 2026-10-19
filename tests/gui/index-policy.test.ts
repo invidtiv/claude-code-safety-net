@@ -229,7 +229,7 @@ describe('the policy GUI server', () => {
       cacheControl: 'no-store',
     });
     expect(page).toContain(
-      '<script id="ccsn-data" type="application/json">{"token":"<token>"}</script>',
+      '<script id="ccsn-data" type="application/json">{"token":"<token>","preferences":{}}</script>',
     );
   });
 

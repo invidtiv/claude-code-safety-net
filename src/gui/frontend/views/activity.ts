@@ -1,4 +1,4 @@
-import { findSuspectEntries, formatRelativeTime } from '@/audit/display';
+import { findSuspectEntries } from '@/audit/display';
 import { DEFAULT_AUDIT_RETENTION_DAYS } from '@/core/policy/audit-retention-days';
 import {
   activityFiltersFromParams,
@@ -7,7 +7,14 @@ import {
   initialActivityFilters,
   visibleEntries,
 } from '../activity-filter';
-import { dayCount, formatCount, plural } from '../format';
+import {
+  formatClockTime,
+  formatCount,
+  formatDateTime,
+  formatDayHeading,
+  formatRelativeTime,
+  t,
+} from '../i18n';
 import { buildReportRequest, reportTitle, scrubReportPaths } from '../report';
 import type { ActivityFeed, FeedEntry } from '../types';
 import {
@@ -49,27 +56,24 @@ const knownRuleIds = () =>
   );
 
 const decisionLabel = (entry: FeedEntry) =>
-  entry.failureStage ? 'Error' : entry.decision === 'allow' ? 'Allowed' : 'Blocked';
+  entry.failureStage
+    ? t.decisionError
+    : entry.decision === 'allow'
+      ? t.decisionAllowed
+      : t.decisionBlocked;
 
-const timeLabel = (ts: string) =>
-  new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-const dayLabel = (ts: string) => {
-  const date = new Date(ts).toDateString();
-  if (date === new Date().toDateString()) return 'Today';
-  if (date === new Date(Date.now() - 86400000).toDateString()) return 'Yesterday';
-  return new Date(ts).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
+const reportFieldNames: Record<string, string> = {
+  title: t.reportNameTitle,
+  expected: t.reportNameExpected,
+  command: t.reportNameCommand,
+  entry: t.reportNameEntry,
 };
 
 const ruleLink = (ruleId: string) =>
   ruleId.startsWith('custom.')
-    ? `<a class="rule-id" href="#rules?focus=${encodeURIComponent(ruleId)}" title="Show this custom rule">${escapeHtml(ruleId)}</a>`
+    ? `<a class="rule-id" href="#rules?focus=${encodeURIComponent(ruleId)}" title="${escapeHtml(t.showCustomRule)}">${escapeHtml(ruleId)}</a>`
     : knownRuleIds().has(ruleId)
-      ? `<a class="rule-id" href="#policy?q=${encodeURIComponent(ruleId)}" title="Show this protection">${escapeHtml(ruleId)}</a>`
+      ? `<a class="rule-id" href="#policy?q=${encodeURIComponent(ruleId)}" title="${escapeHtml(t.showProtection)}">${escapeHtml(ruleId)}</a>`
       : `<code class="rule-id">${escapeHtml(ruleId)}</code>`;
 
 const entryCommand = (entry: FeedEntry) => entry.segment || entry.command || '';
@@ -81,32 +85,32 @@ const feedRowHtml = (entry: FeedEntry, index: number) => {
     entry.agent && entry.agent !== 'unknown' ? (agentLabels[entry.agent] ?? entry.agent) : '';
   const detailRows = [
     entry.command && entry.command !== command
-      ? ['Full command', `<code class="block">${escapeHtml(entry.command)}</code>`]
+      ? [t.detailFullCommand, `<code class="block">${escapeHtml(entry.command)}</code>`]
       : null,
-    entry.reason && entry.reason !== 'allowed' ? ['Reason', escapeHtml(entry.reason)] : null,
-    entry.ruleId ? ['Rule', ruleLink(entry.ruleId)] : null,
-    entry.cwd ? ['Folder', `<code>${escapeHtml(entry.cwd)}</code>`] : null,
+    entry.reason && entry.reason !== 'allowed' ? [t.detailReason, escapeHtml(entry.reason)] : null,
+    entry.ruleId ? [t.detailRule, ruleLink(entry.ruleId)] : null,
+    entry.cwd ? [t.detailFolder, `<code>${escapeHtml(entry.cwd)}</code>`] : null,
     [
-      'Time',
-      `${escapeHtml(new Date(entry.ts).toLocaleString('en-US'))} (${formatRelativeTime(entry.ts)})`,
+      t.detailTime,
+      `${escapeHtml(formatDateTime(entry.ts))} (${escapeHtml(formatRelativeTime(entry.ts))})`,
     ],
   ].filter((row): row is string[] => row !== null);
   return `<li class="feed-row">
     <button type="button" class="feed-summary" aria-expanded="false" aria-controls="feed-detail-${index}">
       <span class="chevron" aria-hidden="true"></span>
-      <time datetime="${escapeHtml(entry.ts)}">${escapeHtml(timeLabel(entry.ts))}</time>
+      <time datetime="${escapeHtml(entry.ts)}">${escapeHtml(formatClockTime(entry.ts))}</time>
       <span class="decision ${entry.failureStage ? 'error' : blocked ? 'deny' : 'allow'}">${decisionLabel(entry)}</span>
       <span class="feed-agent">${escapeHtml(agent)}</span>
-      <code class="feed-command">${escapeHtml(command || '(no command recorded)')}</code>
+      <code class="feed-command">${escapeHtml(command || t.noCommandRecorded)}</code>
       <span class="feed-rule">${escapeHtml(entry.ruleId ?? '')}</span>
     </button>
     <div class="feed-detail" id="feed-detail-${index}" hidden>
-      <code class="block detail-command">${escapeHtml(command || '(no command recorded)')}</code>
+      <code class="block detail-command">${escapeHtml(command || t.noCommandRecorded)}</code>
       <div class="detail-actions">
-        ${blocked ? `<button type="button" class="primary" data-report-fp="${index}">Report false positive</button>` : `<button type="button" class="primary" data-block-future="${index}">Block this in future</button>`}
-        <button type="button" data-log-copy="${index}">${icons.copy}<span>Copy log entry</span></button>
+        ${blocked ? `<button type="button" class="primary" data-report-fp="${index}">${escapeHtml(t.reportFalsePositive)}</button>` : `<button type="button" class="primary" data-block-future="${index}">${escapeHtml(t.blockInFuture)}</button>`}
+        <button type="button" data-log-copy="${index}">${icons.copy}<span>${escapeHtml(t.copyLogEntry)}</span></button>
       </div>
-      <dl class="detail-rows">${detailRows.map(([term, value]) => `<div><dt>${term}</dt><dd>${value}</dd></div>`).join('')}</dl>
+      <dl class="detail-rows">${detailRows.map(([term, value]) => `<div><dt>${escapeHtml(term)}</dt><dd>${value}</dd></div>`).join('')}</dl>
     </div>
   </li>`;
 };
@@ -115,19 +119,19 @@ const renderControls = () => {
   if (!activity) return;
   const loaded = activity;
   const segment = (value: Decision, label: string, count: number) =>
-    `<button type="button" data-activity-decision="${value}" aria-pressed="${filters.decision === value}">${label} <span class="count">${formatCount(count)}</span></button>`;
+    `<button type="button" data-activity-decision="${value}" aria-pressed="${filters.decision === value}">${escapeHtml(label)} <span class="count">${formatCount(count)}</span></button>`;
   qs('activity-decision').innerHTML = [
-    segment('deny', 'Blocked', loaded.counts.blocked),
-    segment('allow', 'Allowed', loaded.counts.allowed),
-    ...(loaded.counts.errors > 0 ? [segment('error', 'Errors', loaded.counts.errors)] : []),
-    ...(suspects.size > 0 ? [segment('suspect', 'Likely false positive', suspects.size)] : []),
-    segment('all', 'All', loaded.totalInWindow),
+    segment('deny', t.decisionBlocked, loaded.counts.blocked),
+    segment('allow', t.decisionAllowed, loaded.counts.allowed),
+    ...(loaded.counts.errors > 0 ? [segment('error', t.filterErrors, loaded.counts.errors)] : []),
+    ...(suspects.size > 0 ? [segment('suspect', t.filterSuspect, suspects.size)] : []),
+    segment('all', t.filterAll, loaded.totalInWindow),
   ].join('');
   const agentNames = Object.keys(loaded.counts.agents)
     .filter((name) => name !== 'unknown')
     .sort();
   qs<HTMLSelectElement>('activity-agent').innerHTML = [
-    '<option value="all">All agents</option>',
+    `<option value="all">${escapeHtml(t.allAgents)}</option>`,
     ...agentNames.map(
       (name) =>
         `<option value="${escapeHtml(name)}">${escapeHtml(agentLabels[name] ?? name)} (${formatCount(loaded.counts.agents[name] ?? 0)})</option>`,
@@ -140,21 +144,21 @@ const renderControls = () => {
     ...new Set([...[7, 30, 90, 180, 365].filter((days) => days < retained), retained, loaded.days]),
   ]
     .sort((left, right) => left - right)
-    .map((days) => `<option value="${days}">Last ${dayCount(days)}</option>`)
+    .map((days) => `<option value="${days}">${escapeHtml(t.lastDaysOption(days))}</option>`)
     .join('');
   qs<HTMLSelectElement>('activity-days').value = String(loaded.days);
   qs('activity-command-filter').hidden = !filters.command;
   qs('activity-command-filter').innerHTML = filters.command
-    ? `Showing blocks of <code>${escapeHtml(filters.command)}</code> <button type="button" class="quiet" data-clear-command>Show all blocks</button>`
+    ? `${escapeHtml(t.showingBlocksOf)} <code>${escapeHtml(filters.command)}</code> <button type="button" class="quiet" data-clear-command>${escapeHtml(t.showAllBlocks)}</button>`
     : '';
 };
 
 const emptyMessage = () => {
   if (filters.query || filters.command || filters.agent !== 'all')
-    return 'Nothing matches these filters.';
+    return escapeHtml(t.noFilterMatch);
   if (filters.decision === 'deny')
-    return `Nothing was blocked in the last ${dayCount(activity?.days ?? filters.days)}. <button type="button" class="quiet" data-activity-decision="all">Show all activity</button>`;
-  return 'No audit log entries match.';
+    return `${escapeHtml(t.nothingBlocked(activity?.days ?? filters.days))} <button type="button" class="quiet" data-activity-decision="all">${escapeHtml(t.showAllActivity)}</button>`;
+  return escapeHtml(t.noLogEntries);
 };
 
 const renderFeed = () => {
@@ -166,23 +170,19 @@ const renderFeed = () => {
       ? `<p class="empty">${emptyMessage()}</p>`
       : entries
           .map((entry, index) => {
-            const label = dayLabel(entry.ts);
+            const label = formatDayHeading(entry.ts);
             const previous = entries[index - 1];
             const heading =
-              previous && dayLabel(previous.ts) === label
+              previous && formatDayHeading(previous.ts) === label
                 ? ''
                 : `${index === 0 ? '' : '</ul>'}<h4 class="day-heading">${escapeHtml(label)}</h4><ul class="feed-list">`;
             return heading + feedRowHtml(entry, index);
           })
           .join('') + '</ul>';
   qs('activity-count').textContent = [
-    `Showing ${formatCount(entries.length)} of ${plural(activity.totalInWindow, 'entry', 'entries')} from the last ${dayCount(activity.days)}.`,
-    activity.truncated
-      ? 'Only the newest 500 entries of each decision are loaded; narrow the time window to see older ones.'
-      : '',
-    activity.unreadable > 0
-      ? `${plural(activity.unreadable, 'log file')} could not be read, so this list is incomplete.`
-      : '',
+    t.showingEntries(entries.length, activity.totalInWindow, activity.days),
+    activity.truncated ? t.activityTruncated : '',
+    activity.unreadable > 0 ? t.unreadableLogs(activity.unreadable) : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -192,13 +192,13 @@ export const loadActivity = async () => {
   const result = await requestJson(`/api/activity?days=${filters.days}`);
   if (!result.ok || !result.data) {
     qs('activity-feed').innerHTML =
-      `<p class="empty">Could not load activity: ${escapeHtml(errorText(result))}</p>`;
+      `<p class="empty">${escapeHtml(t.couldNotLoadActivity(errorText(result)))}</p>`;
     qs('activity-count').textContent = '';
     return;
   }
   activity = result.data as ActivityFeed;
   suspects = findSuspectEntries(activity.entries);
-  showPath('logs-path', activity.logsDir ?? '', activity.logsDir ? '' : 'Not available');
+  showPath('logs-path', activity.logsDir ?? '', activity.logsDir ? '' : t.notAvailable);
   if (filters.agent !== 'all' && !(filters.agent in activity.counts.agents)) filters.agent = 'all';
   if (filters.decision === 'error' && activity.counts.errors === 0) filters.decision = 'deny';
   if (filters.decision === 'suspect' && suspects.size === 0) filters.decision = 'deny';
@@ -266,13 +266,15 @@ const openFalsePositiveForm = async () => {
     : null;
   window.open(request.url, '_blank', 'noopener');
   if (!copying) return;
-  const names = request.dropped.join(' and ');
+  const names = request.dropped
+    .map((field) => reportFieldNames[field] ?? field)
+    .join(t.reportFieldJoiner);
   notify(
-    'Report too long to prefill',
+    t.reportTooLong,
     'error',
     (await copying)
-      ? `The ${names} was copied to your clipboard. Paste it into the form on GitHub.`
-      : `The ${names} was left out. Copy the log entry from Activity and paste it into the form on GitHub.`,
+      ? t.reportFieldCopied(names, request.dropped.length)
+      : t.reportFieldLeftOut(names, request.dropped.length),
   );
 };
 

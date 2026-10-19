@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { en } from '@/gui/frontend/locales/en';
 import { clonePolicy, type Policy } from '@/gui/frontend/project-draft';
 import {
   commandRuleGroups,
@@ -16,12 +17,15 @@ describe('commandRuleGroups', () => {
   });
 
   test('always-on rules form their own first group and leave their categories', () => {
-    const groups = commandRuleGroups([
-      command('git.reset-hard', 'Git'),
-      command('rm.root', 'Filesystem', true),
-      command('rm.cwd', 'Filesystem'),
-      command('rm.git-metadata', 'Filesystem', true),
-    ]);
+    const groups = commandRuleGroups(
+      [
+        command('git.reset-hard', 'Git'),
+        command('rm.root', 'Filesystem', true),
+        command('rm.cwd', 'Filesystem'),
+        command('rm.git-metadata', 'Filesystem', true),
+      ],
+      en,
+    );
     expect(
       groups.map((group) => [group.key, group.title, group.rules.map((rule) => rule.id)]),
     ).toEqual([
@@ -33,11 +37,11 @@ describe('commandRuleGroups', () => {
 
   test('a category with only always-on rules gets no group of its own', () => {
     expect(
-      commandRuleGroups([command('rm.root', 'Filesystem', true)]).map((group) => group.key),
+      commandRuleGroups([command('rm.root', 'Filesystem', true)], en).map((group) => group.key),
     ).toEqual(['always-on']);
-    expect(commandRuleGroups([command('git.reset-hard', 'Git')]).map((group) => group.key)).toEqual(
-      ['Git'],
-    );
+    expect(
+      commandRuleGroups([command('git.reset-hard', 'Git')], en).map((group) => group.key),
+    ).toEqual(['Git']);
   });
 });
 
@@ -58,28 +62,33 @@ const effective = (enabled: boolean, source: string) => ({
 
 describe('a built-in rule note', () => {
   test('says nothing when the rule is on by default', () => {
-    expect(ruleNote(rule(), effective(true, 'built_in_default'), {})).toBeNull();
-    expect(ruleNote(rule('fail_closed'), effective(true, 'preset'), {})).toBeNull();
+    expect(ruleNote(rule(), effective(true, 'built_in_default'), {}, en)).toBeNull();
+    expect(ruleNote(rule('fail_closed'), effective(true, 'preset'), {}, en)).toBeNull();
   });
 
   test('names the preset a stricter rule needs', () => {
-    expect(ruleNote(rule('fail_closed'), effective(false, 'preset'), {})).toBe(
+    expect(ruleNote(rule('fail_closed'), effective(false, 'preset'), {}, en)).toBe(
       'Needs the Strict preset',
     );
-    expect(ruleNote(rule('paranoid_rm'), effective(false, 'preset'), {})).toBe(
+    expect(ruleNote(rule('paranoid_rm'), effective(false, 'preset'), {}, en)).toBe(
       'Needs the Paranoid preset',
     );
   });
 
   test('names what changed the rule', () => {
-    expect(ruleNote(rule(), effective(false, 'rule_override'), {})).toBe('Changed by you');
-    expect(ruleNote(rule('fail_closed'), effective(true, 'capability_override'), {})).toBe(
+    expect(ruleNote(rule(), effective(false, 'rule_override'), {}, en)).toBe('Changed by you');
+    expect(ruleNote(rule('fail_closed'), effective(true, 'capability_override'), {}, en)).toBe(
       'Fail closed forced on in Advanced',
     );
     expect(
-      ruleNote(rule('fail_closed'), effective(true, 'environment'), {
-        fail_closed: { source: 'environment', sources: ['env CC_SAFETY_NET_STRICT=1'] },
-      }),
+      ruleNote(
+        rule('fail_closed'),
+        effective(true, 'environment'),
+        {
+          fail_closed: { source: 'environment', sources: ['env CC_SAFETY_NET_STRICT=1'] },
+        },
+        en,
+      ),
     ).toBe('Set by environment: CC_SAFETY_NET_STRICT=1');
   });
 });
@@ -95,7 +104,7 @@ const saved: Policy = {
 
 describe('the unsaved change summary', () => {
   test('is empty for an untouched policy', () => {
-    expect(policyChanges(saved, clonePolicy(saved), {})).toEqual([]);
+    expect(policyChanges(saved, clonePolicy(saved), {}, en)).toEqual([]);
   });
 
   test('lists each changed setting in plain words', () => {
@@ -106,7 +115,7 @@ describe('the unsaved change summary', () => {
     draft.destructive_command_protection.overrides['git.push-force'] = 'off';
     draft.destructive_command_protection.allow_paths = ['/tmp/b', '/tmp/c'];
 
-    expect(policyChanges(saved, draft, { 'git.push-force': 'Git push force' })).toEqual([
+    expect(policyChanges(saved, draft, { 'git.push-force': 'Git push force' }, en)).toEqual([
       'Preset: Standard → Strict',
       'Paranoid rm -rf checks: forced on',
       'Secret protection: off',

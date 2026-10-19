@@ -1,13 +1,15 @@
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { dirname, join } from 'node:path';
 import { Writable } from 'node:stream';
 import { parseCommandArgs } from '@/cli/args';
 import { getActivitySummary } from '@/cli/doctor/activity';
 import { checkForUpdates } from '@/cli/doctor/updates';
 import { type RunInstallCommandOptions, runInstallCommand } from '@/cli/install/index';
 import { createProcessEnvironment, type Environment } from '@/core/environment';
+import { atomicWriteFile } from '@/core/io/atomic-write';
 import {
   bindPolicyFilesystemScope,
   getPolicyFilesystemTargetForPath,
@@ -22,6 +24,7 @@ import {
 import { mergeProjectPolicy } from '@/core/policy/merge';
 import {
   getProjectPolicyPath,
+  getUserRulesDir,
   projectPolicyIsUserPolicy,
   type RulesPolicyOptions,
 } from '@/core/policy/paths';
@@ -62,6 +65,12 @@ import {
   chooseDirectory,
   isDirectoryPickerAvailable,
 } from './choose-directory';
+import {
+  applyPreferenceUpdate,
+  type GuiPreferences,
+  parseGuiPreferences,
+  parsePreferenceUpdate,
+} from './frontend/preferences';
 import { renderPolicyGuiHtml } from './page';
 
 const REPO = 'kenryu42/cc-safety-net';
@@ -219,12 +228,37 @@ async function handleRequest(
   }
 
   if (request.method === 'GET' && url.pathname === '/') {
+    const preferences = readGuiPreferences(guiPreferencesPath(environment, options));
     await Promise.resolve(options.buildDocument?.()).then(
-      (document) => sendHtml(response, renderPolicyGuiHtml(token, document)),
+      (document) => sendHtml(response, renderPolicyGuiHtml({ token, preferences }, document)),
       (buildError: unknown) =>
         sendJson(response, 500, {
           error: buildError instanceof Error ? buildError.message : String(buildError),
         }),
+    );
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/preferences') {
+    const body = await readJsonBody(request);
+    if (!body.ok) {
+      sendJson(response, body.status, { errors: [body.error] });
+      return;
+    }
+    const update = parsePreferenceUpdate(body.value);
+    if (!update) {
+      sendJson(response, 400, {
+        errors: ['preferences accept only language (en, ja, zh-CN) and theme (auto, light, dark)'],
+      });
+      return;
+    }
+    const path = guiPreferencesPath(environment, options);
+    const preferences = applyPreferenceUpdate(readGuiPreferences(path), update);
+    const writeError = writeGuiPreferences(path, preferences);
+    sendJson(
+      response,
+      writeError ? 500 : 200,
+      writeError ? { errors: [writeError] } : { preferences },
     );
     return;
   }
@@ -480,6 +514,29 @@ async function handleRequest(
   }
 
   sendJson(response, 404, { error: 'Not found' });
+}
+
+function guiPreferencesPath(environment: Environment, options: PolicyGuiServerOptions): string {
+  return join(dirname(getUserRulesDir(environment, options)), 'gui.json');
+}
+
+function readGuiPreferences(path: string): GuiPreferences {
+  if (!existsSync(path)) return {};
+  try {
+    return parseGuiPreferences(JSON.parse(readFileSync(path, 'utf-8')) as unknown);
+  } catch {
+    return {};
+  }
+}
+
+function writeGuiPreferences(path: string, preferences: GuiPreferences): string | null {
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    atomicWriteFile(path, `${JSON.stringify(preferences, null, 2)}\n`);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
 }
 
 function loaderOptions(options: PolicyGuiServerOptions): RulesPolicyOptions {
