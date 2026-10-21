@@ -8,7 +8,6 @@ export function* walkCommandViews(program: CommandProgram): Generator<CommandVie
   }
 }
 
-/** @internal */
 export function projectCommandViews(program: CommandProgram): readonly CommandView[] {
   return [...walkCommandViews(program)];
 }

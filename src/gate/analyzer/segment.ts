@@ -12,7 +12,12 @@ import { AWK_INTERPRETERS, DISPLAY_COMMANDS, SHELL_WRAPPERS } from '@/core/rules
 import { checkPolicyRuleMatch } from '@/core/rules/custom';
 import { destructiveCommandMatch } from '@/core/rules/destructive';
 import type { CommandView, CommandWord } from '@/core/shell/model';
-import { getBasename, hasUnclosedQuotes, normalizeCommandToken } from '@/core/shell/tokens';
+import {
+  getBasename,
+  hasUnclosedQuotes,
+  normalizeCommandToken,
+  parseShellArgv,
+} from '@/core/shell/tokens';
 import type {
   AnalyzeResult,
   DestructiveCommandRuleMatch,
@@ -59,6 +64,7 @@ import {
   extractTrapSource,
   isVerifiableLocalGeneratorSource,
   shellSourceHasUnresolvedDynamicExecutionCarrier,
+  substitutesRemoteFetch,
 } from './shell-execution';
 import {
   expandHomeTildeWord,
@@ -336,6 +342,15 @@ export function analyzeSegment(
       if (startupResult) return startupResult;
       const dashCArg = extractDashCArg(stripped);
       if (dashCArg) {
+        const scriptIndex = parseShellArgv(stripped).commandIndex;
+        const scriptWord = scriptIndex === null ? undefined : words[scriptIndex];
+        if (
+          scriptWord &&
+          options.commandView &&
+          substitutesRemoteFetch(scriptWord, options.commandView.nested, options.environment)
+        ) {
+          return dynamicShellSourceResult(trace);
+        }
         const positionalSource = extractPositionalShellSource(words, dashCArg);
         if (positionalSource.kind === 'dynamic') return dynamicShellSourceResult(trace);
         const source =
