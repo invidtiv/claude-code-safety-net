@@ -7,11 +7,13 @@ import type {
 } from '@/core/shell/model';
 import { DEFAULT_COMMAND_PARSER_LIMITS, parseCommand } from '@/core/shell/parse';
 import { getBasename, normalizeCommandToken, parseShellArgv } from '@/core/shell/tokens';
+import { projectCommandViews } from '@/core/shell/traversal';
+import type { EnvironmentContext } from '@/gate/analysis';
 import { analysisWordText, isLiteralExecutionSourceWord } from './command-words';
 import { expandHomeTildeWord, expandKnownVariableWord } from './shell-git-env';
 import { isShellSyntaxCheck } from './shell-wrappers';
 import { isStandardCommandWrapper } from './transparent-wrappers';
-import { parseEnvAssignment } from './wrapper-prelude';
+import { parseEnvAssignment, stripWrapperWords } from './wrapper-prelude';
 
 type ShellExecutionSource =
   | { kind: 'none' }
@@ -248,6 +250,23 @@ const REMOTE_FETCHERS = new Set([
   'ncat',
   'netcat',
 ]);
+
+export function substitutesRemoteFetch(
+  word: CommandWord,
+  nested: readonly CommandProgram[],
+  environment: EnvironmentContext,
+): boolean {
+  return nested
+    .filter((program) => program.span.start >= word.span.start && program.span.end <= word.span.end)
+    .flatMap(projectCommandViews)
+    .some((view) => {
+      const head = stripWrapperWords(view.words, environment).words[0];
+      return (
+        head !== undefined &&
+        REMOTE_FETCHERS.has(getBasename(normalizeCommandToken(analysisWordText(head))))
+      );
+    });
+}
 
 export function isVerifiableLocalGeneratorSource(command: CommandView): boolean {
   if (
