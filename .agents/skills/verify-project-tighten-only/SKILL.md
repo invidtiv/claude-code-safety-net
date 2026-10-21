@@ -40,7 +40,7 @@ Every combination in each group below is tried; nothing is sampled:
 | --- | --- | --- |
 | safety level and capabilities | `CC_SAFETY_NET_LEVEL` (unset or each level), user level, all 27 user override sets, project level (absent or each), all 27 project override sets | 34,992 |
 | destructive rule `<id>`, once per rule class | session level, both levels, that rule's own capability override in each scope, both protection switches, the rule's `on`/`off`/absent override in each scope | 23,328 each |
-| recursive delete allow paths | both switches, both allow lists over two paths | 120 |
+| recursive delete allow paths | user switch (on/off), user allow list (every subset of two paths), project switch (on/off/absent), project allow list (every subset or absent) | 120 |
 | secret rules, deny paths, allow paths | both switches, overrides for one default-on and one default-off secret rule in each scope, both deny lists and both allow lists over two paths | 194,400 |
 | worktree mode | user value, project value or absent | 6 |
 
@@ -71,7 +71,7 @@ If the check passes after your change, still read the "Update it" list: a pass s
 ## Update it when the code changes on purpose
 
 - **New field in `GuiPolicy` or `ProjectPolicyProjection` that can relax protection.** Add its protection to `computeProtections`, then add a group (or extend the closest one) that varies the field in both scopes alongside the switch that gates it.
-- **New capability in `SAFETY_OVERRIDE_KEYS`.** The capability group and the rule classes pick it up through `SAFETY_OVERRIDE_KEYS` and the metadata. Check that the case count stays small enough to keep the run near 2 seconds.
+- **New capability in `SAFETY_OVERRIDE_KEYS`.** `CAPABILITY_OVERRIDE_SETS` and the rule classes pick it up through `SAFETY_OVERRIDE_KEYS` and the rule metadata, so no edit is needed. Check that the case count stays small enough to keep the run near 2 seconds.
 - **New secret rule category with its own default.** Add a representative id to `SECRET_RULE_CLASSES`.
 - **A path matcher that is no longer a plain `some(...)` over the list.** The path abstraction above is no longer sound. Extend `PATHS` with the cases the new matcher can tell apart, or tell the user that the path part is no longer verified.
 

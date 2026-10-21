@@ -54,11 +54,9 @@ function defined<T>(record: Record<string, T | undefined>): Record<string, T> {
   );
 }
 
-const CAPABILITY_OVERRIDE_SETS = combinations({
-  fail_closed: OPTIONAL_BOOLEANS,
-  paranoid_rm: OPTIONAL_BOOLEANS,
-  paranoid_interpreters: OPTIONAL_BOOLEANS,
-}).map((overrides) => defined(overrides));
+const CAPABILITY_OVERRIDE_SETS = combinations(
+  Object.fromEntries(SAFETY_OVERRIDE_KEYS.map((key) => [key, OPTIONAL_BOOLEANS])),
+).map((overrides) => defined(overrides as Record<string, boolean | undefined>));
 
 function userPolicy(change: (policy: GuiPolicy) => void): GuiPolicy {
   const policy = createDefaultGuiPolicy();
