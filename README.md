@@ -71,7 +71,7 @@ CC Safety Net supports these coding agent CLIs on Windows, macOS, and Linux.
 
 ## Features
 
-- **Blocks destructive commands** such as `git reset --hard`, `git push --force`, and `rm -rf` on dangerous targets, even inside `bash -c` or `python -c`. See [Blocked Commands](https://ccsafetynet.com/docs/reference/blocked-commands).
+- **Blocks destructive commands** such as `git reset --hard`, `git push --force`, and `rm -rf` on dangerous targets, and install scripts piped from the internet (`curl … | bash`), even inside `bash -c` or `python -c`. See [Blocked Commands](https://ccsafetynet.com/docs/reference/blocked-commands).
 - **Blocks secret access** to SSH keys, `.env` files, `~/.aws`, and coding-CLI credentials, from the shell and from the agent's file tools. See [Secret Protection](https://ccsafetynet.com/docs/reference/secret-protection).
 - **Tunes the policy in a GUI.** Run `npx cc-safety-net gui` to pick the Standard, Strict, or Paranoid preset and turn rules on or off. See [Modes](https://ccsafetynet.com/docs/configuration/modes).
 - **Adds blocks through rulebooks**: official packs for Terraform, AWS, gcloud, and Azure, or your own JSON. See [Official Rulebooks](https://ccsafetynet.com/docs/configuration/rulebooks).
