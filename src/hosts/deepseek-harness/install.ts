@@ -6,6 +6,7 @@ import {
   getDeepSeekHarnessProfilesDir,
   listInstalledDeepSeekHarnessProfiles,
 } from '@/hosts/deepseek-harness/detect';
+import { readRecord, readStateFile } from '@/hosts/detect/context';
 import {
   type InstallTargetChoice,
   type InstallTargetProbe,
@@ -24,8 +25,22 @@ const DESKTOP_RUNNING =
 const desktopNotFound = (verb: 'add' | 'remove') =>
   `DeepSeek Harness Desktop is not in its default location, so ${verb} ${PACKAGE_NAME} from its Plugins page.`;
 
+const profileManifest = (environment: Environment, name: string) =>
+  join(getDeepSeekHarnessProfilesDir(environment), name, 'package.json');
+
 const hasProfile = (environment: Environment, name: 'desktop' | 'web') =>
-  existsSync(join(getDeepSeekHarnessProfilesDir(environment), name, 'package.json'));
+  existsSync(profileManifest(environment, name));
+
+function listOtherPlugins(environment: Environment, profile: string): string[] {
+  const manifest = readStateFile(profileManifest(environment, profile));
+  const dependencies = readRecord(
+    manifest.kind === 'ok' ? manifest.value : undefined,
+    'dependencies',
+  );
+  return typeof dependencies === 'object' && dependencies !== null
+    ? Object.keys(dependencies).filter((name) => name !== PACKAGE_NAME)
+    : [];
+}
 
 function locateDesktop(environment: Environment, location: DesktopLocation) {
   const platform = location.platform ?? process.platform;
@@ -114,6 +129,12 @@ export async function planDeepSeekHarnessInstall(
     ...(desktop.cli ? [{ profile: 'desktop', label: 'Desktop', dsh: [desktop.cli] as const }] : []),
     ...(web ? [{ profile: 'web', label: 'web', dsh: NPX_DSH }] : []),
   ];
+  const withOtherPlugins = targets
+    .map((target) => ({
+      label: target.label,
+      plugins: listOtherPlugins(environment, target.profile),
+    }))
+    .filter((target) => target.plugins.length > 0);
   return {
     commands: targets.map(
       (target) =>
@@ -142,6 +163,20 @@ export async function planDeepSeekHarnessInstall(
     message: [
       `Added ${PACKAGE_NAME} to the DeepSeek Harness ${describeProfiles(targets)}.`,
       ...(desktop.profile && !desktop.cli ? [desktopNotFound('add')] : []),
+      ...(withOtherPlugins.length > 0
+        ? [
+            ...withOtherPlugins.map(
+              (target) =>
+                `Other plugins in the DeepSeek Harness ${target.label} profile: ${target.plugins.join(', ')}.`,
+            ),
+            `CC Safety Net does not check commands a plugin's own shell tool runs until you declare it: npx -y ${PACKAGE_NAME} rule tool add <tool-name>`,
+            ...withOtherPlugins.map(
+              (target) =>
+                `DeepSeek Harness ${target.label} 配置中的其他插件：${target.plugins.join('、')}。`,
+            ),
+            `插件自带的 shell 工具需要声明后，CC Safety Net 才会检查它执行的命令：npx -y ${PACKAGE_NAME} rule tool add <工具名>`,
+          ]
+        : []),
     ].join('\n'),
   };
 }
