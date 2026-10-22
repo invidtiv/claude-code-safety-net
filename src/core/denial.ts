@@ -102,6 +102,20 @@ export function createFailedClosedDenial(
   };
 }
 
+export function createMalformedToolCallDenial(
+  options: Pick<IntegrationDenial, 'command' | 'toolName'> = {},
+) {
+  return {
+    reason:
+      'CC Safety Net could not check this tool call because it arrived without a usable tool name or arguments. This is not a CC Safety Net failure. Send the call again with its tool name and complete arguments.',
+    ruleId: 'tool-call.malformed',
+    intent: 'use_alternative',
+    command: options.command,
+    segment: options.command,
+    toolName: options.toolName,
+  } satisfies IntegrationDenial;
+}
+
 const CWD_DENIALS = {
   session: {
     unusable: {

@@ -267,13 +267,13 @@ const RULE_ID = /^[a-z][a-z0-9-]*(\.[a-z0-9-]+)+$/;
 
 const FUZZ_RULE_IDS = [
   'analysis.dynamic-shell-source',
-  'analysis.failed-closed',
   'analysis.limit',
   'analysis.strict-unparseable',
   'raw-text.dangerous-command',
   'rm.recursive-force-outside-cwd',
   'rm.recursive-force-root-or-home',
   'secret.home.ssh',
+  'tool-call.malformed',
 ];
 
 describe(`${FUZZ_SAMPLE_COUNT} seeded fuzz sources hold the gate's invariants`, () => {
@@ -288,9 +288,9 @@ describe(`${FUZZ_SAMPLE_COUNT} seeded fuzz sources hold the gate's invariants`, 
 
   const SHAPES = [
     {
-      name: 'an empty command fails closed',
+      name: 'an empty command is a malformed tool call',
       source: '',
-      expected: 'deny analysis.failed-closed @command-validation',
+      expected: 'deny tool-call.malformed @command-validation',
     },
     { name: 'a lone quote carries no destructive text', source: "'", expected: 'allow' },
     {

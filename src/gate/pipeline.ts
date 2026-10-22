@@ -1,7 +1,7 @@
 import type { AuditFailureStage } from '@/core/audit';
 import { type AnalysisErrorCode, AnalysisLimit, createBudget } from '@/core/budget';
 import type { Decision } from '@/core/decision';
-import { createCwdDenial } from '@/core/denial';
+import { createCwdDenial, createMalformedToolCallDenial } from '@/core/denial';
 import type { PathResolver } from '@/core/environment';
 import type { ProtectedGitMetadata } from '@/core/git/metadata';
 import { getCCSafetyNetEnvModes } from '@/core/policy/env';
@@ -282,10 +282,7 @@ export function evaluateGuard(
   }
 
   if (!invocation.command || invocation.command.trim() === '') {
-    return {
-      ...failedClosedEvaluation('command-validation', command),
-      ...reported,
-    };
+    return { ...malformedToolCallEvaluation(command), ...reported };
   }
 
   const analysis = callDependency('command-analysis', command, () =>
@@ -387,7 +384,7 @@ function promoteDeclaredCommandTool(
     (value): value is string => typeof value === 'string' && value.trim() !== '',
   );
   if (requestedCwds.length > 1 || usableCwds.length !== requestedCwds.length) {
-    return failedClosedEvaluation('command-validation', command);
+    return malformedToolCallEvaluation(command);
   }
   const requestedCwd = usableCwds[0];
   const executionCwd =
@@ -501,6 +498,20 @@ function failedClosedEvaluation(
       kind: 'deny',
       ...denial,
       intent: 'stop_and_explain',
+      ...(command ? { evidence: { command, segment: command } } : {}),
+    },
+  };
+}
+
+function malformedToolCallEvaluation(command: string | null | undefined): GuardEvaluation {
+  const denial = createMalformedToolCallDenial();
+  return {
+    stage: 'command-validation',
+    decision: {
+      kind: 'deny',
+      reason: denial.reason,
+      ruleId: denial.ruleId,
+      intent: denial.intent,
       ...(command ? { evidence: { command, segment: command } } : {}),
     },
   };

@@ -6,6 +6,7 @@ import type { CommandToolKind, ToolInvocation } from '@/gate/invocation';
 import { createToolInvocation } from '@/gate/invocation';
 import {
   createPluginToolCallHandler,
+  failedClosedToolCall,
   type MalformedToolCall,
   malformedToolCall,
   type PluginHandlerOptions,
@@ -76,7 +77,7 @@ function getPiToolCall(
   }
 
   if (typeof ctx.cwd !== 'string' || ctx.cwd.trim() === '') {
-    return malformedPiToolCall(ctx, toolCall.toolName);
+    return failedClosedToolCall(null, { toolName: toolCall.toolName });
   }
   const validContextCwd = resolveContainedCwd('.', [ctx.cwd], paths);
   if (!validContextCwd) {

@@ -16,6 +16,8 @@ const SECRET_SCAN_FAILURE = 'injected secret scan failure';
 const URI_FAILURE = 'injected workspace uri failure';
 const EXTRACTOR_FAILURE = 'injected shell extractor failure';
 const API_FAILURE = 'injected api failure';
+const MALFORMED_RULE = 'Rule: tool-call.malformed';
+const FAILED_CLOSED_RULE = 'Rule: analysis.failed-closed';
 const WORKSPACE_URI = { toString: () => 'file:///workspace' };
 
 type ShellEvent = { tool?: unknown; input?: unknown; thread?: { id?: unknown } };
@@ -107,7 +109,7 @@ const ROWS: readonly Row[] = [
     name: 'a workspace without a root',
     event: () => shell('git status'),
     api: 'no-root',
-    contains: 'failed closed',
+    contains: FAILED_CLOSED_RULE,
     rejected: true,
     lines: 1,
   },
@@ -130,10 +132,17 @@ const ROWS: readonly Row[] = [
     name: 'a shell extractor that throws',
     event: () => shell('git status'),
     api: 'extractor-throws',
+    contains: FAILED_CLOSED_RULE,
     rejected: true,
     lines: 1,
   },
-  { name: 'a blank command', event: () => shell(''), rejected: true, lines: 1 },
+  {
+    name: 'a blank command',
+    event: () => shell(''),
+    contains: MALFORMED_RULE,
+    rejected: true,
+    lines: 1,
+  },
   {
     name: 'a read of a file in the project',
     event: () => ({ tool: 'Read', input: { path: 'README.md' }, thread: { id: THREAD } }),
@@ -222,16 +231,24 @@ const ROWS: readonly Row[] = [
     rejected: true,
     lines: 1,
   },
-  { name: 'an event that is null', event: () => null, rejected: true, lines: 0 },
+  {
+    name: 'an event that is null',
+    event: () => null,
+    contains: FAILED_CLOSED_RULE,
+    rejected: true,
+    lines: 0,
+  },
   {
     name: 'an event without a tool name',
     event: () => ({ tool: '', input: { cmd: 'git status' }, thread: { id: THREAD } }),
+    contains: MALFORMED_RULE,
     rejected: true,
     lines: 1,
   },
   {
     name: 'an event whose input is null',
     event: () => ({ tool: 'Bash', input: null, thread: { id: THREAD } }),
+    contains: MALFORMED_RULE,
     rejected: true,
     lines: 1,
   },

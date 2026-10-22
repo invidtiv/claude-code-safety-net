@@ -6,6 +6,7 @@ import { resolveCanonicalCwd, resolveContainedCwd } from '@/gate/intake';
 import { createToolInvocation, type ToolInvocation } from '@/gate/invocation';
 import {
   createPluginToolCallHandler,
+  failedClosedToolCall,
   type MalformedToolCall,
   malformedToolCall,
   type PluginHandlerOptions,
@@ -53,7 +54,7 @@ function getAmpToolInvocation(
   amp: AmpApi,
   paths: PathResolver,
 ): MalformedToolCall | ToolInvocation {
-  if (!event || typeof event !== 'object') return malformedToolCall(null);
+  if (!event || typeof event !== 'object') return failedClosedToolCall(null);
   const toolCall = event as AmpToolCallEvent;
   if (typeof toolCall.tool !== 'string' || toolCall.tool.trim() === '') {
     return malformedToolCall(null);
@@ -63,7 +64,7 @@ function getAmpToolInvocation(
   }
 
   const rootPath = resolveAmpWorkspaceRootPath(amp);
-  if (!rootPath) return malformedToolCall(null, { toolName: toolCall.tool });
+  if (!rootPath) return failedClosedToolCall(null, { toolName: toolCall.tool });
   const workspaceRoot = resolveContainedCwd('.', [rootPath], paths);
   if (!workspaceRoot) {
     return refusedCwdToolCall(
@@ -73,7 +74,7 @@ function getAmpToolInvocation(
   }
 
   const shell = extractAmpShellCommand(amp, event);
-  if (!shell.ok) return malformedToolCall(workspaceRoot, { toolName: toolCall.tool });
+  if (!shell.ok) return failedClosedToolCall(workspaceRoot, { toolName: toolCall.tool });
 
   if (!shell.command) {
     return createToolInvocation(

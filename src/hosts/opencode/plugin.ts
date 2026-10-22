@@ -4,6 +4,7 @@ import {
   type CwdDenial,
   createCwdDenial,
   createFailedClosedDenial,
+  createMalformedToolCallDenial,
   formatDenial,
   type IntegrationDenial,
   projectGuardDenial,
@@ -111,7 +112,7 @@ export function evaluateOpenCodeTool({
     throwBlocked(denial);
   };
   if (typeof tool !== 'string' || tool.trim() === '') {
-    throwPreflightDenial(createFailedClosedDenial());
+    throwPreflightDenial(createMalformedToolCallDenial());
   }
 
   let command: string | undefined;
@@ -137,7 +138,7 @@ export function evaluateOpenCodeTool({
     expandHomeWorkdir ? environment.home : undefined,
   );
   if (executionCwd === null) {
-    throwPreflightDenial(createFailedClosedDenial({ command, toolName: tool }), tool);
+    throwPreflightDenial(createMalformedToolCallDenial({ command, toolName: tool }), tool);
     return;
   }
   if (typeof executionCwd !== 'string') {

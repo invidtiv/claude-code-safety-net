@@ -298,6 +298,24 @@ describe('denial renderer', () => {
     );
   });
 
+  test('the malformed tool call denial asks for the call again instead of reporting a failure', () => {
+    expect(
+      next.formatDenial(
+        next.createMalformedToolCallDenial({ command: 'git status', toolName: 'bash' }),
+      ),
+    ).toBe(
+      [
+        'BLOCKED by CC Safety Net',
+        'Reason: CC Safety Net could not check this tool call because it arrived without a usable tool name or arguments. This is not a CC Safety Net failure. Send the call again with its tool name and complete arguments.',
+        'Rule: tool-call.malformed',
+        'Tool: bash',
+        'Command: git status',
+        FOOTERS.use_alternative,
+      ].join('\n\n'),
+    );
+    expect(next.formatDenial(next.createMalformedToolCallDenial())).not.toContain('Command:');
+  });
+
   test('a directory denial names the directory under its own label, not as a segment', () => {
     expect(
       next.formatDenial(

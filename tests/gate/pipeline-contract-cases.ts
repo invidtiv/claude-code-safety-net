@@ -268,15 +268,15 @@ export function pipelineContractCases(paths: {
       expected: gitMetadataBlock,
     },
     {
-      name: 'fails closed on a blank shell command',
+      name: 'denies a blank shell command as a malformed tool call',
       ...bash('   '),
       cwd: 'workspace',
       expected: {
         kind: 'block',
         stage: 'command-validation',
-        ruleId: 'analysis.failed-closed',
-        intent: 'stop_and_explain',
-        reasonIncludes: 'failed closed',
+        ruleId: 'tool-call.malformed',
+        intent: 'use_alternative',
+        reasonIncludes: 'This is not a CC Safety Net failure.',
       },
     },
     {

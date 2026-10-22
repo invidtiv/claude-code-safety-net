@@ -13,6 +13,8 @@ const SESSION = 'openclaw-1';
 const WORKSPACE_FAILURE = 'injected workspace failure';
 const ANALYZER_FAILURE = 'injected analyzer failure';
 const CONTEXT_FAILURE = 'injected context failure';
+const MALFORMED_RULE = 'Rule: tool-call.malformed';
+const FAILED_CLOSED_RULE = 'Rule: analysis.failed-closed';
 const cwdReason = (directory: 'session' | 'requested', problem: 'unusable' | 'outside-workspace') =>
   createCwdDenial({ directory, problem, cwd: '' }).reason;
 
@@ -131,7 +133,7 @@ const ROWS: readonly Row[] = [
   {
     name: 'a blank workdir',
     event: () => exec({ command: 'git status', workdir: '' }),
-    contains: 'failed closed',
+    contains: MALFORMED_RULE,
     blocked: true,
     lines: 1,
   },
@@ -153,16 +155,31 @@ const ROWS: readonly Row[] = [
     blocked: false,
     lines: 0,
   },
-  { name: 'an event that is null', event: () => null, blocked: true, lines: 1 },
+  {
+    name: 'an event that is null',
+    event: () => null,
+    contains: FAILED_CLOSED_RULE,
+    blocked: true,
+    lines: 1,
+  },
   {
     name: 'an event without a tool name',
     event: () => ({ toolName: '', params: { command: 'git status' } }),
+    contains: MALFORMED_RULE,
     blocked: true,
     lines: 1,
   },
   {
     name: 'params that are an array',
     event: () => ({ toolName: 'exec', params: ['git status'] }),
+    contains: MALFORMED_RULE,
+    blocked: true,
+    lines: 1,
+  },
+  {
+    name: 'a blank command',
+    event: () => exec({ command: '   ' }),
+    contains: MALFORMED_RULE,
     blocked: true,
     lines: 1,
   },
@@ -170,6 +187,7 @@ const ROWS: readonly Row[] = [
     name: 'a context without an agent id',
     event: () => exec({ command: 'git status' }),
     ctx: () => ({ toolName: 'exec', sessionId: SESSION }),
+    contains: FAILED_CLOSED_RULE,
     blocked: true,
     lines: 1,
   },

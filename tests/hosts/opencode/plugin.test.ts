@@ -15,6 +15,7 @@ import { auditHomeFor, captureInProcessCall, describeDifferential } from '../../
 const SESSION = 'opencode-1';
 const POLICY_FAILURE = 'boom';
 const ANALYZER_FAILURE = 'injected analyzer failure';
+const MALFORMED_RULE = 'Rule: tool-call.malformed';
 const cwdReason = (directory: 'session' | 'requested') =>
   createCwdDenial({ directory, problem: 'unusable', cwd: '' }).reason;
 
@@ -89,7 +90,21 @@ const ROWS: readonly Row[] = [
   {
     name: 'a blank workdir',
     args: () => ({ command: 'git status', workdir: '' }),
-    contains: 'failed closed',
+    contains: MALFORMED_RULE,
+    blocked: true,
+    lines: 1,
+  },
+  {
+    name: 'a bash call with a blank command',
+    args: () => ({ command: '   ' }),
+    contains: MALFORMED_RULE,
+    blocked: true,
+    lines: 1,
+  },
+  {
+    name: 'a bash call without a command',
+    args: () => ({}),
+    contains: MALFORMED_RULE,
     blocked: true,
     lines: 1,
   },
@@ -97,6 +112,14 @@ const ROWS: readonly Row[] = [
     name: 'a call without a tool name',
     tool: '',
     args: () => ({ command: 'git status' }),
+    contains: MALFORMED_RULE,
+    blocked: true,
+    lines: 1,
+  },
+  {
+    name: 'a tool input whose command is an accessor',
+    args: () => Object.defineProperty({}, 'command', { get: () => 'git status', enumerable: true }),
+    contains: 'Rule: analysis.failed-closed',
     blocked: true,
     lines: 1,
   },

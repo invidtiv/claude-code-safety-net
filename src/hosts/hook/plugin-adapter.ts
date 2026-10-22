@@ -2,6 +2,7 @@ import {
   type CwdDenial,
   createCwdDenial,
   createFailedClosedDenial,
+  createMalformedToolCallDenial,
   formatIntegrationError,
   type IntegrationDenial,
   projectGuardDenial,
@@ -41,6 +42,13 @@ export type PluginToolCallHost<Event, Context, Result> = {
 };
 
 export function malformedToolCall(
+  cwd: string | null,
+  denial: Pick<IntegrationDenial, 'command' | 'toolName'> = {},
+): MalformedToolCall {
+  return { malformed: true, denial: createMalformedToolCallDenial(denial), cwd };
+}
+
+export function failedClosedToolCall(
   cwd: string | null,
   denial: Pick<IntegrationDenial, 'command' | 'toolName'> = {},
 ): MalformedToolCall {

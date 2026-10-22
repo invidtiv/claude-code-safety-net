@@ -16,6 +16,7 @@ const SESSION = 'pi-1';
 const ANALYZER_FAILURE = 'injected analyzer failure';
 const SECRET_SCAN_FAILURE = 'injected secret scan failure';
 const CONTEXT_FAILURE = 'injected context failure';
+const MALFORMED_RULE = 'Rule: tool-call.malformed';
 const SESSION_UNUSABLE = createCwdDenial({
   directory: 'session',
   problem: 'unusable',
@@ -69,12 +70,14 @@ const ROWS: readonly Row[] = [
   {
     name: 'a bash call without a tool input',
     event: () => ({ type: 'tool_call', toolName: 'bash' }),
+    contains: MALFORMED_RULE,
     blocked: true,
     lines: 1,
   },
   {
     name: 'a bash call with a blank command',
     event: () => bash('   '),
+    contains: MALFORMED_RULE,
     blocked: true,
     lines: 1,
   },
@@ -118,6 +121,7 @@ const ROWS: readonly Row[] = [
   {
     name: 'an event without a tool name',
     event: () => ({ type: 'tool_call', toolName: '', input: { command: 'git status' } }),
+    contains: MALFORMED_RULE,
     blocked: true,
     lines: 1,
   },
@@ -141,7 +145,7 @@ const ROWS: readonly Row[] = [
     name: 'a context without a directory',
     event: () => bash('git status'),
     cwd: () => '',
-    contains: 'failed closed',
+    contains: 'Rule: analysis.failed-closed',
     blocked: true,
     lines: 1,
   },
