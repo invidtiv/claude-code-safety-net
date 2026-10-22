@@ -4,6 +4,7 @@ import { cwdProblem, resolveContainedCwd } from '@/gate/intake';
 import { createToolInvocation, type ToolInvocation } from '@/gate/invocation';
 import {
   createPluginToolCallHandler,
+  failedClosedToolCall,
   type MalformedToolCall,
   malformedToolCall,
   type PluginHandlerOptions,
@@ -76,7 +77,7 @@ function getOpenClawToolCall(
   api: OpenClawPluginApi,
   paths: PathResolver,
 ): MalformedToolCall | ToolInvocation | undefined {
-  if (!event || typeof event !== 'object') return malformedToolCall(null);
+  if (!event || typeof event !== 'object') return failedClosedToolCall(null);
   const toolName = (event as OpenClawBeforeToolCallEvent).toolName;
   if (typeof toolName !== 'string' || toolName.trim() === '') {
     return malformedToolCall(null);
@@ -97,11 +98,11 @@ function getOpenClawToolCall(
     return malformedToolCall(null, { toolName });
   }
   if (execParams.host !== undefined && !PROVEN_EXEC_HOSTS.has(execParams.host as string)) {
-    return malformedToolCall(null, { command, toolName });
+    return failedClosedToolCall(null, { command, toolName });
   }
 
   const workspaceDir = resolveOpenClawWorkspaceDir(api, ctx.agentId);
-  if (!workspaceDir) return malformedToolCall(null, { command, toolName });
+  if (!workspaceDir) return failedClosedToolCall(null, { command, toolName });
   const workspace = resolveContainedCwd('.', [workspaceDir], paths);
   if (!workspace) {
     return refusedCwdToolCall(

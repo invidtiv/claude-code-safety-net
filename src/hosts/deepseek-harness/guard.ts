@@ -6,6 +6,7 @@ import { firstTrustedRoot } from '@/gate/intake';
 import { type CommandToolKind, createToolInvocation, type ToolInvocation } from '@/gate/invocation';
 import {
   createPluginToolCallHandler,
+  failedClosedToolCall,
   type MalformedToolCall,
   malformedToolCall,
   type PluginHandlerOptions,
@@ -58,13 +59,14 @@ function getDeepSeekHarnessToolCall(
   launchCwd: string,
   paths: PathResolver,
 ): MalformedToolCall | ToolInvocation {
-  if (!execution || typeof execution !== 'object') return malformedToolCall(null);
+  if (!execution || typeof execution !== 'object') return failedClosedToolCall(null);
   const toolCall = execution as DeepSeekHarnessToolExecution;
-  const toolName = toolCall.name;
-  if (typeof toolName !== 'string' || toolName.trim() === '') return malformedToolCall(null);
-
   const sessionCwd = toolCall.agent?.session.header.cwd ?? launchCwd;
   const workspace = firstTrustedRoot([sessionCwd], paths);
+  const toolName = toolCall.name;
+  if (typeof toolName !== 'string' || toolName.trim() === '') {
+    return malformedToolCall(workspace ?? null);
+  }
   if (!workspace) {
     return refusedCwdToolCall(
       { directory: 'session', problem: 'unusable', cwd: sessionCwd },

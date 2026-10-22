@@ -18,6 +18,8 @@ const ANALYZER_FAILURE = 'injected analyzer failure';
 const EXECUTION_FAILURE = 'injected execution failure';
 const HOME_DELETE_RULE = 'Rule: powershell.remove-item-recursive-force-root-or-home';
 const HOME_CWD_DELETE_RULE = 'Rule: rm.recursive-force-home-cwd';
+const MALFORMED_RULE = 'Rule: tool-call.malformed';
+const FAILED_CLOSED_RULE = 'Rule: analysis.failed-closed';
 const cwdReason = (directory: 'session' | 'requested') =>
   createCwdDenial({ directory, problem: 'unusable', cwd: '' }).reason;
 
@@ -102,20 +104,21 @@ const ROWS: readonly Row[] = [
   {
     name: 'a blank workdir',
     execution: tool('bash', { command: 'git status', workdir: '' }),
-    contains: 'failed closed',
+    contains: MALFORMED_RULE,
     blocked: true,
     lines: 1,
   },
   {
     name: 'bash arguments that are not an object',
     execution: tool('bash', 'git status'),
-    contains: 'failed closed',
+    contains: MALFORMED_RULE,
     blocked: true,
     lines: 1,
   },
   {
     name: 'a bash call with a blank command',
     execution: tool('bash', { command: '   ' }),
+    contains: MALFORMED_RULE,
     blocked: true,
     lines: 1,
   },
@@ -134,10 +137,17 @@ const ROWS: readonly Row[] = [
     blocked: false,
     lines: 0,
   },
-  { name: 'an execution that is null', execution: () => null, blocked: true, lines: 0 },
+  {
+    name: 'an execution that is null',
+    execution: () => null,
+    contains: FAILED_CLOSED_RULE,
+    blocked: true,
+    lines: 0,
+  },
   {
     name: 'an execution without a tool name',
     execution: tool('', { command: 'git status' }),
+    contains: MALFORMED_RULE,
     blocked: true,
     lines: 1,
   },
@@ -214,6 +224,15 @@ describeDifferential('one DeepSeek Harness tool execution', ROWS, runRow, (row, 
       agent: 'deepseek-harness',
       command: 'git status',
       cwd: realpathSync(fixture.project),
+      sessionId: SESSION,
+    });
+  }
+  if (row.name === 'an execution without a tool name') {
+    expect(outcome.entries[0]?.entry).toMatchObject({
+      decision: 'deny',
+      agent: 'deepseek-harness',
+      cwd: realpathSync(fixture.project),
+      ruleId: 'tool-call.malformed',
       sessionId: SESSION,
     });
   }
