@@ -95,6 +95,20 @@ const ROWS: readonly Row[] = [
     lines: 1,
   },
   {
+    name: 'a bash call with a blank command',
+    args: () => ({ command: '   ' }),
+    contains: MALFORMED_RULE,
+    blocked: true,
+    lines: 1,
+  },
+  {
+    name: 'a bash call without a command',
+    args: () => ({}),
+    contains: MALFORMED_RULE,
+    blocked: true,
+    lines: 1,
+  },
+  {
     name: 'a call without a tool name',
     tool: '',
     args: () => ({ command: 'git status' }),

@@ -15,6 +15,7 @@ import {
   isSameOrInsidePath,
   outputCwdDenial,
   outputFailedClosed,
+  outputMalformedToolCall,
   resolveContainedCwd,
 } from '@/gate/intake';
 import type { CommandToolKind, ToolCallContext } from '@/gate/invocation';
@@ -143,7 +144,7 @@ function resolveAntigravityContext(
   }
   const cwd = args.Cwd;
   if (typeof cwd !== 'string' || cwd.trim() === '') {
-    outputFailedClosed(outputDeny, toolInput, toolName);
+    outputMalformedToolCall(outputDeny, toolInput, toolName);
     return null;
   }
 

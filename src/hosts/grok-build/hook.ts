@@ -6,6 +6,7 @@ import {
   getToolRoute,
   outputCwdDenial,
   outputFailedClosed,
+  outputMalformedToolCall,
   resolveContainedCwd,
 } from '@/gate/intake';
 import type { CommandToolKind, ToolCallContext } from '@/gate/invocation';
@@ -109,7 +110,7 @@ function resolveGrokBuildContext(
   }
   const requestedCwd = args[cwdKey];
   if (typeof requestedCwd !== 'string' || requestedCwd.trim() === '') {
-    outputFailedClosed(outputDeny, toolInput, toolName);
+    outputMalformedToolCall(outputDeny, toolInput, toolName);
     return null;
   }
   const executionCwd = resolveContainedCwd(requestedCwd, [base, root], environment.paths);

@@ -5,6 +5,7 @@ import {
   type CwdProblem,
   createCwdDenial,
   createFailedClosedDenial,
+  createMalformedToolCallDenial,
   type IntegrationDenial,
 } from '@/core/denial';
 import type { PathResolver } from '@/core/environment';
@@ -166,6 +167,14 @@ export function outputFailedClosed(
   toolName?: string,
 ): void {
   outputDeny(createFailedClosedDenial({ command: readableCommand(toolInput), toolName }));
+}
+
+export function outputMalformedToolCall(
+  outputDeny: HookDenyOutput,
+  toolInput?: unknown,
+  toolName?: string,
+): void {
+  outputDeny(createMalformedToolCallDenial({ command: readableCommand(toolInput), toolName }));
 }
 
 export function outputCwdDenial(

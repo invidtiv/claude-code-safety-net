@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LIMITS, REASON_SAFETY_NET_FAILED_CLOSED } from '@/core/budget';
-import { createCwdDenial } from '@/core/denial';
+import { createCwdDenial, createMalformedToolCallDenial } from '@/core/denial';
 import { createProcessEnvironment } from '@/core/environment';
 import { getUserPolicyPath } from '@/core/policy/paths';
 import { REASON_STRICT_UNPARSEABLE } from '@/gate/analyzer/reasons';
@@ -42,6 +42,13 @@ const cwdReason = (directory: 'session' | 'requested', problem: 'unusable' | 'ou
 const MALFORMED = {
   document: 'deny',
   audit: 'deny',
+  ruleId: 'tool-call.malformed',
+  reason: createMalformedToolCallDenial().reason,
+} as const;
+const FAILED_CLOSED = {
+  document: 'deny',
+  audit: 'deny',
+  ruleId: 'analysis.failed-closed',
   reason: REASON_SAFETY_NET_FAILED_CLOSED,
 } as const;
 const SESSION_UNUSABLE = {
@@ -81,7 +88,8 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   'an empty payload': { document: 'deny', audit: 'none' },
   'a payload that is an array': { document: 'deny', audit: 'none' },
   'a payload past the input byte limit': { document: 'deny', audit: 'none' },
-  'a payload without a tool name': { document: 'deny', audit: 'deny' },
+  'a payload without a tool name': MALFORMED,
+  'a payload with a blank tool name': MALFORMED,
   'a read tool over a relative path': { document: 'none', audit: 'none' },
   'a read tool over a private key': {
     document: 'deny',
@@ -193,14 +201,14 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
     ruleId: 'git.reset-hard',
   },
   'a prompt answer written to a process as key input': { document: 'none', audit: 'allow' },
-  'an undocumented key token written to a process': MALFORMED,
-  'a line written to a process as both text and key input': MALFORMED,
-  'a line erased by a key before a destructive line': MALFORMED,
-  'a line edited by backspace': MALFORMED,
-  'an editor command after escape': MALFORMED,
-  'an aborted line before a destructive line': MALFORMED,
-  'a destructive line split by Ctrl-D': MALFORMED,
-  'text written to a process followed by an editing key': MALFORMED,
+  'an undocumented key token written to a process': FAILED_CLOSED,
+  'a line written to a process as both text and key input': FAILED_CLOSED,
+  'a line erased by a key before a destructive line': FAILED_CLOSED,
+  'a line edited by backspace': FAILED_CLOSED,
+  'an editor command after escape': FAILED_CLOSED,
+  'an aborted line before a destructive line': FAILED_CLOSED,
+  'a destructive line split by Ctrl-D': FAILED_CLOSED,
+  'text written to a process followed by an editing key': FAILED_CLOSED,
   'text written to a process followed by Enter': { document: 'none', audit: 'allow' },
   'a recursive delete whose workdir is the home directory': {
     document: 'deny',
@@ -287,7 +295,7 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
   'a working directory outside the workspace roots': REQUESTED_OUTSIDE,
   'a working directory that does not exist': REQUESTED_UNUSABLE,
   'a blank working directory': MALFORMED,
-  'no workspace roots': MALFORMED,
+  'no workspace roots': FAILED_CLOSED,
   'workspace roots that do not exist': SESSION_UNUSABLE,
   'a cwd outside the workspace roots': SESSION_OUTSIDE,
   'a Cwd inside the workspace paths': { document: 'none', audit: 'allow' },
@@ -297,7 +305,7 @@ const OUTCOMES: Readonly<Record<string, HookOutcome>> = {
     document: 'none',
     audit: 'allow',
   },
-  'no workspace paths': MALFORMED,
+  'no workspace paths': FAILED_CLOSED,
   'a blank Cwd': MALFORMED,
   'a destructive line sent to a background task': {
     document: 'deny',
@@ -355,7 +363,7 @@ const ANSWERED_OUTCOMES: Readonly<Record<string, HookOutcome>> = {
     audit: 'none',
   },
   'a read tool over a relative path': { document: 'allow', audit: 'none' },
-  'a payload without a cwd': { document: 'deny', audit: 'deny' },
+  'a payload without a cwd': FAILED_CLOSED,
 };
 
 export type HookHost = {
@@ -1331,6 +1339,10 @@ function commonRows(spec: HostSpec, fixture: HookFixture): Omit<HookRow, 'expect
     {
       name: 'a payload without a tool name',
       stdin: payload({ args: commandArgs('git status'), cwd: fixture.project }),
+    },
+    {
+      name: 'a payload with a blank tool name',
+      stdin: payload({ tool: '', args: commandArgs('git status'), cwd: fixture.project }),
     },
     {
       name: 'a read tool over a relative path',

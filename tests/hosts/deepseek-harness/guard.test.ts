@@ -238,13 +238,17 @@ describeDifferential('one DeepSeek Harness tool execution', ROWS, runRow, (row, 
   }
 });
 
-test('a tool the user declared as a command tool is blocked and audited like bash', async () => {
+function declareOpsBash() {
   const rules = join(fixture.home, '.cc-safety-net', 'rules');
   mkdirSync(rules, { recursive: true });
   writeFileSync(
     join(rules, 'rule.json'),
     JSON.stringify({ version: 1, command_tools: ['ops_bash'] }),
   );
+}
+
+test('a tool the user declared as a command tool is blocked and audited like bash', async () => {
+  declareOpsBash();
   const handle = createDeepSeekHarnessGuardHandler();
   const decided = await captureInProcessCall(fixture, {}, () => [
     handle(tool('ops_bash', { command: 'git push --force origin main' })(fixture), fixture.project),
@@ -262,6 +266,21 @@ test('a tool the user declared as a command tool is blocked and audited like bas
       cwd: realpathSync(fixture.project),
       sessionId: SESSION,
     },
+  ]);
+});
+
+test('a declared command tool with a blank workdir is denied as malformed', async () => {
+  declareOpsBash();
+  const decided = await captureInProcessCall(fixture, {}, () =>
+    createDeepSeekHarnessGuardHandler()(
+      tool('ops_bash', { command: 'git status', workdir: '' })(fixture),
+      fixture.project,
+    ),
+  );
+  expect(decided.returned).toContain(MALFORMED_RULE);
+  expect(decided.stderr).toStrictEqual([]);
+  expect(decided.entries.map((line) => line.entry)).toMatchObject([
+    { decision: 'deny', toolName: 'ops_bash', ruleId: 'tool-call.malformed' },
   ]);
 });
 

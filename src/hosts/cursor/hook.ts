@@ -7,6 +7,7 @@ import {
   getToolRoute,
   outputCwdDenial,
   outputFailedClosed,
+  outputMalformedToolCall,
   resolveContainedCwd,
 } from '@/gate/intake';
 import type { CommandToolKind, ToolCallContext } from '@/gate/invocation';
@@ -103,7 +104,7 @@ function resolveCursorContext(
 
   const requestedWorkingDirectory = (toolInput as Record<string, unknown>).working_directory;
   if (typeof requestedWorkingDirectory !== 'string' || requestedWorkingDirectory.trim() === '') {
-    outputFailedClosed(outputDeny, toolInput, toolName);
+    outputMalformedToolCall(outputDeny, toolInput, toolName);
     return null;
   }
   const workingDirectory = normalizeUriDrivePath(requestedWorkingDirectory);

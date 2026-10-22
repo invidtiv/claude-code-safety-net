@@ -13,6 +13,7 @@ import {
   cwdProblem,
   outputCwdDenial,
   outputFailedClosed,
+  outputMalformedToolCall,
   parseHookJson,
   readBoundedHookInput,
   resolveCanonicalCwd,
@@ -92,7 +93,7 @@ export const getToolCwdHookContext =
     const requestedCwd = args[cwdKey];
     if (options?.emptyMeansSessionCwd && requestedCwd === '') return context;
     if (typeof requestedCwd !== 'string' || requestedCwd.trim() === '') {
-      outputFailedClosed(outputDeny, toolInput, toolName);
+      outputMalformedToolCall(outputDeny, toolInput, toolName);
       return null;
     }
     const executionCwd = options?.allowOutsideSessionCwd
@@ -163,7 +164,7 @@ async function runHookAdapter<T>(adapter: HookAdapter<T>): Promise<void> {
 
   const toolNameInput = adapter.getToolName(input);
   if (typeof toolNameInput !== 'string' || toolNameInput.trim() === '') {
-    outputFailedClosed((denial) => outputPreflightDeny(denial), getRawHookToolInput(input));
+    outputMalformedToolCall((denial) => outputPreflightDeny(denial), getRawHookToolInput(input));
     return;
   }
   const toolName = toolNameInput;

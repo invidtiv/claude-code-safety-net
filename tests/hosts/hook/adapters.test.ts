@@ -44,7 +44,8 @@ const INPUT_DIAGNOSTICS: Record<string, string> = {
   'an empty payload': 'Missing hook input JSON.',
   'a payload that is an array': 'failed closed',
   'a payload past the input byte limit': 'Failed to parse hook input JSON.',
-  'a payload without a tool name': 'failed closed',
+  'a payload without a tool name': 'Rule: tool-call.malformed',
+  'a payload with a blank tool name': 'Rule: tool-call.malformed',
   'a read tool over a private key': 'Tool: Read',
 };
 

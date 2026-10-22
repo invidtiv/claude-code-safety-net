@@ -5,7 +5,7 @@ import { tmpdir as systemTemp } from 'node:os';
 import { join, sep } from 'node:path';
 import { AnalysisLimit } from '@/core/budget';
 import { createProcessEnvironment } from '@/core/environment';
-import { createCwdDenial } from '@/core/denial';
+import { createCwdDenial, createMalformedToolCallDenial } from '@/core/denial';
 import { getUserPolicyPath } from '@/core/policy/paths';
 import { StructuralShellSyntaxLimitError as PortedStructuralLimit } from '@/gate/guards/semantic-facts';
 import { createToolInvocation, type ToolInvocation, type ToolRoute } from '@/gate/invocation';
@@ -161,7 +161,7 @@ const STAGE_EXITS: readonly {
     label: 'a blank shell command',
     stage: 'command-validation',
     call: bash('   ', plain),
-    denyReason: 'failed closed',
+    denyReason: 'This is not a CC Safety Net failure.',
   },
   {
     label: 'a destructive command the analyzer denies',
@@ -410,15 +410,22 @@ describe('a tool the user declared as a command tool', () => {
   test('two working directory arguments that disagree are denied', () => {
     expect(
       verdict(evaluate(unknown('ops_bash', { command: 'echo hi', workdir: plain, cwd: project }))),
-    ).toBe('analysis.failed-closed');
+    ).toBe('tool-call.malformed');
   });
 
-  test('a blank or non-string working directory argument is denied', () => {
-    expect(verdict(evaluate(unknown('ops_bash', { command: 'echo hi', workdir: '' })))).toBe(
-      'analysis.failed-closed',
-    );
+  test('a blank or non-string working directory argument is denied as malformed', () => {
+    expect(evaluate(unknown('ops_bash', { command: 'echo hi', workdir: '' }))).toStrictEqual({
+      stage: 'command-validation',
+      decision: {
+        kind: 'deny',
+        reason: createMalformedToolCallDenial().reason,
+        ruleId: 'tool-call.malformed',
+        intent: 'use_alternative',
+        evidence: { command: 'echo hi', segment: 'echo hi' },
+      },
+    });
     expect(verdict(evaluate(unknown('ops_bash', { command: 'echo hi', cwd: 7 })))).toBe(
-      'analysis.failed-closed',
+      'tool-call.malformed',
     );
   });
 
