@@ -23,6 +23,7 @@ import type {
 } from '@/core/policy/types';
 import { sanitizeDiagnosticText } from '@/core/redaction';
 import { DESTRUCTIVE_COMMAND_RULE_METADATA } from '@/core/rules/destructive';
+import type { ShellKind } from '@/core/shell/model';
 import { parseCommand } from '@/core/shell/parse';
 import { projectSegmentWords } from '@/core/shell/traversal';
 import { REASON_GIT_METADATA_PROTECTION } from './guards/git-metadata-protection';
@@ -45,6 +46,7 @@ interface ExplainTrace {
 
 export interface ExplainOptions {
   cwd?: string;
+  shell?: ShellKind;
   userConfigDir?: string;
   policySnapshot?: PolicySnapshot;
 }
@@ -104,7 +106,8 @@ export function explainCommand(
     };
   }
 
-  const program = parseCommand(command, 'auto');
+  const shell = options.shell ?? 'auto';
+  const program = parseCommand(command, shell);
 
   if (program.status === 'limited') throw new StructuralShellSyntaxLimitError();
   const displayProgram =
@@ -121,7 +124,7 @@ export function explainCommand(
   const invocation = createToolInvocation(
     'Bash',
     { command },
-    { kind: 'command', shell: 'auto' },
+    { kind: 'command', shell },
     { configCwd: cwd, executionCwd: cwd },
     command,
   );

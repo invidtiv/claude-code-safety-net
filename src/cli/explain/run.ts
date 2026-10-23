@@ -26,7 +26,11 @@ export async function runExplain(environment: Environment, args: string[]): Prom
   }
 
   try {
-    const result = explainCommand(flags.command, { cwd: flags.cwd }, environment);
+    const result = explainCommand(
+      flags.command,
+      { cwd: flags.cwd, shell: flags.shell },
+      environment,
+    );
     const asciiOnly = !!process.env.NO_COLOR || !process.stdout.isTTY;
 
     await writeStdoutLine(
