@@ -235,10 +235,19 @@ type CodeLiteral = {
 
 type Identifier = { readonly name: string; readonly index: number };
 
-type LiteralScan = { readonly masked: string[]; readonly literals: CodeLiteral[] };
+type LiteralScan = {
+  readonly masked: string[];
+  readonly literals: CodeLiteral[];
+  readonly comments: string[];
+};
 
 type MaskedCode =
-  | { readonly kind: 'masked'; readonly masked: string; readonly literals: readonly CodeLiteral[] }
+  | {
+      readonly kind: 'masked';
+      readonly masked: string;
+      readonly literals: readonly CodeLiteral[];
+      readonly comments: readonly string[];
+    }
   | { readonly kind: 'unmaskable' };
 
 type PathExtractionOptions = {
@@ -1592,7 +1601,11 @@ function extractInlineCodePathTargets(
           ),
         )
       : []),
-    ...(codeRolesReadable ? [] : (masked.masked.match(BARE_PATH_PATTERN) ?? []).map(here)),
+    ...(codeRolesReadable
+      ? []
+      : [masked.masked, ...masked.comments]
+          .flatMap((text) => text.match(BARE_PATH_PATTERN) ?? [])
+          .map(here)),
     ...(literalsPresumedData ? (code.match(/\$\{[^}]*\}|\$[A-Za-z_]\w*/g) ?? []).map(here) : []),
   ];
 }
@@ -1797,10 +1810,15 @@ const HOLE_UNREADABLE_CHARACTER: Partial<Record<LiteralFamily, string>> = {
 
 function maskStringLiterals(code: string, family: LiteralFamily): MaskedCode {
   if (family === 'opaque') return { kind: 'unmaskable' };
-  const scan: LiteralScan = { masked: code.split(''), literals: [] };
+  const scan: LiteralScan = { masked: code.split(''), literals: [], comments: [] };
   return maskCode(code, 0, family, scan, false) === null
     ? { kind: 'unmaskable' }
-    : { kind: 'masked', masked: scan.masked.join(''), literals: scan.literals };
+    : {
+        kind: 'masked',
+        masked: scan.masked.join(''),
+        literals: scan.literals,
+        comments: scan.comments,
+      };
 }
 
 function maskCode(
@@ -1815,6 +1833,14 @@ function maskCode(
     const char = code[index] ?? '';
     if (insideHole && char === '}' && openBraces === 0) return index;
     if (insideHole && char === HOLE_UNREADABLE_CHARACTER[family]) return null;
+    if (family === 'python' && char === '#') {
+      const lineEnd = code.slice(index).search(/[\r\n]/);
+      const end = lineEnd === -1 ? code.length : index + lineEnd;
+      scan.comments.push(code.slice(index, end));
+      scan.masked.fill(' ', index, end);
+      index = end - 1;
+      continue;
+    }
     if (char === '{') openBraces++;
     if (char === '}') openBraces--;
     if (family === 'simple' && (char === '`' || char === '%' || char === '<')) {
@@ -2220,13 +2246,7 @@ const PUBLIC_KEY_BASENAMES = new Set(['id_rsa.pub', 'id_ed25519.pub', 'id_ecdsa.
 
 const ENV_PREFIX = '.env.';
 
-const ENV_EXEMPTION_BASENAMES = new Set([
-  '.env.example',
-  '.env.sample',
-  '.env.template',
-  '.env.tpl',
-  '.env.defaults',
-]);
+const ENV_TEMPLATE_SUFFIXES = ['.example', '.sample', '.template', '.tpl'];
 
 const ENV_EXEMPTION_PREFIXES = ['.env.example.', '.env.sample.'];
 
@@ -2314,7 +2334,9 @@ function isSensitivePath(
   }
 
   if (
-    ENV_EXEMPTION_BASENAMES.has(comparableName) ||
+    comparableName === '.env.defaults' ||
+    (comparableName.startsWith(ENV_PREFIX) &&
+      ENV_TEMPLATE_SUFFIXES.some((suffix) => comparableName.endsWith(suffix))) ||
     ENV_EXEMPTION_PREFIXES.some((prefix) => comparableName.startsWith(prefix))
   ) {
     return null;

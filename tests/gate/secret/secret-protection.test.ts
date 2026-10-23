@@ -291,6 +291,36 @@ describe('shell operands against the built-in secret catalog', () => {
         expected: null,
       },
       {
+        name: 'a template suffix after an environment name marks a template',
+        command: 'cat .env.local.example',
+        expected: null,
+      },
+      {
+        name: 'a .sample suffix after an environment name marks a template',
+        command: 'grep foo .env.production.sample',
+        expected: null,
+      },
+      {
+        name: 'a .template suffix after an environment name marks a template',
+        command: 'cat .env.local.template',
+        expected: null,
+      },
+      {
+        name: 'a .tpl suffix after an environment name marks a template',
+        command: 'cat .env.staging.tpl',
+        expected: null,
+      },
+      {
+        name: 'an environment name without a template suffix stays protected',
+        command: 'cat .env.local',
+        expected: { target: '.env.local', ruleId: 'secret.pattern.env-variant' },
+      },
+      {
+        name: 'a backup of a template is not a template',
+        command: 'cat .env.local.example.bak',
+        expected: { target: '.env.local.example.bak', ruleId: 'secret.pattern.env-variant' },
+      },
+      {
         name: 'a template name inside a protected home directory stays protected',
         command: 'cat ~/.ssh/.env.tpl',
         expected: ssh('~/.ssh/.env.tpl'),
@@ -1855,6 +1885,39 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
           "python3 - <<'EOF'\nhtml = open('index.html').read()\n# drop the .env group from the nav\nopen('index.html', 'w').write(html)\nEOF",
         expected: env('.env'),
         relaxedInStandard: true,
+      },
+    ]);
+  });
+
+  test('an apostrophe or bracket in a python comment leaves the literal roles of the code readable', () => {
+    checkCarriers([
+      {
+        name: 'a set member after a comment holding an apostrophe',
+        command: python(
+          'import os',
+          'SENSITIVE = {".env"}',
+          "# don't follow links",
+          'for r, d, f in os.walk("/opt/py"):',
+          '    print(f, [n in SENSITIVE for n in f])',
+        ),
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a set member beside a comment holding parentheses',
+        command: python(
+          'import os',
+          'SENSITIVE = {".env"}  # mark names (not contents)',
+          'for e in os.scandir("/opt/py"):',
+          '    print(e.name, e.is_file(), e.name in SENSITIVE)',
+        ),
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a read after a comment holding an apostrophe',
+        command: python("# don't follow links", 'print(open(".env").read())'),
+        expected: env('.env'),
       },
     ]);
   });
