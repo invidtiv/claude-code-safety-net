@@ -1,6 +1,7 @@
 import { PYTHON_INTERPRETER_PATTERN } from '@/core/rules/constants';
 import { getBasename } from '@/core/shell/tokens';
 import { hasLinearDangerousText, hasLinearInterpreterDanger } from './linear-danger-scanner';
+import { isDangerousRootOrHomeTarget } from './recursive-delete-targets';
 import { chargeNativeLinearPass } from './text-scanner';
 
 export const REASON_INTERPRETER_DANGEROUS =
@@ -131,6 +132,17 @@ const RUBY_DASH_VALUE_FLAGS = new Set([
   '--enable',
 ]);
 const INTERPRETER_SHELL_CONTINUATION = /\\\r?\n/g;
+const NATIVE_DELETE_ROOT_OR_HOME_ARGUMENT = String.raw`\s*\(\s*(?:(?<quote>['"])(?<literal>[^'"\n]{1,256})\k<quote>|(?:os\.path\.)?expanduser\(['"]~/?['"]\)|(?:pathlib\.)?Path\.home\(\)|os\.environ\[['"]HOME['"]\]|os\.getenv\(['"]HOME['"]\)|\$ENV\{['"]?HOME['"]?\}|(?:\w+\.|require\(['"](?:node:)?os['"]\)\.)?homedir\(\)|process\.env\.HOME|Dir\.home|ENV\[['"]HOME['"]\])\s*`;
+const NATIVE_RECURSIVE_DELETE_OF_ROOT_OR_HOME = [
+  new RegExp(
+    String.raw`\b(?:rmtree|remove_tree|rm_rf|rm_r|remove_dir|remove_entry(?:_secure)?)${NATIVE_DELETE_ROOT_OR_HOME_ARGUMENT}[,)]`,
+    'g',
+  ),
+  new RegExp(
+    String.raw`\b(?:rmSync|rmdirSync|rm|rmdir)${NATIVE_DELETE_ROOT_OR_HOME_ARGUMENT},\s*\{[^}]{0,256}?\brecursive\s*:\s*true\b`,
+    'g',
+  ),
+];
 
 /** @internal */
 export type InterpreterExecutableSourceKind = 'inline-code' | 'main-script' | 'module-file';
@@ -494,6 +506,15 @@ export function containsDangerousCode(
   standard = false,
 ): boolean {
   const executableCode = collapseInterpreterShellContinuations(code, scanWork);
+  chargeNativeLinearPass(scanWork, executableCode);
+  const deletesRootOrHome = NATIVE_RECURSIVE_DELETE_OF_ROOT_OR_HOME.some((call) =>
+    Array.from(executableCode.matchAll(call)).some(
+      (match) =>
+        match.groups?.literal === undefined ||
+        isDangerousRootOrHomeTarget(match.groups.literal, true),
+    ),
+  );
+  if (deletesRootOrHome) return true;
   if (!interpreterCodeHasDangerousText(executableCode, scanWork)) return false;
 
   chargeNativeLinearPass(scanWork, executableCode);

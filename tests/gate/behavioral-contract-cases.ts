@@ -97,6 +97,12 @@ export function behavioralContractCases(paths: {
     intent: 'hard_stop',
     reasonIncludes: 'targeting root or home',
   };
+  const interpreterDangerBlock: BehavioralContractCase['expected'] = {
+    kind: 'block',
+    ruleId: 'interpreter.dangerous-command',
+    intent: 'use_alternative',
+    reasonIncludes: 'Interpreter code contains a dangerous command',
+  };
   const rsyncRootBlock: BehavioralContractCase['expected'] = {
     kind: 'block',
     ruleId: 'rm.recursive-force-root-or-home',
@@ -1707,6 +1713,77 @@ export function behavioralContractCases(paths: {
         intent: 'use_alternative',
         reasonIncludes: 'Interpreter code contains a dangerous command',
       },
+    },
+    ...atStandardAndStrict(
+      [
+        [
+          'blocks a python rmtree of the expanded home directory',
+          'python3 -c "import shutil,os; shutil.rmtree(os.path.expanduser(\'~\'))"',
+          interpreterDangerBlock,
+        ],
+        [
+          'blocks a python rmtree of the root directory',
+          'python3 -c "import shutil; shutil.rmtree(\'/\')"',
+          interpreterDangerBlock,
+        ],
+        [
+          'blocks a perl rmtree of the home directory',
+          "perl -e 'use File::Path; rmtree($ENV{HOME})'",
+          interpreterDangerBlock,
+        ],
+        [
+          'blocks a perl rmtree of the root directory',
+          'perl -e \'use File::Path; rmtree("/")\'',
+          interpreterDangerBlock,
+        ],
+        [
+          'blocks a node recursive rmSync of the home directory',
+          "node -e \"require('fs').rmSync(require('os').homedir(), {recursive: true, force: true})\"",
+          interpreterDangerBlock,
+        ],
+        [
+          'blocks a ruby rm_rf of the home directory',
+          'ruby -e "require \'fileutils\'; FileUtils.rm_rf(Dir.home)"',
+          interpreterDangerBlock,
+        ],
+        [
+          'blocks a ruby rm_rf of the root directory',
+          "ruby -e \"require 'fileutils'; FileUtils.rm_rf('/')\"",
+          interpreterDangerBlock,
+        ],
+        [
+          'allows a python rmtree of a subdirectory joined onto home',
+          "python3 -c \"import shutil,os; shutil.rmtree(os.path.join(os.path.expanduser('~'), 'build'))\"",
+          { kind: 'allow' },
+        ],
+        [
+          'allows a python rmtree of a relative build directory',
+          'python3 -c "import shutil; shutil.rmtree(\'dist\')"',
+          { kind: 'allow' },
+        ],
+        [
+          'allows a node recursive rmSync of a relative build directory',
+          "node -e \"require('fs').rmSync('dist', {recursive: true})\"",
+          { kind: 'allow' },
+        ],
+        [
+          'allows a node rmSync of the home directory without recursive',
+          "node -e \"require('fs').rmSync(require('os').homedir())\"",
+          { kind: 'allow' },
+        ],
+        [
+          'allows a python rmtree of the root directory written to a file as data',
+          "cat > x.py <<'EOF'\nimport shutil\nshutil.rmtree('/')\nEOF",
+          { kind: 'allow' },
+        ],
+      ],
+      { cwd: paths.cwd },
+    ),
+    {
+      name: 'blocks a python stdin heredoc that runs rmtree on the root directory',
+      command: "python3 - <<'EOF'\nimport shutil\nshutil.rmtree('/')\nEOF",
+      options: options({ cwd: paths.cwd }),
+      expected: interpreterDangerBlock,
     },
     ...['{ {}; }', '! {}', 'time {}', 'command {}', 'VAR=1 {}', 'case y in x) {};; esac'].map(
       (body) => ({
