@@ -216,13 +216,13 @@ bun run format:check  # Formatting check (Oxfmt)
 bun run typecheck     # Type check
 bun run knip          # Dead code detection
 bun run check-duplicates  # Duplicate-code detection (jscpd)
-bun test              # Run tests
+bun run test          # Run tests (30 s per-test timeout, as in CI)
 
 # Run specific test
-bun test tests/gate/analyzer/git-rules.test.ts
+bun run test tests/gate/analyzer/git-rules.test.ts
 
 # Run tests matching pattern
-bun test --test-name-pattern "checkout"
+bun run test --test-name-pattern "checkout"
 
 # Build for distribution
 bun run build
