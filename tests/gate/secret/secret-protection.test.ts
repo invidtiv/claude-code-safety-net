@@ -291,6 +291,36 @@ describe('shell operands against the built-in secret catalog', () => {
         expected: null,
       },
       {
+        name: 'a template suffix after an environment name marks a template',
+        command: 'cat .env.local.example',
+        expected: null,
+      },
+      {
+        name: 'a .sample suffix after an environment name marks a template',
+        command: 'grep foo .env.production.sample',
+        expected: null,
+      },
+      {
+        name: 'a .template suffix after an environment name marks a template',
+        command: 'cat .env.local.template',
+        expected: null,
+      },
+      {
+        name: 'a .tpl suffix after an environment name marks a template',
+        command: 'cat .env.staging.tpl',
+        expected: null,
+      },
+      {
+        name: 'an environment name without a template suffix stays protected',
+        command: 'cat .env.local',
+        expected: { target: '.env.local', ruleId: 'secret.pattern.env-variant' },
+      },
+      {
+        name: 'a backup of a template is not a template',
+        command: 'cat .env.local.example.bak',
+        expected: { target: '.env.local.example.bak', ruleId: 'secret.pattern.env-variant' },
+      },
+      {
         name: 'a template name inside a protected home directory stays protected',
         command: 'cat ~/.ssh/.env.tpl',
         expected: ssh('~/.ssh/.env.tpl'),

@@ -2246,13 +2246,7 @@ const PUBLIC_KEY_BASENAMES = new Set(['id_rsa.pub', 'id_ed25519.pub', 'id_ecdsa.
 
 const ENV_PREFIX = '.env.';
 
-const ENV_EXEMPTION_BASENAMES = new Set([
-  '.env.example',
-  '.env.sample',
-  '.env.template',
-  '.env.tpl',
-  '.env.defaults',
-]);
+const ENV_TEMPLATE_SUFFIXES = ['.example', '.sample', '.template', '.tpl'];
 
 const ENV_EXEMPTION_PREFIXES = ['.env.example.', '.env.sample.'];
 
@@ -2340,7 +2334,9 @@ function isSensitivePath(
   }
 
   if (
-    ENV_EXEMPTION_BASENAMES.has(comparableName) ||
+    comparableName === '.env.defaults' ||
+    (comparableName.startsWith(ENV_PREFIX) &&
+      ENV_TEMPLATE_SUFFIXES.some((suffix) => comparableName.endsWith(suffix))) ||
     ENV_EXEMPTION_PREFIXES.some((prefix) => comparableName.startsWith(prefix))
   ) {
     return null;
