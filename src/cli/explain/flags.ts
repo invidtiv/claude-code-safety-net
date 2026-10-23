@@ -47,7 +47,7 @@ export function parseExplainFlags(args: string[]): ExplainFlags | null {
           .map((argument) =>
             SHELL_SAFE_ARGUMENT.test(argument)
               ? argument
-              : `'${argument.replaceAll("'", `'\\''`)}'`,
+              : `'${argument.replaceAll("'", shell === 'powershell' ? "''" : `'\\''`)}'`,
           )
           .join(' ');
   if (!command) {

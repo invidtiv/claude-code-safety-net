@@ -35,6 +35,15 @@ describe('explain argument parsing', () => {
     });
   });
 
+  test('quotes separate arguments the way PowerShell reads them', () => {
+    expect(parseExplainFlags(['--shell', 'powershell', 'Write-Output', "a'b"])).toEqual({
+      json: false,
+      cwd: undefined,
+      shell: 'powershell',
+      command: "Write-Output 'a''b'",
+    });
+  });
+
   test('rejects a shell dialect it does not know', async () => {
     const result = await captureConsole(() => parseExplainFlags(['--shell', 'bash', 'git status']));
     expect(result.returned).toBeNull();
