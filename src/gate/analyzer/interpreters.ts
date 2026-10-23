@@ -132,17 +132,22 @@ const RUBY_DASH_VALUE_FLAGS = new Set([
   '--enable',
 ]);
 const INTERPRETER_SHELL_CONTINUATION = /\\\r?\n/g;
-const NATIVE_DELETE_ROOT_OR_HOME_ARGUMENT = String.raw`\s*\(\s*(?:(?<quote>['"])(?<literal>[^'"\n]{1,256})\k<quote>|(?:os\.path\.)?expanduser\(['"]~/?['"]\)|(?:pathlib\.)?Path\.home\(\)|os\.environ\[['"]HOME['"]\]|os\.getenv\(['"]HOME['"]\)|\$ENV\{['"]?HOME['"]?\}|(?:\w+\.|require\(['"](?:node:)?os['"]\)\.)?homedir\(\)|process\.env\.HOME|Dir\.home|ENV\[['"]HOME['"]\])\s*`;
+const NATIVE_DELETE_ROOT_OR_HOME_ARGUMENT = String.raw`\s*\(\s*(?:(?<quote>['"])(?<literal>[^'"\n]{1,256})\k<quote>|(?:os\.path\.)?expanduser\(['"]~/?['"]\)|(?:pathlib\.)?Path\.home\(\)|os\.environ\[['"]HOME['"]\]|os\.getenv\(['"]HOME['"]\)|\$ENV\{['"]?HOME['"]?\}|(?:\w+\.|require\(['"](?:node:)?os['"]\)\.)?homedir\(\)|process\.env\.HOME|Dir\.home(?:\(\))?|ENV\[['"]HOME['"]\])\s*`;
+const NATIVE_RECURSIVE_DELETE_NAMES = String.raw`rmtree|remove_tree|rm_rf|rm_r|remove_dir|remove_entry(?:_secure)?`;
+const NATIVE_RECURSIVE_OPTION_DELETE_NAMES = String.raw`rmSync|rmdirSync|rm|rmdir`;
 const NATIVE_RECURSIVE_DELETE_OF_ROOT_OR_HOME = [
   new RegExp(
-    String.raw`\b(?:rmtree|remove_tree|rm_rf|rm_r|remove_dir|remove_entry(?:_secure)?)${NATIVE_DELETE_ROOT_OR_HOME_ARGUMENT}[,)]`,
+    String.raw`\b(?:${NATIVE_RECURSIVE_DELETE_NAMES})${NATIVE_DELETE_ROOT_OR_HOME_ARGUMENT}[,)]`,
     'g',
   ),
   new RegExp(
-    String.raw`\b(?:rmSync|rmdirSync|rm|rmdir)${NATIVE_DELETE_ROOT_OR_HOME_ARGUMENT},\s*\{[^}]{0,256}?\brecursive\s*:\s*true\b`,
+    String.raw`\b(?:${NATIVE_RECURSIVE_OPTION_DELETE_NAMES})${NATIVE_DELETE_ROOT_OR_HOME_ARGUMENT},\s*\{[^}]{0,256}?(?:\brecursive|(?<keyQuote>['"])recursive\k<keyQuote>)\s*:\s*true\b`,
     'g',
   ),
 ];
+const NATIVE_RECURSIVE_DELETE_CALL_IN_CODE = new RegExp(
+  String.raw`\b(?:${NATIVE_RECURSIVE_DELETE_NAMES}|${NATIVE_RECURSIVE_OPTION_DELETE_NAMES})\s*\(`,
+);
 
 /** @internal */
 export type InterpreterExecutableSourceKind = 'inline-code' | 'main-script' | 'module-file';
@@ -514,7 +519,11 @@ export function containsDangerousCode(
         isDangerousRootOrHomeTarget(match.groups.literal, true),
     ),
   );
-  if (deletesRootOrHome) return true;
+  if (deletesRootOrHome) {
+    if (!standard) return true;
+    chargeNativeLinearPass(scanWork, executableCode);
+    if (NATIVE_RECURSIVE_DELETE_CALL_IN_CODE.test(stripStringLiterals(executableCode))) return true;
+  }
   if (!interpreterCodeHasDangerousText(executableCode, scanWork)) return false;
 
   chargeNativeLinearPass(scanWork, executableCode);

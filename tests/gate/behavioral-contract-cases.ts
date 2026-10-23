@@ -1752,6 +1752,16 @@ export function behavioralContractCases(paths: {
           interpreterDangerBlock,
         ],
         [
+          'blocks a ruby rm_rf of the home directory called with parentheses',
+          'ruby -e "require \'fileutils\'; FileUtils.rm_rf(Dir.home())"',
+          interpreterDangerBlock,
+        ],
+        [
+          'blocks a node recursive rmSync of the root directory with a quoted option key',
+          'node -e \'require("fs").rmSync("/", {"recursive": true})\'',
+          interpreterDangerBlock,
+        ],
+        [
           'allows a python rmtree of a subdirectory joined onto home',
           "python3 -c \"import shutil,os; shutil.rmtree(os.path.join(os.path.expanduser('~'), 'build'))\"",
           { kind: 'allow' },
@@ -1779,6 +1789,18 @@ export function behavioralContractCases(paths: {
       ],
       { cwd: paths.cwd },
     ),
+    {
+      name: 'allows a python print of an rmtree root example at standard safety',
+      command: 'python3 -c "print(\\"shutil.rmtree(\'/\')\\")"',
+      options: options({ cwd: paths.cwd }),
+      expected: { kind: 'allow' },
+    },
+    {
+      name: 'blocks a python print of an rmtree root example at strict safety',
+      command: 'python3 -c "print(\\"shutil.rmtree(\'/\')\\")"',
+      options: options({ cwd: paths.cwd, strict: true }),
+      expected: interpreterDangerBlock,
+    },
     {
       name: 'blocks a python stdin heredoc that runs rmtree on the root directory',
       command: "python3 - <<'EOF'\nimport shutil\nshutil.rmtree('/')\nEOF",
