@@ -1790,15 +1790,15 @@ export function behavioralContractCases(paths: {
       { cwd: paths.cwd },
     ),
     {
-      name: 'allows a python print of an rmtree root example at standard safety',
-      command: 'python3 -c "print(\\"shutil.rmtree(\'/\')\\")"',
+      name: 'blocks a python exec of a string that runs rmtree on the root directory',
+      command: 'python3 -c "exec(\\"import shutil; shutil.rmtree(\'/\')\\")"',
       options: options({ cwd: paths.cwd }),
-      expected: { kind: 'allow' },
+      expected: interpreterDangerBlock,
     },
     {
-      name: 'blocks a python print of an rmtree root example at strict safety',
-      command: 'python3 -c "print(\\"shutil.rmtree(\'/\')\\")"',
-      options: options({ cwd: paths.cwd, strict: true }),
+      name: 'blocks a python stdin heredoc rmtree of the root directory after a comment apostrophe',
+      command: "python3 - <<'EOF'\n# the user's cleanup\nimport shutil\nshutil.rmtree('/')\nEOF",
+      options: options({ cwd: paths.cwd }),
       expected: interpreterDangerBlock,
     },
     {
