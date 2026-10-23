@@ -323,6 +323,30 @@ describe('explain flags', () => {
   }
 });
 
+describe('explain parses in the shell dialect the host tool runs', () => {
+  const WINDOWS_DRIVE_ROOT_RMDIR = 'rmdir /s /q d:\\';
+  test.each([
+    [[], { result: 'blocked', ruleId: 'powershell.remove-item-root-or-home' }],
+    [['--shell', 'auto'], { result: 'blocked', ruleId: 'powershell.remove-item-root-or-home' }],
+    [
+      ['--shell', 'powershell'],
+      { result: 'blocked', ruleId: 'powershell.remove-item-root-or-home' },
+    ],
+    [['--shell', 'posix'], { result: 'allowed', ruleId: undefined }],
+  ] as const)(
+    'with %j',
+    async (shellArgs, expected) => {
+      const outcome = await explain({
+        args: ['explain', '--json', ...shellArgs, WINDOWS_DRIVE_ROOT_RMDIR],
+      });
+      expect(outcome.exitCode).toBe(0);
+      const document = JSON.parse(outcome.stdout) as ExplainResult;
+      expect({ result: document.result, ruleId: document.ruleId }).toEqual(expected);
+    },
+    30_000,
+  );
+});
+
 const KNOWN_GAPS = [
   {
     name: 'a partial program is analyzed as raw text, not as the command it resembles',

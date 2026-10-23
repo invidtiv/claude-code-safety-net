@@ -16,6 +16,11 @@ export const explainCommand = {
       description: 'Use custom working directory',
     },
     {
+      flags: '--shell',
+      argument: '<auto|posix|powershell>',
+      description: 'Parse the command as this shell (default: auto)',
+    },
+    {
       flags: '-h, --help',
       description: 'Show this help',
     },
@@ -24,5 +29,6 @@ export const explainCommand = {
     'cc-safety-net explain "git reset --hard"',
     'cc-safety-net explain --json "rm -rf /"',
     'cc-safety-net explain --cwd /tmp "git status"',
+    "cc-safety-net explain --shell posix 'rmdir /s /q d:\\'",
   ],
 } satisfies Command;
