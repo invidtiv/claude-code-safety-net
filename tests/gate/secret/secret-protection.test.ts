@@ -1859,6 +1859,39 @@ bun test tests/gate/secret/secret-protection.test.ts 2>&1 | grep -E "expect\\(|p
     ]);
   });
 
+  test('an apostrophe or bracket in a python comment leaves the literal roles of the code readable', () => {
+    checkCarriers([
+      {
+        name: 'a set member after a comment holding an apostrophe',
+        command: python(
+          'import os',
+          'SENSITIVE = {".env"}',
+          "# don't follow links",
+          'for r, d, f in os.walk("/opt/py"):',
+          '    print(f, [n in SENSITIVE for n in f])',
+        ),
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a set member beside a comment holding parentheses',
+        command: python(
+          'import os',
+          'SENSITIVE = {".env"}  # mark names (not contents)',
+          'for e in os.scandir("/opt/py"):',
+          '    print(e.name, e.is_file(), e.name in SENSITIVE)',
+        ),
+        expected: env('.env'),
+        relaxedInStandard: true,
+      },
+      {
+        name: 'a read after a comment holding an apostrophe',
+        command: python("# don't follow links", 'print(open(".env").read())'),
+        expected: env('.env'),
+      },
+    ]);
+  });
+
   test('an f-string or template hole is code, and the text around it is a literal', () => {
     checkCarriers([
       {
