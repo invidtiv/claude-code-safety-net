@@ -1,8 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import { formatDenial } from '@/core/denial';
-import type { PathResolver } from '@/core/environment';
+import { createProcessEnvironment, type PathResolver } from '@/core/environment';
+import { loadPolicySnapshot } from '@/core/policy/snapshot';
 import { getNonCommandToolInputKind } from '@/core/tool-input';
 import { firstTrustedRoot } from '@/gate/intake';
+import { getDeepSeekHarnessProfilesDir } from '@/hosts/deepseek-harness/detect';
 import { type CommandToolKind, createToolInvocation, type ToolInvocation } from '@/gate/invocation';
 import {
   createPluginToolCallHandler,
@@ -22,8 +25,20 @@ type DeepSeekHarnessToolExecution = {
 
 type DeepSeekHarnessToolGuard = (execution: unknown) => string | undefined;
 
+type DeepSeekHarnessPostToolDecision = {
+  kind: 'accept' | 'block';
+  additionalContexts?: unknown[];
+};
+
+type DeepSeekHarnessPostExecuteListener = (
+  execution: unknown,
+  result: unknown,
+  next: () => Promise<DeepSeekHarnessPostToolDecision>,
+) => Promise<DeepSeekHarnessPostToolDecision>;
+
 type DeepSeekHarnessContext = {
   tools: { guard: (guard: DeepSeekHarnessToolGuard) => () => void };
+  on: (event: 'tools/post-execute', listener: DeepSeekHarnessPostExecuteListener) => () => void;
 };
 
 export const DEEPSEEK_HARNESS_COMMAND_TOOLS = new Map<string, CommandToolKind>([
@@ -45,6 +60,59 @@ const DEEPSEEK_HARNESS_HOST: PluginToolCallHost<unknown, string, string | undefi
 export function registerDeepSeekHarnessGuard(ctx: DeepSeekHarnessContext): void {
   const handle = createDeepSeekHarnessGuardHandler();
   ctx.tools.guard((execution) => handle(execution, process.cwd()));
+  const noticed = new Set<string>();
+  ctx.on('tools/post-execute', async (execution, _result, next) => {
+    const decision = await next();
+    const notice = noticeUndeclaredCommandTool(execution, noticed);
+    if (!notice) return decision;
+    return { ...decision, additionalContexts: [notice, ...(decision.additionalContexts ?? [])] };
+  });
+}
+
+function noticeUndeclaredCommandTool(execution: unknown, noticed: Set<string>) {
+  try {
+    const toolCall = execution as DeepSeekHarnessToolExecution | null;
+    const header = toolCall?.agent?.session.header;
+    const toolName = toolCall?.name;
+    const input = toolCall?.arguments;
+    const command = (input as { command?: unknown } | null | undefined)?.command;
+    if (
+      !header ||
+      typeof toolName !== 'string' ||
+      DEEPSEEK_HARNESS_COMMAND_TOOLS.has(toolName) ||
+      getNonCommandToolInputKind(toolName) !== 'unknown' ||
+      typeof command !== 'string' ||
+      command.trim() === ''
+    ) {
+      return undefined;
+    }
+    const key = JSON.stringify([header.id, toolName]);
+    if (noticed.has(key)) return undefined;
+    const environment = createProcessEnvironment();
+    const declared = loadPolicySnapshot(environment, { cwd: header.cwd }).policy.commandTools.some(
+      (tool) => tool.name === toolName,
+    );
+    if (declared) return undefined;
+    noticed.add(key);
+    const profilesDir = getDeepSeekHarnessProfilesDir(environment);
+    return Object.freeze({
+      id: randomUUID(),
+      role: 'user',
+      content: Object.freeze([
+        Object.freeze({
+          type: 'text',
+          text: `CC Safety Net did not check the command \`${toolName}\` just ran. It checks a plugin's shell tool only after the tool is declared. First find out where \`${toolName}\` runs its commands: check its tool description, and if that doesn't say, read its plugin's source under \`${profilesDir}/<profile>/node_modules\`. If it runs them on this machine, declare it with \`npx -y cc-safety-net rule tool add ${toolName}\`. Add \`--cwd-arg <name>\` if it takes its working directory in an argument other than \`workdir\`, \`cwd\` or \`working_directory\`. If it runs them somewhere else, such as a remote host, or you can't tell, don't declare it. Either way, tell the user what you found and what you did.`,
+        }),
+      ]),
+      source: Object.freeze({
+        kind: 'cc-safety-net',
+        form: 'notice',
+        summary: `${toolName} commands are not checked`,
+      }),
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 /** @internal */
