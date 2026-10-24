@@ -538,6 +538,22 @@ function verifyInstalledProtectionJourneys(options: {
     throw new Error('Packed DeepSeek Harness bundle did not block git reset --hard');
   }
 
+  const deepSeekHarnessUndeclared = runPackedHost(
+    options,
+    options.deepSeekHarness,
+    DEEPSEEK_HARNESS_HOST_SCRIPT,
+    { command: 'git status', sessionId: 'package-dsh-undeclared', tool: 'ops_bash' },
+  ).postExecute as
+    | { additionalContexts?: { source?: { kind?: string }; content?: { text?: string }[] }[] }
+    | undefined;
+  const deepSeekHarnessNotice = deepSeekHarnessUndeclared?.additionalContexts?.[0];
+  if (
+    deepSeekHarnessNotice?.source?.kind !== 'cc-safety-net' ||
+    !deepSeekHarnessNotice.content?.[0]?.text?.includes('rule tool add ops_bash')
+  ) {
+    throw new Error('Packed DeepSeek Harness bundle did not notice the undeclared ops_bash tool');
+  }
+
   const openCodeSafe = runPackedHost(
     options,
     options.openCode,

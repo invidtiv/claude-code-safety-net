@@ -89,9 +89,9 @@ function noticeUndeclaredCommandTool(execution: unknown, noticed: Set<string>) {
     const key = JSON.stringify([header.id, toolName]);
     if (noticed.has(key)) return undefined;
     const environment = createProcessEnvironment();
-    const declared = loadPolicySnapshot(environment, { cwd: header.cwd }).policy.commandTools.some(
-      (tool) => tool.name === toolName,
-    );
+    const declared = loadPolicySnapshot(environment, {
+      cwd: header.cwd ?? process.cwd(),
+    }).policy.commandTools.some((tool) => tool.name === toolName);
     if (declared) return undefined;
     noticed.add(key);
     const profilesDir = getDeepSeekHarnessProfilesDir(environment);

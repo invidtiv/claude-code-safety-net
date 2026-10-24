@@ -419,6 +419,33 @@ test('checked tools and tools without a command get no notice', async () => {
   expect(decisions).toStrictEqual(Array.from({ length: 6 }, () => ({ kind: 'accept' })));
 });
 
+test('a session without a cwd reads the tool declaration from the launch directory', async () => {
+  const withoutCwd = (session: string) => () => ({
+    name: 'ops_bash',
+    arguments: { command: 'git status' },
+    agent: { session: { header: { id: session } } },
+  });
+  const launchCwd = process.cwd();
+  process.chdir(fixture.project);
+  const undeclared = await postExecuteAll([withoutCwd(SESSION)]).finally(() =>
+    process.chdir(launchCwd),
+  );
+  const rules = join(fixture.project, '.cc-safety-net', 'rules');
+  mkdirSync(rules, { recursive: true });
+  writeFileSync(
+    join(rules, 'rule.json'),
+    JSON.stringify({ version: 1, command_tools: ['ops_bash'] }),
+  );
+  process.chdir(fixture.project);
+  const declared = await postExecuteAll([withoutCwd(OTHER_SESSION)]).finally(() =>
+    process.chdir(launchCwd),
+  );
+  expect(undeclared).toMatchObject([
+    { kind: 'accept', additionalContexts: [{ source: { kind: 'cc-safety-net' } }] },
+  ]);
+  expect(declared).toStrictEqual([{ kind: 'accept' }]);
+});
+
 test('an execution that throws passes the downstream decision through untouched', async () => {
   const hostile = () => ({
     name: 'ops_bash',

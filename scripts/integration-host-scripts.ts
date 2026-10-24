@@ -53,6 +53,7 @@ for await (const chunk of process.stdin) input += chunk;
 const request = JSON.parse(input);
 const plugin = (await import(pathToFileURL(process.argv[1]).href)).default;
 const guards = [];
+const postExecuteListeners = [];
 plugin.apply({
   tools: {
     guard(guard) {
@@ -60,13 +61,23 @@ plugin.apply({
       return () => {};
     },
   },
+  on(event, listener) {
+    if (event === 'tools/post-execute') postExecuteListeners.push(listener);
+    return () => {};
+  },
 });
-const reason = guards[0]({
-  name: 'bash',
+const execution = {
+  name: request.tool ?? 'bash',
   arguments: { command: request.command },
   agent: { session: { header: { id: request.sessionId, cwd: process.cwd() } } },
-});
-process.stdout.write(JSON.stringify({ guards: guards.length, reason: reason ?? null }));
+};
+const reason = guards[0](execution);
+const postExecute = request.tool
+  ? await postExecuteListeners[0](execution, {}, async () => ({ kind: 'accept' }))
+  : null;
+process.stdout.write(
+  JSON.stringify({ guards: guards.length, reason: reason ?? null, postExecute }),
+);
 `;
 
 export const AMP_HOST_SCRIPT = `
