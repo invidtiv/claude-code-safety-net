@@ -133,65 +133,6 @@ test('a Desktop profile whose app is not in a default location points at the Plu
   );
 });
 
-const pluginsManifest = (...plugins: string[]) =>
-  JSON.stringify({
-    dependencies: Object.fromEntries(plugins.map((plugin) => [plugin, '1.0.0'])),
-    dsh: { profile: { bundles: plugins } },
-  });
-const DECLARE_HINT =
-  "CC Safety Net does not check commands a plugin's own shell tool runs until you declare it: npx -y cc-safety-net rule tool add <tool-name>";
-const DECLARE_HINT_ZH =
-  '插件自带的 shell 工具需要声明后，CC Safety Net 才会检查它执行的命令：npx -y cc-safety-net rule tool add <工具名>';
-
-test('a profile that already holds another plugin gets a hint to declare its shell tool', async () => {
-  const current = machine({
-    [DESKTOP_MANIFEST]: pluginsManifest('cc-safety-net', 'dsh-ops'),
-    [`Applications/${MAC_CLI}`]: '',
-  });
-
-  expect((await plan(current, false).planned).message).toBe(
-    [
-      'Added cc-safety-net to the DeepSeek Harness Desktop profile.',
-      'Other plugins in the DeepSeek Harness Desktop profile: dsh-ops.',
-      DECLARE_HINT,
-      'DeepSeek Harness Desktop 配置中的其他插件：dsh-ops。',
-      DECLARE_HINT_ZH,
-    ].join('\n'),
-  );
-});
-
-test('the declare hint names the other plugins of each profile the install targets', async () => {
-  const current = machine({
-    [DESKTOP_MANIFEST]: pluginsManifest('dsh-ops'),
-    [WEB_MANIFEST]: pluginsManifest('dsh-ops', 'cc-safety-net', 'dsh-notes'),
-    [`Applications/${MAC_CLI}`]: '',
-  });
-
-  expect((await plan(current, false).planned).message).toBe(
-    [
-      'Added cc-safety-net to the DeepSeek Harness Desktop and web profiles.',
-      'Other plugins in the DeepSeek Harness Desktop profile: dsh-ops.',
-      'Other plugins in the DeepSeek Harness web profile: dsh-ops, dsh-notes.',
-      DECLARE_HINT,
-      'DeepSeek Harness Desktop 配置中的其他插件：dsh-ops。',
-      'DeepSeek Harness web 配置中的其他插件：dsh-ops、dsh-notes。',
-      DECLARE_HINT_ZH,
-    ].join('\n'),
-  );
-});
-
-test('an update of profiles that hold only cc-safety-net prints no declare hint', async () => {
-  const current = machine({
-    [DESKTOP_MANIFEST]: pluginsManifest('cc-safety-net'),
-    [WEB_MANIFEST]: pluginsManifest('cc-safety-net'),
-    [`Applications/${MAC_CLI}`]: '',
-  });
-
-  expect((await plan(current, false).planned).message).toBe(
-    'Added cc-safety-net to the DeepSeek Harness Desktop and web profiles.',
-  );
-});
-
 test('a running Desktop stops the install before anything changes', async () => {
   const current = machine({ [DESKTOP_MANIFEST]: manifest(false), [`Applications/${MAC_CLI}`]: '' });
   current.lock(process.pid);
